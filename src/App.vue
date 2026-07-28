@@ -39,6 +39,11 @@ onMounted(() => game.connect())
 .app > :not(.connection):not(.toast) {
   flex: 1 1 auto;
   min-height: 0;
+}
+
+/* Every screen scrolls as a whole except home, which pins its artwork column at
+   full height and scrolls only the forms beside it. */
+.app > :not(.connection):not(.toast):not(.home) {
   overflow-y: auto;
 }
 

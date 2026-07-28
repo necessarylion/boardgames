@@ -4,14 +4,21 @@ import mainBackground from '../../assets/mainbg.png'
 import BoardGlyph from './BoardGlyph.vue'
 import { DEFAULT_OPTIONS } from '@shared/engine'
 import { BOARD_SHAPES } from '@shared/types'
-import LanguageSwitcher from '@/i18n/LanguageSwitcher.vue'
+import LanguageMenu from '@/i18n/LanguageMenu.vue'
 import { t } from '@/i18n'
 import { useGameStore } from '@/stores/game'
 
 const game = useGameStore()
 
 const name = ref(game.myName)
-const code = ref(new URLSearchParams(location.search).get('room') ?? '')
+const code = ref((new URLSearchParams(location.search).get('room') ?? '').toUpperCase())
+
+/**
+ * Arriving on an invite link, the two halves of this screen read as a choice
+ * the guest does not have to make. So the link collapses it to the one action
+ * that applies, with hosting still a click away for anyone who wants it.
+ */
+const invited = ref(code.value.length > 0)
 const randomHands = ref(DEFAULT_OPTIONS.randomHands)
 const openInformation = ref(DEFAULT_OPTIONS.openInformation)
 const boardShape = ref(DEFAULT_OPTIONS.boardShape)
@@ -34,6 +41,8 @@ function join() {
 
 <template>
   <div class="home">
+    <LanguageMenu class="lang-corner" />
+
     <aside class="art">
       <img class="art-image" :src="mainBackground" alt="" />
       <div class="art-wash"></div>
@@ -55,53 +64,13 @@ function join() {
             :placeholder="t('home.name.placeholder')"
             @change="game.rememberName(name.trim())"
           />
-          <LanguageSwitcher class="lang" />
         </section>
 
         <hr class="rule" />
 
-        <section>
-          <h2>{{ t('home.host.title') }}</h2>
-          <label class="check">
-            <input v-model="randomHands" type="checkbox" />
-            <span>
-              {{ t('option.randomHands') }}
-              <em class="tiny muted">{{ t('option.randomHands.hint') }}</em>
-            </span>
-          </label>
-          <label class="check">
-            <input v-model="openInformation" type="checkbox" />
-            <span>
-              {{ t('option.openInfo') }}
-              <em class="tiny muted">{{ t('option.openInfo.hint') }}</em>
-            </span>
-          </label>
-          <div class="board-pick">
-            <span class="board-label tiny muted">{{ t('home.board.title') }}</span>
-            <div class="board-options">
-              <button
-                v-for="shape in BOARD_SHAPES"
-                :key="shape"
-                type="button"
-                class="board-option"
-                :class="{ chosen: boardShape === shape }"
-                :title="t(`board.${shape}.hint`)"
-                @click="boardShape = shape"
-              >
-                <BoardGlyph :shape="shape" />
-                <span>{{ t(`board.${shape}`) }}</span>
-              </button>
-            </div>
-          </div>
-
-          <button class="btn wide" @click="create">{{ t('home.create') }}</button>
-        </section>
-
-        <hr class="rule" />
-
-        <section>
-          <h2>{{ t('home.join.title') }}</h2>
-          <p class="muted tiny join-hint">{{ t('home.join.hint') }}</p>
+        <section v-if="invited">
+          <h2>{{ t('home.invited.title') }}</h2>
+          <p class="muted tiny join-hint">{{ t('home.invited.hint') }}</p>
           <input
             v-model="code"
             class="field code"
@@ -110,8 +79,66 @@ function join() {
             @input="code = code.toUpperCase()"
             @keyup.enter="join"
           />
-          <button class="btn wide ghost" @click="join">{{ t('home.join.action') }}</button>
+          <button class="btn wide" @click="join">{{ t('home.join.action') }}</button>
+          <button type="button" class="linkish" @click="invited = false">
+            {{ t('home.invited.hostInstead') }}
+          </button>
         </section>
+
+        <template v-else>
+          <section>
+            <h2>{{ t('home.host.title') }}</h2>
+            <label class="check">
+              <input v-model="randomHands" type="checkbox" />
+              <span>
+                {{ t('option.randomHands') }}
+                <em class="tiny muted">{{ t('option.randomHands.hint') }}</em>
+              </span>
+            </label>
+            <label class="check">
+              <input v-model="openInformation" type="checkbox" />
+              <span>
+                {{ t('option.openInfo') }}
+                <em class="tiny muted">{{ t('option.openInfo.hint') }}</em>
+              </span>
+            </label>
+            <div class="board-pick">
+              <span class="board-label tiny muted">{{ t('home.board.title') }}</span>
+              <div class="board-options">
+                <button
+                  v-for="shape in BOARD_SHAPES"
+                  :key="shape"
+                  type="button"
+                  class="board-option"
+                  :class="{ chosen: boardShape === shape }"
+                  :title="t(`board.${shape}.hint`)"
+                  @click="boardShape = shape"
+                >
+                  <BoardGlyph :shape="shape" />
+                  <span>{{ t(`board.${shape}`) }}</span>
+                </button>
+              </div>
+            </div>
+
+            <button class="btn wide" @click="create">{{ t('home.create') }}</button>
+          </section>
+
+          <hr class="rule" />
+
+          <section>
+            <h2>{{ t('home.join.title') }}</h2>
+            <p class="muted tiny join-hint">{{ t('home.join.hint') }}</p>
+            <input
+              v-model="code"
+              class="field code"
+              maxlength="4"
+              :placeholder="t('home.join.placeholder')"
+              @input="code = code.toUpperCase()"
+              @keyup.enter="join"
+            />
+            <button class="btn wide ghost" @click="join">{{ t('home.join.action') }}</button>
+          </section>
+        </template>
 
         <p class="tiny muted footnote">{{ t('home.footnote') }}</p>
       </div>
@@ -121,9 +148,20 @@ function join() {
 
 <style scoped>
 .home {
-  min-height: 100%;
+  position: relative;
+  height: 100%;
+  overflow: hidden;
   display: grid;
   grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+}
+
+/* Anchored to the screen rather than to the form column, so it holds its corner
+   while the form scrolls under it. */
+.lang-corner {
+  position: absolute;
+  top: clamp(1.1rem, 2.5vw, 1.9rem);
+  right: clamp(1.25rem, 3vw, 2.5rem);
+  z-index: 5;
 }
 
 /* --- left: the artwork --------------------------------------------------- */
@@ -191,15 +229,20 @@ h1 {
 
 .forms {
   display: flex;
-  align-items: center;
   justify-content: center;
+  min-height: 0;
+  overflow-y: auto;
   padding: clamp(2rem, 5vw, 3.5rem) clamp(1.25rem, 4vw, 3rem);
   border-left: 1px solid rgba(160, 137, 102, 0.35);
 }
 
+/* Auto margins rather than `align-items: center`, which centres the same way
+   when there is room but hides the top of the column past the scroll origin
+   once the form outgrows the viewport. */
 .forms-inner {
   width: 100%;
   max-width: 24rem;
+  margin: auto 0;
 }
 
 .forms-inner .rule {
@@ -238,19 +281,35 @@ h2 {
   margin: -0.25rem 0 0.7rem;
 }
 
-/* Sits under the name field rather than in a section of its own, which would
-   cost the column a rule and another heading's worth of height. */
-.lang {
-  margin-top: 0.6rem;
+/* Offers the other half of the screen to a guest who followed an invite but
+   wanted to host, without giving it the weight of a second button. */
+.linkish {
+  display: block;
+  margin-top: 0.8rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 0.85rem;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.linkish:hover {
+  color: var(--vermillion-dark);
 }
 
 .check {
+  position: relative;
   display: flex;
   gap: 0.55rem;
   align-items: flex-start;
   margin-bottom: 0.6rem;
   line-height: 1.4;
   font-size: 0.92rem;
+  cursor: pointer;
 }
 
 .check em {
@@ -315,8 +374,11 @@ h2 {
 /* --- stacked on narrow screens ------------------------------------------- */
 
 @media (max-width: 52rem) {
+  /* Stacked, the artwork is a banner rather than a column, so the whole screen
+     scrolls as one and the forms stop being their own scroll container. */
   .home {
     grid-template-columns: 1fr;
+    overflow-y: auto;
   }
 
   .art {
@@ -330,7 +392,11 @@ h2 {
 
   .forms {
     border-left: 0;
-    align-items: flex-start;
+    overflow-y: visible;
+  }
+
+  .forms-inner {
+    margin: 0;
   }
 }
 </style>

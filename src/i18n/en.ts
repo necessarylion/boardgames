@@ -33,6 +33,9 @@ export const en = {
   'home.join.hint': 'Ask the host for the four-character room code.',
   'home.join.placeholder': 'ABCD',
   'home.join.action': 'Join room',
+  'home.invited.title': "You've been invited",
+  'home.invited.hint': 'The room code came with your link. Enter your name and join.',
+  'home.invited.hostInstead': 'Host my own table instead',
   'home.footnote':
     'Two to four players, each on their own device. The board grows with the number of players.',
   'home.board.title': 'Board',
