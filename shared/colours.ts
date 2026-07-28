@@ -1,4 +1,4 @@
-import type { PlayerColour } from './types'
+import type { Caste, PlayerColour } from './types'
 
 export interface ColourSet {
   /** Tile body. */
@@ -10,11 +10,30 @@ export interface ColourSet {
   label: string
 }
 
+/**
+ * Dyed-cloth tones: a saturated body, a darker thread for the border and the
+ * weave, and whichever text colour holds up on that body — dark on the mustard,
+ * light on the other three.
+ */
 export const PLAYER_COLOURS: Record<PlayerColour, ColourSet> = {
-  gold: { fill: '#e5c06a', ink: '#8a6414', text: '#4a3406', label: 'Gold' },
-  red: { fill: '#e08b86', ink: '#8f2b26', text: '#4a100d', label: 'Red' },
-  green: { fill: '#8fbf8a', ink: '#2f6b34', text: '#123d16', label: 'Green' },
-  purple: { fill: '#a999cf', ink: '#4d3d80', text: '#241a45', label: 'Purple' },
+  gold: { fill: '#d4a017', ink: '#7d5309', text: '#3d2903', label: 'Gold' },
+  red: { fill: '#a63a30', ink: '#6b1d17', text: '#fdeee8', label: 'Red' },
+  green: { fill: '#2f7a45', ink: '#17482a', text: '#eff7ec', label: 'Green' },
+  purple: { fill: '#5b429e', ink: '#32235f', text: '#f1ecfb', label: 'Purple' },
 }
 
 export const COLOUR_ORDER: readonly PlayerColour[] = ['gold', 'red', 'green', 'purple']
+
+/**
+ * The disc a caste piece sits on. The three pieces are drawn in much the same
+ * brown, and at board size the silhouettes alone are hard to tell apart, so the
+ * disc carries the distinction instead of the artwork.
+ *
+ * Buddha is blue rather than green because green is already the board's mark for
+ * a piece you may click.
+ */
+export const CASTE_COLOURS: Record<Caste, Pick<ColourSet, 'fill' | 'ink'>> = {
+  buddha: { fill: '#c6dbef', ink: '#2f5a86' },
+  rice: { fill: '#f2c7c1', ink: '#8f2b26' },
+  castle: { fill: '#f4dfa4', ink: '#8a6414' },
+}

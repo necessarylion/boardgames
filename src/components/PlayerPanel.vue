@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import GameIcon from './GameIcon.vue'
-import { PLAYER_COLOURS } from '@shared/colours'
+import { CASTE_COLOURS, PLAYER_COLOURS } from '@shared/colours'
 import { CASTES, type Caste } from '@shared/types'
 import { casteName, castePiece, t } from '@/i18n'
 import { useGameStore } from '@/stores/game'
@@ -37,7 +37,15 @@ function capturedCounts(captured: Caste[] | null): Record<Caste, number> | null 
       <h3>{{ t('panel.onBoard') }}</h3>
       <ul class="tally">
         <li v-for="caste in CASTES" :key="caste">
-          <GameIcon :name="caste" :size="18" />
+          <span
+            class="caste-disc"
+            :style="{
+              background: CASTE_COLOURS[caste].fill,
+              borderColor: CASTE_COLOURS[caste].ink,
+            }"
+          >
+            <GameIcon :name="caste" :size="18" />
+          </span>
           <span class="tally-name">{{ castePiece(caste) }}</span>
           <span class="tally-sub tiny muted">{{ casteName(caste) }}</span>
           <strong>{{ remaining[caste] }}</strong>
@@ -149,6 +157,18 @@ h3 {
 
 .tally.compact li {
   grid-template-columns: auto 1fr auto;
+}
+
+/* Matches the disc a piece sits on over on the board, so the tally reads as the
+   same three things. */
+.caste-disc {
+  display: grid;
+  place-items: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 50%;
+  border: 1px solid;
+  flex: none;
 }
 
 .tally-name {
