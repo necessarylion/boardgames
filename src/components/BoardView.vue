@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import GameIcon from './GameIcon.vue'
 import TileGlyph from './TileGlyph.vue'
 import { usePanZoom, type Bounds } from '@/composables/usePanZoom'
+import { CASTE_COLOURS } from '@shared/colours'
 import { hexCentre, hexPolygon, type Point } from '@shared/hex'
 import type { PieceRef } from '@shared/rules'
 import { SETTLEMENT_CAPACITY, type PlayerColour, type Space } from '@shared/types'
@@ -154,13 +155,17 @@ function isSurroundedNow(space: Space): boolean {
             <circle
               :cx="cell.centre.x + pieceSlots((pieces[cell.space.id] ?? []).length)[index].x"
               :cy="cell.centre.y + pieceSlots((pieces[cell.space.id] ?? []).length)[index].y"
-              :r="HEX * 0.31"
+              :r="HEX * 0.34"
               class="piece-disc"
+              :style="{
+                '--disc-fill': CASTE_COLOURS[caste].fill,
+                '--disc-ink': CASTE_COLOURS[caste].ink,
+              }"
             />
             <GameIcon
               inline
               :name="caste"
-              :size="HEX * 0.46"
+              :size="HEX * 0.63"
               :x="cell.centre.x + pieceSlots((pieces[cell.space.id] ?? []).length)[index].x"
               :y="cell.centre.y + pieceSlots((pieces[cell.space.id] ?? []).length)[index].y"
             />
@@ -176,7 +181,7 @@ function isSurroundedNow(space: Space): boolean {
           <TileGlyph
             :tile="game.tiles[placed[cell.space.id].tileId]"
             :colour="ownerColour(cell.space.id)"
-            :size="HEX * 0.88"
+            :size="HEX * 0.83"
             :x="cell.centre.x"
             :y="cell.centre.y"
           />
@@ -361,9 +366,11 @@ function isSurroundedNow(space: Space): boolean {
   color: var(--vermillion);
 }
 
+/* The caste colour is the only thing separating the three pieces at this size,
+   so every state below changes the ring and leaves the fill alone. */
 .piece-disc {
-  fill: #fbf4e6;
-  stroke: rgba(90, 70, 44, 0.55);
+  fill: var(--disc-fill);
+  stroke: var(--disc-ink);
   stroke-width: 1.1;
 }
 
@@ -377,11 +384,10 @@ function isSurroundedNow(space: Space): boolean {
 }
 
 .piece-selectable:hover .piece-disc {
-  fill: #e2f2d6;
+  stroke-width: 3.4;
 }
 
 .piece-chosen .piece-disc {
-  fill: #f6d9a6;
   stroke: var(--vermillion);
   stroke-width: 3;
 }
