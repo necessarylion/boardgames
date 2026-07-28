@@ -13,6 +13,16 @@ WebSockets.
 Vue 3 + TypeScript + Vite on the client, a small Node WebSocket server holding
 the authoritative game state.
 
+![The table mid-game: the hex board, the player panel and the play log](assets/preview2.png)
+
+*The table. The board pans and zooms, the sidebar tracks the caste counts and
+every player's hand size, and your own tiles sit along the bottom.*
+
+![The draft screen: what each tile does, beside the twenty tiles to choose from](assets/preview1.jpeg)
+
+*The opening draft. Everyone picks five of their twenty tiles at the same time,
+with a reference for what each tile does alongside.*
+
 ## Running it
 
 ```bash
