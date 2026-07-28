@@ -171,7 +171,7 @@ function isSurroundedNow(space: Space): boolean {
         <g
           v-if="placed[cell.space.id]"
           filter="url(#tile-drop)"
-          :class="{ 'tile-fresh': justPlaced.has(cell.space.id) }"
+          :class="['tile', { 'tile-fresh': justPlaced.has(cell.space.id) }]"
         >
           <TileGlyph
             :tile="game.tiles[placed[cell.space.id].tileId]"
@@ -339,6 +339,18 @@ function isSurroundedNow(space: Space): boolean {
   50% {
     stroke-opacity: 1;
   }
+}
+
+/*
+ * Only the hex itself and the caste pieces answer to a click. Everything drawn
+ * over a hex is decoration and has to let the click through to the hex beneath
+ * — a placed tile covers almost the whole space, so without this the only part
+ * of an occupied hex that could be clicked was the thin ring around its edge,
+ * and picking up a tile with a move tile was all but impossible.
+ */
+.tile,
+.building {
+  pointer-events: none;
 }
 
 .building {
