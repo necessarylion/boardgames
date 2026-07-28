@@ -1,0 +1,28 @@
+# syntax=docker/dockerfile:1
+
+# Deployment for Coolify, using the image GitHub Actions already published
+# rather than rebuilding from source on the server.
+#
+# In Coolify: add this repository as an "Application" with the Dockerfile build
+# pack, and set the Dockerfile location to `/Dockerfile.coolify`. Point the
+# proxy at port 8787; WebSocket upgrades are proxied through as-is.
+#
+# Add a PostgreSQL resource in the same project and copy its internal
+# connection string into this application's `DATABASE_URL` environment
+# variable. Rooms and games in progress are written there, so a redeploy or a
+# crash does not end the tables people are sitting at. Without it the server
+# still runs, but everything is lost on restart.
+#
+# IMPORTANT: run exactly one replica. A live game is served from the server's
+# memory and only written through to Postgres, so a second instance would not
+# see the first one's tables.
+
+FROM ghcr.io/necessarylion/samurai:latest
+
+# Everything else — the working directory, the healthcheck, the non-root user
+# and the command — comes from the published image.
+ENV NODE_ENV=production \
+    PORT=8787 \
+    HOST=0.0.0.0
+
+EXPOSE 8787

@@ -1,0 +1,155 @@
+:root {
+  --paper: #f2e9db;
+  --paper-2: #e7dbc8;
+  --paper-3: #dbcdb5;
+  --ink: #2c241c;
+  --ink-soft: #6a5b4a;
+  --ink-faint: #9b8b76;
+  --vermillion: #b23a2c;
+  --vermillion-dark: #8c2a1f;
+  --gold-line: #b99a5c;
+  --sea: #b7d2dd;
+  --sea-deep: #93b8c8;
+  --land: #e3d3b3;
+  --land-edge: #c2ab84;
+  --settlement: #efe2c4;
+  --shadow: 0 2px 6px rgba(52, 38, 24, 0.18);
+  --shadow-lg: 0 12px 34px rgba(52, 38, 24, 0.26);
+  --radius: 10px;
+  --font-display: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif;
+  --font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-body);
+  color: var(--ink);
+  background-color: var(--paper);
+  background-image:
+    radial-gradient(circle at 18% 12%, rgba(255, 255, 255, 0.7), transparent 42%),
+    radial-gradient(circle at 82% 78%, rgba(199, 176, 140, 0.35), transparent 46%),
+    linear-gradient(160deg, #f6efe3 0%, #eee2cf 55%, #e6d8c0 100%);
+  background-attachment: fixed;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  margin: 0;
+}
+
+button {
+  font: inherit;
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+/* --- shared building blocks ---------------------------------------------- */
+
+.panel {
+  background: linear-gradient(170deg, rgba(255, 253, 248, 0.92), rgba(243, 235, 221, 0.86));
+  border: 1px solid rgba(160, 137, 102, 0.42);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.55rem 1.1rem;
+  border-radius: 8px;
+  border: 1px solid rgba(140, 42, 31, 0.55);
+  background: linear-gradient(180deg, #c2483a, #a1301f);
+  color: #fdf6ec;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  box-shadow: var(--shadow);
+  transition: transform 0.12s ease, filter 0.12s ease;
+}
+
+.btn:hover:not(:disabled) {
+  filter: brightness(1.07);
+  transform: translateY(-1px);
+}
+
+.btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.btn:disabled {
+  background: linear-gradient(180deg, #cfc2ac, #bcae95);
+  border-color: rgba(120, 105, 82, 0.4);
+  color: #f2ece1;
+  box-shadow: none;
+}
+
+.btn.ghost {
+  background: rgba(255, 252, 245, 0.7);
+  border-color: rgba(140, 118, 84, 0.5);
+  color: var(--ink);
+}
+
+.btn.ghost:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.95);
+}
+
+.btn.small {
+  padding: 0.35rem 0.75rem;
+  font-size: 0.85rem;
+}
+
+.seal {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  border-radius: 5px;
+  background: var(--vermillion);
+  color: #fdf3e6;
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  line-height: 1;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25);
+}
+
+.muted {
+  color: var(--ink-soft);
+}
+
+.tiny {
+  font-size: 0.78rem;
+}
+
+.rule {
+  border: 0;
+  border-top: 1px solid rgba(150, 128, 94, 0.32);
+  margin: 0.9rem 0;
+}
+
+.scroll {
+  overflow-y: auto;
+  scrollbar-width: thin;
+}

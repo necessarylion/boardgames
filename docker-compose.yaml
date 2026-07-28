@@ -1,0 +1,40 @@
+# Builds and runs the production image locally, to check it before deploying.
+#
+#   docker compose -f docker-compose.local.yaml up --build
+#
+# Then open http://localhost:8787. Other devices on the network can join at
+# http://<your-lan-ip>:8787.
+
+services:
+  samurai:
+    build: .
+    restart: unless-stopped
+    environment:
+      - PORT=8787
+      - HOST=0.0.0.0
+      - NODE_ENV=production
+      - DATABASE_URL=postgres://samurai:samurai@postgres:5432/samurai
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - '8787:8787'
+
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=samurai
+      - POSTGRES_PASSWORD=samurai
+      - POSTGRES_DB=samurai
+    volumes:
+      - samurai-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U samurai -d samurai']
+      interval: 10s
+      timeout: 5s
+      start_period: 20s
+      retries: 5
+
+volumes:
+  samurai-postgres:

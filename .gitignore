@@ -1,0 +1,10 @@
+node_modules/
+dist/
+# Reference PDFs (rulebooks and the like) are third-party copyrighted material
+# and must never be committed — see the licence note in README.md.
+*.pdf
+dist-server/
+*.local
+.DS_Store
+*.log
+.vite/

@@ -1,0 +1,202 @@
+// @vitest-environment jsdom
+import { describe, expect, it, beforeEach } from 'vitest'
+import { createPinia, setActivePinia } from 'pinia'
+import { mount } from '@vue/test-utils'
+
+import DraftScreen from '../src/components/DraftScreen.vue'
+import GameScreen from '../src/components/GameScreen.vue'
+import HomeScreen from '../src/components/HomeScreen.vue'
+import LobbyScreen from '../src/components/LobbyScreen.vue'
+import { Room } from '../server/rooms'
+import { tileFromId } from '../shared/tiles'
+import { useGameStore } from '../src/stores/game'
+
+/** A real room, driven through the real server code, to render against. */
+function room(started = true) {
+  const r = new Room('TEST')
+  r.addSeat('token-a', 'Takeda')
+  r.addSeat('token-b', 'Uesugi')
+  r.options = { randomHands: true, openInformation: false }
+  if (started) r.start()
+  return r
+}
+
+beforeEach(() => {
+  setActivePinia(createPinia())
+  localStorage.clear()
+})
+
+describe('ending and restarting', () => {
+  it('takes the room back to the lobby, keeping the players seated', () => {
+    const r = room()
+    expect(r.started).toBe(true)
+    expect(r.abandon()).toBeNull()
+
+    expect(r.started).toBe(false)
+    expect(r.stateFor('token-a').phase).toBe('lobby')
+    expect(r.seats.map((s) => s.name)).toEqual(['Takeda', 'Uesugi'])
+    // The board is gone, so a fresh game can be dealt with new settings.
+    expect(r.stateFor('token-a').pieces).toEqual({})
+    expect(r.start()).toBeNull()
+  })
+
+  it('refuses to abandon when no game is running', () => {
+    const r = room(false)
+    expect(r.abandon()).toMatch(/no game/i)
+  })
+
+  it('drops absent players when a new game is dealt', () => {
+    const r = room()
+    r.seats[1].connected = false
+    r.abandon()
+    expect(r.seats.map((s) => s.name)).toEqual(['Takeda'])
+    // One player left is not a game.
+    expect(r.start()).toMatch(/at least two/i)
+  })
+
+  it('hands the host role to someone who is still present', () => {
+    const r = room()
+    expect(r.isHost('token-a')).toBe(true)
+    r.seats[0].connected = false
+    r.ensureHost()
+    expect(r.isHost('token-b')).toBe(true)
+  })
+
+  it('will not rematch while a game is still in progress', () => {
+    const r = room()
+    expect(r.rematch()).toMatch(/still in progress/i)
+  })
+})
+
+describe('rendering', () => {
+  it('renders the home screen without a connection', () => {
+    const wrapper = mount(HomeScreen)
+    expect(wrapper.text()).toContain('Samurai')
+    expect(wrapper.findAll('button').length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('renders the lobby with both seats and two empty slots', () => {
+    const game = useGameStore()
+    game.state = room(false).stateFor('token-a')
+    const wrapper = mount(LobbyScreen)
+    expect(wrapper.text()).toContain('TEST')
+    expect(wrapper.text()).toContain('Takeda')
+    expect(wrapper.text()).toContain('Uesugi')
+    expect(wrapper.findAll('.seat')).toHaveLength(4)
+  })
+
+  it('renders the board, every space and both hands from server state', () => {
+    const r = room()
+    const game = useGameStore()
+    game.state = r.stateFor('token-a')
+
+    const wrapper = mount(GameScreen)
+    const svg = wrapper.find('svg.board')
+    expect(svg.exists()).toBe(true)
+
+    // One terrain polygon per space on the two-player board.
+    const spaceCount = Object.keys(r.game!.board.spaces).length
+    expect(svg.findAll('polygon.hex')).toHaveLength(spaceCount)
+
+    // Caste pieces are drawn for the whole starting supply of 21.
+    expect(svg.findAll('.piece')).toHaveLength(21)
+
+    // The seated player sees their own five tiles and it is their turn.
+    expect(wrapper.text()).toContain('Your turn')
+    expect(wrapper.findAll('.tile-btn')).toHaveLength(5)
+  })
+
+  it('shows the opponent as waiting and hides their captured pieces', () => {
+    const r = room()
+    const game = useGameStore()
+    game.state = r.stateFor('token-b') // the player who is not on turn
+
+    const wrapper = mount(GameScreen)
+    expect(wrapper.text()).toContain("Takeda's turn")
+    expect(wrapper.text()).toContain('Captured pieces kept behind their screen')
+    // Nothing is playable while it is not your turn.
+    expect(wrapper.findAll('.tile-btn:not([disabled])')).toHaveLength(0)
+  })
+
+  it('offers all twenty tiles during the draft and caps the picks at five', async () => {
+    const r = new Room('DRFT')
+    r.addSeat('token-a', 'Takeda')
+    r.addSeat('token-b', 'Uesugi')
+    r.options = { randomHands: false, openInformation: false }
+    r.start()
+
+    const game = useGameStore()
+    game.state = r.stateFor('token-a')
+    const wrapper = mount(DraftScreen)
+    expect(wrapper.findAll('.tile-btn')).toHaveLength(20)
+
+    game.randomiseDraft()
+    await wrapper.vm.$nextTick()
+    expect(game.draftPicks).toHaveLength(5)
+    expect(new Set(game.draftPicks).size).toBe(5)
+    expect(wrapper.findAll('.tile-btn.picked')).toHaveLength(5)
+
+    // A sixth pick is ignored rather than replacing one.
+    const unpicked = game.draftPool.find((t) => !game.draftPicks.includes(t.id))!
+    game.toggleDraftPick(unpicked.id)
+    expect(game.draftPicks).toHaveLength(5)
+  })
+
+  it('ends the game only after a confirming second click', async () => {
+    const r = room()
+    const game = useGameStore()
+    game.state = r.stateFor('token-a') // the host
+    const sent: string[] = []
+    // Intercept outgoing messages instead of opening a real socket.
+    game.abandonGame = () => sent.push('abandon')
+
+    const wrapper = mount(GameScreen)
+    expect(wrapper.text()).not.toContain('End game')
+
+    await wrapper.find('.menu-wrap > button').trigger('click')
+    expect(wrapper.text()).toContain('End game')
+    expect(wrapper.text()).toContain('Leave table')
+
+    // First click only asks for confirmation.
+    await wrapper.find('.menu .item').trigger('click')
+    expect(sent).toHaveLength(0)
+    expect(wrapper.text()).toContain('End this game for everyone')
+
+    await wrapper.find('.menu .row .btn').trigger('click')
+    expect(sent).toEqual(['abandon'])
+  })
+
+  it('does not offer ending the game to a player who is not the host', async () => {
+    const r = room()
+    const game = useGameStore()
+    game.state = r.stateFor('token-b')
+
+    const wrapper = mount(GameScreen)
+    await wrapper.find('.menu-wrap > button').trigger('click')
+    expect(wrapper.text()).toContain('Only the host can end the game')
+    expect(wrapper.text()).toContain('Leave table')
+  })
+
+  it('highlights legal targets once a tile is selected', async () => {
+    const r = room()
+    const game = useGameStore()
+    game.state = r.stateFor('token-a')
+
+    const wrapper = mount(GameScreen)
+    expect(wrapper.findAll('.hex-target')).toHaveLength(0)
+
+    // Hands are random here, so pick a tile that actually goes onto the board:
+    // the move tile has nothing to reposition on turn one, and switch targets
+    // pieces rather than spaces.
+    const playable = game.playableTileIds.find((id) => {
+      const kind = tileFromId(id).kind
+      return kind !== 'move' && kind !== 'switch'
+    })
+    expect(playable).toBeTruthy()
+    game.selectTile(playable!)
+    await wrapper.vm.$nextTick()
+
+    expect(game.highlightedSpaces.length).toBeGreaterThan(0)
+    expect(wrapper.findAll('.hex-target')).toHaveLength(game.highlightedSpaces.length)
+  })
+})
