@@ -8,7 +8,7 @@ import PlayerPanel from './PlayerPanel.vue'
 import RulesDialog from './RulesDialog.vue'
 import TableMenu from './TableMenu.vue'
 import { PLAYER_COLOURS } from '@shared/colours'
-import { LOCALE_NAME, LOCALES, locale, setLocale, t } from '@/i18n'
+import { t } from '@/i18n'
 import { useGameStore } from '@/stores/game'
 
 const game = useGameStore()
@@ -22,13 +22,6 @@ const turnLabel = computed(() => {
     ? t('game.playerTurn', { name: game.activePlayer.name })
     : t('game.noTurn')
 })
-
-/**
- * The table menu carries the full language row, but mid-game that is a click
- * away behind a dropdown. With only two languages a single button that names
- * the one you are not in is enough, and costs the bar almost nothing.
- */
-const otherLocale = computed(() => LOCALES.find((code) => code !== locale.value) ?? LOCALES[0])
 
 const accent = computed(() =>
   game.activePlayer ? PLAYER_COLOURS[game.activePlayer.colour].ink : 'var(--ink-soft)',
@@ -45,14 +38,6 @@ const accent = computed(() =>
       </div>
       <div class="top-actions">
         <span class="tiny muted code">{{ t('game.room', { code: game.state?.code ?? '' }) }}</span>
-        <button
-          class="btn ghost small"
-          :lang="otherLocale"
-          :title="t('lang.label')"
-          @click="setLocale(otherLocale)"
-        >
-          {{ LOCALE_NAME[otherLocale] }}
-        </button>
         <button class="btn ghost small" @click="showRules = true">{{ t('game.rules') }}</button>
         <button class="btn ghost small sidebar-toggle" @click="showSidebar = !showSidebar">
           {{ showSidebar ? t('game.hideInfo') : t('game.showInfo') }}
