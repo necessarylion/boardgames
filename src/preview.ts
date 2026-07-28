@@ -1,5 +1,6 @@
 // Development-only entry: renders the table against a locally simulated game
 // so the visuals can be inspected without a server or a second browser.
+import { DEFAULT_OPTIONS } from '@shared/engine'
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 
@@ -17,7 +18,7 @@ const NAMES = ['Takeda', 'Uesugi', 'Hojo', 'Imagawa']
 const playerCount = Number(new URLSearchParams(location.search).get('players') ?? 4)
 const turns = Number(new URLSearchParams(location.search).get('turns') ?? 26)
 
-const game = new Game(playerCount, { randomHands: true, openInformation: true }, 20260728)
+const game = new Game(playerCount, { ...DEFAULT_OPTIONS, randomHands: true, openInformation: true }, 20260728)
 
 // Play a few plausible turns so the board is not empty.
 for (let i = 0; i < turns; i++) {
@@ -69,6 +70,7 @@ const state: ClientState = {
   captured: [...s.players[0].captured],
   draftPool: [],
   canEndTurn: false,
+  canUndo: false,
 }
 
 // ?screen=draft renders the opening-hand chooser instead of the table, with a

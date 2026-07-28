@@ -222,6 +222,7 @@ export class Room {
         current: 0,
         turnNumber: 0,
         placedThisTurn: [],
+        canUndo: false,
         playedNonFast: false,
         setAside: [],
         log: [],
@@ -249,6 +250,9 @@ export class Room {
       current: s.current,
       turnNumber: s.turnNumber,
       placedThisTurn: s.placedThisTurn,
+      // Only the player whose turn it is can take anything back, so the flag is
+      // false for everyone else and the button never appears for them.
+      canUndo: seat?.id === s.current && s.phase === 'play' && s.undoStack.length > 0,
       playedNonFast: s.playedNonFast,
       setAside: s.setAside,
       log: s.log,

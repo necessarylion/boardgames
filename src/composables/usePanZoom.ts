@@ -10,7 +10,16 @@ export interface Bounds {
 export interface PanZoomOptions {
   min?: number
   max?: number
-  /** Movement in screen pixels before a press counts as a drag, not a click. */
+  /**
+   * How far the pointer may travel, in screen pixels, before a press counts as
+   * a drag rather than a click.
+   *
+   * This is deliberately generous. Almost nobody clicks without moving the
+   * pointer a little, and every pixel of that slop that lands over the
+   * threshold turns a tile placement into a swallowed click — the tile silently
+   * refuses to go down. Panning survives a larger value comfortably, because a
+   * real pan is tens of pixels; a misread click has no such margin.
+   */
   dragThreshold?: number
 }
 
@@ -29,7 +38,7 @@ export function usePanZoom(
 ) {
   const MIN = options.min ?? 1
   const MAX = options.max ?? 6
-  const DRAG_THRESHOLD = options.dragThreshold ?? 4
+  const DRAG_THRESHOLD = options.dragThreshold ?? 10
 
   // Seeded with a sensible shape so the first render is correct even before the
   // element has been measured (and under test runners with no layout).
@@ -159,6 +168,22 @@ export function usePanZoom(
     return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }
   }
 
+  /**
+   * Follow the pointer even once it leaves the board — but only from the moment
+   * a gesture is actually under way.
+   *
+   * Capturing on press instead would be a trap: while a pointer is captured the
+   * browser retargets the compatibility mouse events too, so the `click` that
+   * follows is delivered to the capturing SVG rather than to the hex under the
+   * cursor. The hex's own handler never runs and the tile silently refuses to go
+   * down. Panning needs capture; a plain click must never see it.
+   */
+  function capturePointer(event: PointerEvent) {
+    const target = event.currentTarget as Element | null
+    if (target?.hasPointerCapture?.(event.pointerId)) return
+    target?.setPointerCapture?.(event.pointerId)
+  }
+
   function onPointerDown(event: PointerEvent) {
     // Ignore secondary mouse buttons so right-click menus still work.
     if (event.pointerType === 'mouse' && event.button !== 0) return
@@ -172,7 +197,6 @@ export function usePanZoom(
       pinchZoom = zoom.value
       dragging.value = true
     }
-    ;(event.currentTarget as Element | null)?.setPointerCapture?.(event.pointerId)
   }
 
   function onPointerMove(event: PointerEvent) {
@@ -182,17 +206,21 @@ export function usePanZoom(
     pointers.set(event.pointerId, next)
 
     if (pointers.size === 1) {
-      if (
-        Math.abs(next.x - pressOrigin.x) > DRAG_THRESHOLD ||
-        Math.abs(next.y - pressOrigin.y) > DRAG_THRESHOLD
-      ) {
-        dragging.value = true
+      // Straight-line distance, not each axis on its own: a per-axis test makes
+      // the slop diamond-shaped, so a diagonal wobble is allowed to travel
+      // further than a straight one before it counts.
+      const dx = next.x - pressOrigin.x
+      const dy = next.y - pressOrigin.y
+      if (Math.hypot(dx, dy) > DRAG_THRESHOLD) dragging.value = true
+      if (dragging.value) {
+        capturePointer(event)
+        panByScreen(next.x - previous.x, next.y - previous.y)
       }
-      if (dragging.value) panByScreen(next.x - previous.x, next.y - previous.y)
       return
     }
 
     if (pointers.size === 2 && pinchDistance > 0) {
+      capturePointer(event)
       const mid = midpoint()
       zoomAt((pinchZoom * spread()) / pinchDistance, mid.x, mid.y)
     }

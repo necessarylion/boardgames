@@ -1,3 +1,4 @@
+import { DEFAULT_OPTIONS } from '../shared/engine'
 import { describe, expect, it } from 'vitest'
 
 import { Game } from '../shared/engine'
@@ -30,7 +31,7 @@ function playSomeTurns(game: Game, turns: number) {
 describe('rooms survive a restart', () => {
   it('restores a lobby with its seats, host and settings', () => {
     const room = new Room('LOBY')
-    room.options = { randomHands: true, openInformation: true }
+    room.options = { ...DEFAULT_OPTIONS, randomHands: true, openInformation: true }
     room.addSeat('token-a', 'Ada')
     room.addSeat('token-b', 'Bo')
     room.members.add('token-a')
@@ -40,7 +41,7 @@ describe('rooms survive a restart', () => {
     const back = reload(room)
 
     expect(back.code).toBe('LOBY')
-    expect(back.options).toEqual({ randomHands: true, openInformation: true })
+    expect(back.options).toEqual({ ...DEFAULT_OPTIONS, randomHands: true, openInformation: true })
     expect(back.seats.map((s) => s.name)).toEqual(['Ada', 'Bo'])
     expect(back.seats.map((s) => s.colour)).toEqual(room.seats.map((s) => s.colour))
     expect(back.hostToken).toBe('token-b')
@@ -59,7 +60,7 @@ describe('rooms survive a restart', () => {
 
   it('restores a game in progress move for move', () => {
     const room = new Room('GAME')
-    room.options = { randomHands: true, openInformation: false }
+    room.options = { ...DEFAULT_OPTIONS, randomHands: true, openInformation: false }
     room.addSeat('token-a', 'Ada')
     room.addSeat('token-b', 'Bo')
     expect(room.start()).toBeNull()
@@ -81,7 +82,7 @@ describe('rooms survive a restart', () => {
 
   it('keeps playing from where the restored game left off', () => {
     const room = new Room('CONT')
-    room.options = { randomHands: true, openInformation: false }
+    room.options = { ...DEFAULT_OPTIONS, randomHands: true, openInformation: false }
     room.addSeat('token-a', 'Ada')
     room.addSeat('token-b', 'Bo')
     room.start()

@@ -43,8 +43,25 @@ function harness(content: Bounds = CONTENT) {
   return { api, wrapper }
 }
 
-const pointer = (id: number, x: number, y: number) =>
-  ({ pointerId: id, clientX: x, clientY: y, pointerType: 'touch', button: 0 }) as PointerEvent
+const pointer = (id: number, x: number, y: number, currentTarget?: Element) =>
+  ({
+    pointerId: id,
+    clientX: x,
+    clientY: y,
+    pointerType: 'touch',
+    button: 0,
+    currentTarget,
+  }) as unknown as PointerEvent
+
+/** Stands in for the SVG, recording which pointers it captured. */
+function captureSpy() {
+  const captured = new Set<number>()
+  const element = {
+    hasPointerCapture: (id: number) => captured.has(id),
+    setPointerCapture: (id: number) => captured.add(id),
+  } as unknown as Element
+  return { element, captured }
+}
 
 const clickEvent = (onStop: () => void) =>
   ({ stopPropagation: onStop, preventDefault: () => {} }) as unknown as MouseEvent
@@ -131,6 +148,71 @@ describe('board pan and zoom', () => {
 
     expect(api.dragging.value).toBe(false)
     expect(api.viewBox.value).toBe(before)
+  })
+
+  // Hardly anyone clicks without the pointer creeping a few pixels, and every
+  // one of those that reads as a drag silently eats the tile placement. These
+  // are the wobbles a hand actually produces, on both axes at once.
+  it.each([
+    [5, 2],
+    [3, 5],
+    [6, 6],
+    [-7, 4],
+  ])('still places a tile when the click drifts by (%i, %i)', (dx, dy) => {
+    const { api } = harness()
+    api.zoomIn()
+
+    api.handlers.onPointerdown(pointer(1, 400, 300))
+    api.handlers.onPointermove(pointer(1, 400 + dx, 300 + dy))
+    api.handlers.onPointerup(pointer(1, 400 + dx, 300 + dy))
+
+    expect(api.dragging.value).toBe(false)
+
+    let stopped = false
+    api.onClickCapture(clickEvent(() => (stopped = true)))
+    expect(stopped, 'the click reached the board and placed the tile').toBe(false)
+  })
+
+  // A captured pointer takes the click with it: the browser retargets the
+  // compatibility mouse events to the capturing element, so a hex never sees
+  // the click that was meant to place a tile on it. Capture has to wait until
+  // the press has proved itself a drag.
+  it('does not capture the pointer on a press that turns out to be a click', () => {
+    const { api } = harness()
+    const { element, captured } = captureSpy()
+    api.zoomIn()
+
+    api.handlers.onPointerdown(pointer(1, 400, 300, element))
+    expect(captured.has(1), 'a press alone must not capture').toBe(false)
+
+    api.handlers.onPointermove(pointer(1, 403, 302, element))
+    api.handlers.onPointerup(pointer(1, 403, 302, element))
+    expect(captured.has(1), 'a wobble must not capture either').toBe(false)
+  })
+
+  it('captures the pointer once a press becomes a drag', () => {
+    const { api } = harness()
+    const { element, captured } = captureSpy()
+    api.zoomIn()
+
+    api.handlers.onPointerdown(pointer(1, 400, 300, element))
+    api.handlers.onPointermove(pointer(1, 340, 260, element))
+
+    expect(api.dragging.value).toBe(true)
+    expect(captured.has(1), 'a pan must keep following the pointer off-board').toBe(true)
+  })
+
+  it('still treats a deliberate pan as a drag', () => {
+    const { api } = harness()
+    api.zoomIn()
+
+    api.handlers.onPointerdown(pointer(1, 400, 300))
+    api.handlers.onPointermove(pointer(1, 386, 292))
+
+    expect(api.dragging.value).toBe(true)
+    let stopped = false
+    api.onClickCapture(clickEvent(() => (stopped = true)))
+    expect(stopped, 'a real pan must not place a tile').toBe(true)
   })
 
   it('swallows the click that ends a drag so no tile is placed', () => {

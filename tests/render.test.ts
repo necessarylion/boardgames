@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { DEFAULT_OPTIONS } from '../shared/engine'
 import { describe, expect, it, beforeEach } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { mount } from '@vue/test-utils'
@@ -8,6 +9,7 @@ import GameScreen from '../src/components/GameScreen.vue'
 import HomeScreen from '../src/components/HomeScreen.vue'
 import LobbyScreen from '../src/components/LobbyScreen.vue'
 import { Room } from '../server/rooms'
+import { legalPlacements } from '../shared/rules'
 import { tileFromId } from '../shared/tiles'
 import { useGameStore } from '../src/stores/game'
 
@@ -16,7 +18,7 @@ function room(started = true) {
   const r = new Room('TEST')
   r.addSeat('token-a', 'Takeda')
   r.addSeat('token-b', 'Uesugi')
-  r.options = { randomHands: true, openInformation: false }
+  r.options = { ...DEFAULT_OPTIONS, randomHands: true, openInformation: false }
   if (started) r.start()
   return r
 }
@@ -106,6 +108,37 @@ describe('rendering', () => {
     expect(wrapper.findAll('.tile-btn')).toHaveLength(5)
   })
 
+  it('offers a take-back only once something has been placed this turn', () => {
+    const r = room()
+    const game = useGameStore()
+    game.state = r.stateFor('token-a')
+
+    // Nothing placed yet, so there is nothing to take back.
+    expect(mount(GameScreen).text()).not.toContain('Take back')
+
+    const view = r.game!.view
+    const tile = r.game!.state.players[0].hand
+      .map(tileFromId)
+      .find((t) => legalPlacements(view, t).length > 0)!
+    r.game!.playTile(0, tile.id, legalPlacements(view, tile)[0])
+    game.state = r.stateFor('token-a')
+
+    expect(mount(GameScreen).text()).toContain('Take back')
+  })
+
+  it('never offers a take-back to the player who is not on turn', () => {
+    const r = room()
+    const view = r.game!.view
+    const tile = r.game!.state.players[0].hand
+      .map(tileFromId)
+      .find((t) => legalPlacements(view, t).length > 0)!
+    r.game!.playTile(0, tile.id, legalPlacements(view, tile)[0])
+
+    const game = useGameStore()
+    game.state = r.stateFor('token-b')
+    expect(mount(GameScreen).text()).not.toContain('Take back')
+  })
+
   it('shows the opponent as waiting and hides their captured pieces', () => {
     const r = room()
     const game = useGameStore()
@@ -122,7 +155,7 @@ describe('rendering', () => {
     const r = new Room('DRFT')
     r.addSeat('token-a', 'Takeda')
     r.addSeat('token-b', 'Uesugi')
-    r.options = { randomHands: false, openInformation: false }
+    r.options = { ...DEFAULT_OPTIONS, randomHands: false, openInformation: false }
     r.start()
 
     const game = useGameStore()

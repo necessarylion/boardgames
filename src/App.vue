@@ -4,6 +4,7 @@ import DraftScreen from './components/DraftScreen.vue'
 import GameScreen from './components/GameScreen.vue'
 import HomeScreen from './components/HomeScreen.vue'
 import LobbyScreen from './components/LobbyScreen.vue'
+import { t } from './i18n'
 import { useGameStore } from './stores/game'
 
 const game = useGameStore()
@@ -14,11 +15,7 @@ onMounted(() => game.connect())
 <template>
   <div class="app">
     <p v-if="game.connection !== 'open'" class="connection" :class="game.connection">
-      {{
-        game.connection === 'connecting'
-          ? 'Connecting to the game server…'
-          : 'Connection lost — reconnecting…'
-      }}
+      {{ game.connection === 'connecting' ? t('app.connecting') : t('app.connectionLost') }}
     </p>
 
     <HomeScreen v-if="!game.inRoom" />

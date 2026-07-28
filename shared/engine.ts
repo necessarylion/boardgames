@@ -1,4 +1,4 @@
-import { buildBoard, type Board } from './board'
+import { buildBoard, DEFAULT_BOARD_SHAPE, type Board } from './board'
 import { Rng } from './rng'
 import {
   canSwitch,
@@ -15,6 +15,7 @@ import { distributePieces } from './setup'
 import { STARTING_HAND_SIZE, buildTiles, tileFromId, tileLabel } from './tiles'
 import {
   CASTE_PIECE_LABEL,
+  type BoardShape,
   type Caste,
   type GameResult,
   type LogEntry,
@@ -29,11 +30,14 @@ export interface GameOptions {
   randomHands: boolean
   /** Reveal every player's captured pieces instead of keeping them secret. */
   openInformation: boolean
+  /** Which island chain to play on. The board is rebuilt from this, never sent. */
+  boardShape: BoardShape
 }
 
 export const DEFAULT_OPTIONS: GameOptions = {
   randomHands: false,
   openInformation: false,
+  boardShape: DEFAULT_BOARD_SHAPE,
 }
 
 export interface EnginePlayer {
@@ -44,6 +48,18 @@ export interface EnginePlayer {
   /** Draft picks confirmed; empty until the player has chosen. */
   draftReady: boolean
 }
+
+/**
+ * Enough to reverse one action of the turn in progress.
+ *
+ * Recorded explicitly rather than inferred from `placedThisTurn`, because the
+ * three actions leave very different marks: a placement adds one space, a move
+ * adds two and relocates an existing tile, and a switch adds none at all.
+ */
+export type UndoEntry =
+  | { kind: 'place'; tileId: string; spaceId: string }
+  | { kind: 'move'; tileId: string; from: string; to: string }
+  | { kind: 'switch'; tileId: string; a: PieceRef; b: PieceRef }
 
 export interface GameState {
   phase: Phase
@@ -56,6 +72,12 @@ export interface GameState {
   current: number
   turnNumber: number
   placedThisTurn: string[]
+  /**
+   * What the current player has done this turn, newest last, so a misclick can
+   * be taken back. Emptied by `endTurn`, which is the point everything commits:
+   * captures resolve, hands refill, and the board is no longer yours to edit.
+   */
+  undoStack: UndoEntry[]
   playedNonFast: boolean
   setAside: Caste[]
   log: LogEntry[]
@@ -81,7 +103,7 @@ export class Game {
 
   constructor(playerCount: number, options: GameOptions, seed: number) {
     if (playerCount < 2 || playerCount > 4) throw new Error('Samurai is for 2 to 4 players')
-    this.board = buildBoard(playerCount)
+    this.board = buildBoard(playerCount, options.boardShape)
     const rng = new Rng(seed)
 
     const players: EnginePlayer[] = Array.from({ length: playerCount }, (_, id) => {
@@ -107,6 +129,7 @@ export class Game {
       current: 0,
       turnNumber: 1,
       placedThisTurn: [],
+      undoStack: [],
       playedNonFast: false,
       setAside: [],
       log: [],
@@ -131,7 +154,9 @@ export class Game {
    */
   static fromState(state: GameState): Game {
     const game = new Game(state.playerCount, state.options, state.seed)
-    game.state = state
+    // Snapshots written before undo existed have no stack; an empty one simply
+    // means "nothing to take back", which is correct for a restored room.
+    game.state = { ...state, undoStack: state.undoStack ?? [] }
     return game
   }
 
@@ -225,6 +250,7 @@ export class Game {
     this.state.placed[spaceId] = { tileId, owner: playerId }
     this.discard(playerId, tileId)
     this.state.placedThisTurn.push(spaceId)
+    this.state.undoStack.push({ kind: 'place', tileId, spaceId })
     if (!tile.fast) this.state.playedNonFast = true
     this.log(playerId, `plays ${tileLabel(tile)}${tile.fast ? ' (fast)' : ''}.`)
     return OK
@@ -248,6 +274,7 @@ export class Game {
     this.state.placed[from] = { tileId, owner: playerId }
     this.discard(playerId, tileId)
     this.state.placedThisTurn.push(from, to)
+    this.state.undoStack.push({ kind: 'move', tileId, from, to })
     this.state.playedNonFast = true
     this.log(playerId, `repositions ${tileLabel(tileFromId(moved.tileId))} with the move tile.`)
     return OK
@@ -265,6 +292,7 @@ export class Game {
     this.state.pieces[a.spaceId][a.index] = casteB
     this.state.pieces[b.spaceId][b.index] = casteA
     this.discard(playerId, tileId)
+    this.state.undoStack.push({ kind: 'switch', tileId, a, b })
     this.log(
       playerId,
       `swaps a ${CASTE_PIECE_LABEL[casteA]} and a ${CASTE_PIECE_LABEL[casteB]} with the switch tile.`,
@@ -296,6 +324,55 @@ export class Game {
     })
   }
 
+  /**
+   * Take back the last thing done this turn — a misclick fix, not a take-back
+   * of a move. Only ever reaches as far as the start of the current turn:
+   * `endTurn` is where captures resolve and hands refill, and unwinding past
+   * that would mean rewriting information other players have already acted on.
+   *
+   * Nothing here needs to touch captures, because none have happened yet.
+   */
+  undoLast(playerId: number): ActionResult {
+    const turn = this.requireTurn(playerId)
+    if (!turn.ok) return turn
+
+    const last = this.state.undoStack.pop()
+    if (!last) return fail('There is nothing to take back this turn.')
+
+    const hand = this.state.players[playerId].hand
+    switch (last.kind) {
+      case 'place':
+        delete this.state.placed[last.spaceId]
+        break
+      case 'move':
+        // The moved tile goes home and the move tile leaves the board.
+        this.state.placed[last.from] = this.state.placed[last.to]
+        delete this.state.placed[last.to]
+        break
+      case 'switch': {
+        const casteA = this.state.pieces[last.a.spaceId][last.a.index]
+        const casteB = this.state.pieces[last.b.spaceId][last.b.index]
+        this.state.pieces[last.a.spaceId][last.a.index] = casteB
+        this.state.pieces[last.b.spaceId][last.b.index] = casteA
+        break
+      }
+    }
+
+    hand.push(last.tileId)
+    // Rebuild from what is left rather than guessing: a fast tile undone after
+    // a normal one must not hand the placement back.
+    this.state.placedThisTurn = this.state.undoStack.flatMap((entry) =>
+      entry.kind === 'place' ? [entry.spaceId] : entry.kind === 'move' ? [entry.from, entry.to] : [],
+    )
+    this.state.playedNonFast = this.state.undoStack.some(
+      (entry) => entry.kind === 'move' || (entry.kind === 'place' && !tileFromId(entry.tileId).fast),
+    )
+    // Drop the line this action wrote. It reads as the history of the game, and
+    // as far as the game is concerned this never happened.
+    this.state.log.pop()
+    return OK
+  }
+
   endTurn(playerId: number): ActionResult {
     const turn = this.requireTurn(playerId)
     if (!turn.ok) return turn
@@ -316,6 +393,7 @@ export class Game {
     if (this.state.current === 0) this.state.turnNumber += 1
     this.state.placedThisTurn = []
     this.state.playedNonFast = false
+    this.state.undoStack = []
     return OK
   }
 

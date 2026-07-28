@@ -1,12 +1,39 @@
 import { describe, expect, it } from 'vitest'
 
-import { Game } from '../shared/engine'
+import { DEFAULT_BOARD_SHAPE } from '../shared/board'
+import { BOARD_SHAPES, type BoardShape } from '../shared/types'
+import { DEFAULT_OPTIONS, Game } from '../shared/engine'
 import { legalPlacements } from '../shared/rules'
 import { STARTING_HAND_SIZE, tileFromId } from '../shared/tiles'
 import type { Tile } from '../shared/types'
 
-function newGame(playerCount = 2) {
-  return new Game(playerCount, { randomHands: true, openInformation: false }, 12345)
+function newGame(playerCount = 2, boardShape: BoardShape = DEFAULT_BOARD_SHAPE) {
+  return new Game(playerCount, { randomHands: true, openInformation: false, boardShape }, 12345)
+}
+
+/**
+ * Plays a whole game with a simple legal-move policy. Returns the game so the
+ * caller can assert on how it ended — or that it ended at all.
+ */
+function playOut(game: Game) {
+  let guard = 0
+  while (game.state.phase === 'play' && guard++ < 2000) {
+    const seat = game.state.current
+    const playable = game.state.players[seat].hand
+      .map(tileFromId)
+      .filter((t) => t.kind !== 'switch' && t.kind !== 'move')
+      .filter((t) => t.fast || !game.state.playedNonFast)
+      .filter((t) => legalPlacements(game.view, t).length > 0)
+
+    if (playable.length) {
+      const tile = playable[0]
+      const targets = legalPlacements(game.view, tile)
+      game.playTile(seat, tile.id, targets[guard % targets.length])
+    }
+    if (game.canEndTurn(seat)) game.endTurn(seat)
+    else break
+  }
+  return game
 }
 
 /** First tile in a player's hand matching a predicate. */
@@ -34,7 +61,7 @@ describe('turn structure', () => {
   })
 
   it('starts in the draft phase when hands are chosen', () => {
-    const game = new Game(2, { randomHands: false, openInformation: false }, 99)
+    const game = new Game(2, { ...DEFAULT_OPTIONS, randomHands: false, openInformation: false }, 99)
     expect(game.state.phase).toBe('draft')
     expect(game.draftPool(0)).toHaveLength(20)
 
@@ -46,7 +73,7 @@ describe('turn structure', () => {
   })
 
   it('rejects a draft that is the wrong size or not your own tiles', () => {
-    const game = new Game(2, { randomHands: false, openInformation: false }, 99)
+    const game = new Game(2, { ...DEFAULT_OPTIONS, randomHands: false, openInformation: false }, 99)
     expect(game.submitDraft(0, game.draftPool(0).slice(0, 4)).ok).toBe(false)
     expect(game.submitDraft(0, game.draftPool(1).slice(0, 5)).ok).toBe(false)
   })
@@ -103,6 +130,86 @@ describe('turn structure', () => {
   })
 })
 
+describe('taking back a placement', () => {
+  it('returns the tile to the hand and clears the space', () => {
+    const game = newGame()
+    const tile = findInHand(game, 0, (t) => t.kind === 'caste' && !t.fast)!
+    const space = legalPlacements(game.view, tile)[0]
+    const logBefore = game.state.log.length
+
+    game.playTile(0, tile.id, space)
+    expect(game.state.placed[space]).toBeDefined()
+
+    expect(game.undoLast(0).ok).toBe(true)
+    expect(game.state.placed[space]).toBeUndefined()
+    expect(game.state.players[0].hand).toContain(tile.id)
+    expect(game.state.placedThisTurn).toEqual([])
+    // The placement never happened, so the transcript should not mention it.
+    expect(game.state.log).toHaveLength(logBefore)
+  })
+
+  it('hands the placement back so another tile can be played instead', () => {
+    const game = newGame()
+    const first = findInHand(game, 0, (t) => t.kind === 'caste' && !t.fast)!
+    game.playTile(0, first.id, legalPlacements(game.view, first)[0])
+    expect(game.state.playedNonFast).toBe(true)
+
+    game.undoLast(0)
+    expect(game.state.playedNonFast).toBe(false)
+
+    const second = findInHand(game, 0, (t) => t.kind === 'caste' && !t.fast && t.id !== first.id)
+    if (second) {
+      expect(game.playTile(0, second.id, legalPlacements(game.view, second)[0]).ok).toBe(true)
+    }
+  })
+
+  it('unwinds a whole turn one tile at a time, newest first', () => {
+    const game = newGame()
+    const slow = findInHand(game, 0, (t) => t.kind === 'caste' && !t.fast)!
+    stack(game, 0, slow)
+    game.playTile(0, slow.id, legalPlacements(game.view, slow)[0])
+
+    const fast = tileFromId(
+      game.state.players[0].stack.map(tileFromId).find((t) => t.fast && t.kind === 'ronin')!.id,
+    )
+    stack(game, 0, fast)
+    const fastSpace = legalPlacements(game.view, fast)[0]
+    game.playTile(0, fast.id, fastSpace)
+    expect(game.state.placedThisTurn).toHaveLength(2)
+
+    // Newest first: the fast tile comes back before the one under it.
+    game.undoLast(0)
+    expect(game.state.placed[fastSpace]).toBeUndefined()
+    expect(game.state.playedNonFast).toBe(true)
+    expect(game.state.placedThisTurn).toHaveLength(1)
+
+    game.undoLast(0)
+    expect(game.state.placedThisTurn).toEqual([])
+    expect(game.state.playedNonFast).toBe(false)
+    expect(game.undoLast(0).ok).toBe(false)
+  })
+
+  it('refuses to reach back past the end of a turn', () => {
+    const game = newGame()
+    const tile = findInHand(game, 0, (t) => t.kind === 'caste' && !t.fast)!
+    const space = legalPlacements(game.view, tile)[0]
+    game.playTile(0, tile.id, space)
+    game.endTurn(0)
+
+    // Captures have resolved and hands have refilled; the board is committed.
+    expect(game.undoLast(1).ok).toBe(false)
+    expect(game.state.placed[space]).toBeDefined()
+  })
+
+  it('refuses a take-back from a player whose turn it is not', () => {
+    const game = newGame()
+    const tile = findInHand(game, 0, (t) => t.kind === 'caste' && !t.fast)!
+    game.playTile(0, tile.id, legalPlacements(game.view, tile)[0])
+    expect(game.undoLast(1).ok).toBe(false)
+    expect(game.state.placedThisTurn).toHaveLength(1)
+  })
+})
+
 describe('the move tile', () => {
   it('relocates an earlier tile and leaves the move tile behind', () => {
     const game = newGame()
@@ -129,6 +236,15 @@ describe('the move tile', () => {
     expect(game.useMove(0, move.id, from, to).ok).toBe(true)
     expect(game.state.placed[to].tileId).toBe(caste.id)
     expect(game.state.placed[from].tileId).toBe(move.id)
+
+    // Taking it back must send the relocated tile home and lift the move tile,
+    // not merely clear the destination — this is the one action that touches
+    // two spaces at once.
+    expect(game.undoLast(0).ok).toBe(true)
+    expect(game.state.placed[from].tileId).toBe(caste.id)
+    expect(game.state.placed[to]).toBeUndefined()
+    expect(game.state.players[0].hand).toContain(move.id)
+    expect(game.state.playedNonFast).toBe(false)
   })
 
   it('will not relocate a tile placed on the same turn', () => {
@@ -219,26 +335,20 @@ describe('the switch tile', () => {
 })
 
 describe('a full game', () => {
+  // A game can only end by clearing a caste or setting four pieces aside, so a
+  // map with more open land than the players have tiles to fill it would leave
+  // everyone stuck mid-game. Every shape a table can pick has to finish.
+  it.each(BOARD_SHAPES.flatMap((shape) => [2, 3, 4].map((n) => [shape, n] as const)))(
+    'finishes on %s at %i players',
+    (shape, count) => {
+      const game = playOut(newGame(count, shape))
+      expect(game.state.phase, `stuck after ${game.state.turnNumber} rounds`).toBe('over')
+      expect(game.state.result).not.toBeNull()
+    },
+  )
+
   it('reaches a scored result by playing legal moves at random', () => {
-    const game = newGame(4)
-    let guard = 0
-
-    while (game.state.phase === 'play' && guard++ < 500) {
-      const seat = game.state.current
-      const playable = game.state.players[seat].hand
-        .map(tileFromId)
-        .filter((t) => t.kind !== 'switch' && t.kind !== 'move')
-        .filter((t) => t.fast || !game.state.playedNonFast)
-        .filter((t) => legalPlacements(game.view, t).length > 0)
-
-      if (playable.length) {
-        const tile = playable[0]
-        const targets = legalPlacements(game.view, tile)
-        game.playTile(seat, tile.id, targets[guard % targets.length])
-      }
-      if (game.canEndTurn(seat)) game.endTurn(seat)
-      else break
-    }
+    const game = playOut(newGame(4))
 
     expect(game.state.phase).toBe('over')
     expect(game.state.result).not.toBeNull()

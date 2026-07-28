@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import LanguageSwitcher from '@/i18n/LanguageSwitcher.vue'
+import { t } from '@/i18n'
 import { useGameStore } from '@/stores/game'
 
 /**
@@ -29,44 +31,48 @@ function leave() {
 <template>
   <div class="menu-wrap">
     <button class="btn ghost small" @click="open ? close() : (open = true)">
-      Table {{ open ? '▴' : '▾' }}
+      {{ t('menu.table') }} {{ open ? '▴' : '▾' }}
     </button>
 
     <div v-if="open" class="backdrop" @click="close" />
 
     <div v-if="open" class="menu panel">
-      <p class="tiny muted head">Room {{ game.state?.code }}</p>
+      <p class="tiny muted head">{{ t('menu.room', { code: game.state?.code ?? '' }) }}</p>
 
       <template v-if="game.isHost">
         <template v-if="confirming === 'end'">
-          <p class="tiny warn">
-            End this game for everyone and go back to the lobby? The current board is lost.
-          </p>
+          <p class="tiny warn">{{ t('menu.endConfirm') }}</p>
           <div class="row">
-            <button class="btn small" @click="endGame">End game</button>
-            <button class="btn ghost small" @click="confirming = null">Cancel</button>
+            <button class="btn small" @click="endGame">{{ t('menu.endGame') }}</button>
+            <button class="btn ghost small" @click="confirming = null">
+              {{ t('menu.cancel') }}
+            </button>
           </div>
         </template>
         <button v-else class="item" @click="confirming = 'end'">
-          <span>End game</span>
-          <span class="tiny muted">Back to the lobby to deal again</span>
+          <span>{{ t('menu.endGame') }}</span>
+          <span class="tiny muted">{{ t('menu.endHint') }}</span>
         </button>
       </template>
-      <p v-else class="tiny muted item-note">Only the host can end the game.</p>
+      <p v-else class="tiny muted item-note">{{ t('menu.hostOnly') }}</p>
 
       <hr class="rule" />
 
       <template v-if="confirming === 'leave'">
-        <p class="tiny warn">Leave the table? You will lose your seat in this game.</p>
+        <p class="tiny warn">{{ t('menu.leaveConfirm') }}</p>
         <div class="row">
-          <button class="btn small" @click="leave">Leave table</button>
-          <button class="btn ghost small" @click="confirming = null">Cancel</button>
+          <button class="btn small" @click="leave">{{ t('menu.leaveTable') }}</button>
+          <button class="btn ghost small" @click="confirming = null">{{ t('menu.cancel') }}</button>
         </div>
       </template>
       <button v-else class="item" @click="confirming = 'leave'">
-        <span>Leave table</span>
-        <span class="tiny muted">Return to the start screen</span>
+        <span>{{ t('menu.leaveTable') }}</span>
+        <span class="tiny muted">{{ t('menu.leaveHint') }}</span>
       </button>
+
+      <hr class="rule" />
+
+      <LanguageSwitcher class="lang" />
     </div>
   </div>
 </template>
@@ -135,5 +141,9 @@ function leave() {
 
 .rule {
   margin: 0.45rem 0;
+}
+
+.lang {
+  padding: 0 0.5rem 0.2rem;
 }
 </style>

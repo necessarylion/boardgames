@@ -31,6 +31,26 @@ export const SETTLEMENT_CAPACITY: Record<SettlementKind, number> = {
 /** Board sections, added as the player count grows. A ⊂ A+B ⊂ A+B+C. */
 export type Section = 'A' | 'B' | 'C'
 
+/**
+ * Which island chain a table plays on. Each holds the supply exactly at every
+ * player count, and each keeps its open land inside the tile supply so a game
+ * can always reach an ending.
+ */
+export const BOARD_SHAPES = ['mountain', 'valley', 'bay'] as const
+export type BoardShape = (typeof BOARD_SHAPES)[number]
+
+export const BOARD_SHAPE_LABEL: Record<BoardShape, string> = {
+  mountain: 'Mountains',
+  valley: 'Valley',
+  bay: 'Bay',
+}
+
+export const BOARD_SHAPE_HINT: Record<BoardShape, string> = {
+  mountain: 'Two peaks either side of a valley.',
+  valley: 'A broad chevron dropping to a point in the middle.',
+  bay: 'Shores curving away either side of a deep centre.',
+}
+
 export interface Space {
   id: HexId
   q: number

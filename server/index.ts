@@ -4,8 +4,10 @@ import { extname, join, normalize, resolve } from 'node:path'
 
 import { WebSocketServer, type WebSocket } from 'ws'
 
+import { DEFAULT_BOARD_SHAPE } from '../shared/board'
 import type { ClientMessage, ServerMessage } from '../shared/protocol'
 import { HEARTBEAT_MS, PROTOCOL_VERSION } from '../shared/protocol'
+import { BOARD_SHAPES } from '../shared/types'
 import { MAX_PLAYERS, RoomManager, type Room } from './rooms'
 import { PostgresRoomStore, type RoomStore } from './store'
 
@@ -244,6 +246,8 @@ wss.on('connection', (socket) => {
           return game.useSwitch(seat.id, msg.tileId, msg.a, msg.b)
         case 'move':
           return game.useMove(seat.id, msg.tileId, msg.from, msg.to)
+        case 'undo':
+          return game.undoLast(seat.id)
         case 'endTurn':
           return game.endTurn(seat.id)
         default:
@@ -274,9 +278,13 @@ wss.on('connection', (socket) => {
 
 function sanitiseOptions(options: unknown) {
   const o = (options ?? {}) as Record<string, unknown>
+  // An unknown shape falls back to the default rather than being rejected, so a
+  // stale or hand-rolled client can never leave a room unable to deal a board.
+  const shape = BOARD_SHAPES.find((s) => s === o.boardShape) ?? DEFAULT_BOARD_SHAPE
   return {
     randomHands: Boolean(o.randomHands),
     openInformation: Boolean(o.openInformation),
+    boardShape: shape,
   }
 }
 

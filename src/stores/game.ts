@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref, shallowRef } from 'vue'
 
-import { buildBoard, type Board } from '@shared/board'
+import { buildBoard, DEFAULT_BOARD_SHAPE, type Board } from '@shared/board'
 import type { GameOptions } from '@shared/engine'
 import { HEARTBEAT_MS, type ClientMessage, type ClientState, type ServerMessage } from '@shared/protocol'
 import {
@@ -14,7 +14,8 @@ import {
   type RulesView,
 } from '@shared/rules'
 import { STARTING_HAND_SIZE, tileFromId } from '@shared/tiles'
-import type { Tile } from '@shared/types'
+import type { BoardShape, Tile } from '@shared/types'
+import { t } from '@/i18n'
 
 /** What the local player is currently being asked to click. */
 export type Interaction =
@@ -215,7 +216,7 @@ export const useGameStore = defineStore('game', () => {
 
   function send(message: ClientMessage) {
     if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify(message))
-    else showError('Not connected to the server yet.')
+    else showError(t('app.notConnected'))
   }
 
   // --- local interaction ---------------------------------------------------
@@ -237,13 +238,19 @@ export const useGameStore = defineStore('game', () => {
     () => phase.value === 'play' && you.value !== null && you.value === state.value?.current,
   )
 
-  /** The board is fully determined by the player count, so it is rebuilt locally. */
-  const boardCache = shallowRef<{ count: number; board: Board } | null>(null)
+  /**
+   * The board is fully determined by the player count and the table's chosen
+   * shape, so it is rebuilt locally rather than sent. Both are part of the cache
+   * key — keying on the count alone would keep a stale map after a rematch that
+   * changed the shape.
+   */
+  const boardCache = shallowRef<{ count: number; shape: BoardShape; board: Board } | null>(null)
   const board = computed<Board>(() => {
     const count = state.value?.playerCount ?? 0
+    const shape = state.value?.options.boardShape ?? DEFAULT_BOARD_SHAPE
     if (count < 2) return { spaces: {}, order: [] }
-    if (boardCache.value?.count !== count) {
-      boardCache.value = { count, board: buildBoard(count) }
+    if (boardCache.value?.count !== count || boardCache.value.shape !== shape) {
+      boardCache.value = { count, shape, board: buildBoard(count, shape) }
     }
     return boardCache.value.board
   })
@@ -322,6 +329,8 @@ export const useGameStore = defineStore('game', () => {
   })
 
   const canEndTurn = computed(() => isMyTurn.value && (state.value?.canEndTurn ?? false))
+  /** The server decides this; it is false for everyone but the active player. */
+  const canUndo = computed(() => isMyTurn.value && (state.value?.canUndo ?? false))
   const mustPlace = computed(
     () => isMyTurn.value && (state.value?.placedThisTurn.length ?? 0) === 0,
   )
@@ -439,6 +448,14 @@ export const useGameStore = defineStore('game', () => {
     interaction.value = { mode: 'idle' }
   }
 
+  /** Take back the last placement of this turn. Repeat to unwind the whole turn. */
+  function undoPlacement() {
+    if (!canUndo.value) return
+    send({ t: 'undo' })
+    // Whatever the player was half-way through choosing no longer applies.
+    interaction.value = { mode: 'idle' }
+  }
+
   return {
     // connection
     connection,
@@ -469,6 +486,7 @@ export const useGameStore = defineStore('game', () => {
     highlightedSpaces,
     selectablePieces,
     canEndTurn,
+    canUndo,
     mustPlace,
     // actions
     createRoom,
@@ -486,5 +504,6 @@ export const useGameStore = defineStore('game', () => {
     clickSpace,
     clickPiece,
     endTurn,
+    undoPlacement,
   }
 })

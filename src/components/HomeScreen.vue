@@ -1,7 +1,11 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import mainBackground from '../../assets/mainbg.png'
+import BoardGlyph from './BoardGlyph.vue'
 import { DEFAULT_OPTIONS } from '@shared/engine'
+import { BOARD_SHAPES } from '@shared/types'
+import LanguageSwitcher from '@/i18n/LanguageSwitcher.vue'
+import { t } from '@/i18n'
 import { useGameStore } from '@/stores/game'
 
 const game = useGameStore()
@@ -10,18 +14,20 @@ const name = ref(game.myName)
 const code = ref(new URLSearchParams(location.search).get('room') ?? '')
 const randomHands = ref(DEFAULT_OPTIONS.randomHands)
 const openInformation = ref(DEFAULT_OPTIONS.openInformation)
+const boardShape = ref(DEFAULT_OPTIONS.boardShape)
 
 function create() {
-  if (!name.value.trim()) return game.showError('Enter a name first.')
+  if (!name.value.trim()) return game.showError(t('home.error.name'))
   game.createRoom(name.value.trim(), {
     randomHands: randomHands.value,
     openInformation: openInformation.value,
+    boardShape: boardShape.value,
   })
 }
 
 function join() {
-  if (!name.value.trim()) return game.showError('Enter a name first.')
-  if (code.value.trim().length !== 4) return game.showError('Room codes are four characters.')
+  if (!name.value.trim()) return game.showError(t('home.error.name'))
+  if (code.value.trim().length !== 4) return game.showError(t('home.error.code'))
   game.joinRoom(code.value, name.value.trim())
 }
 </script>
@@ -34,67 +40,80 @@ function join() {
       <header class="masthead">
         <span class="seal">侍</span>
         <h1>Samurai</h1>
-        <p class="tagline">
-          Feudal Japan, 1336. Place your influence, surround the settlements, and lead the most
-          castes.
-        </p>
+        <p class="tagline">{{ t('home.tagline') }}</p>
       </header>
     </aside>
 
     <main class="forms">
       <div class="forms-inner">
         <section>
-          <h2>Your name</h2>
+          <h2>{{ t('home.name.title') }}</h2>
           <input
             v-model="name"
             class="field"
             maxlength="18"
-            placeholder="e.g. Takeda"
+            :placeholder="t('home.name.placeholder')"
             @change="game.rememberName(name.trim())"
           />
+          <LanguageSwitcher class="lang" />
         </section>
 
         <hr class="rule" />
 
         <section>
-          <h2>Host a table</h2>
+          <h2>{{ t('home.host.title') }}</h2>
           <label class="check">
             <input v-model="randomHands" type="checkbox" />
             <span>
-              Deal opening hands at random
-              <em class="tiny muted">— skips the hand-selection step</em>
+              {{ t('option.randomHands') }}
+              <em class="tiny muted">{{ t('option.randomHands.hint') }}</em>
             </span>
           </label>
           <label class="check">
             <input v-model="openInformation" type="checkbox" />
             <span>
-              Open information
-              <em class="tiny muted">— everyone's captured pieces stay visible</em>
+              {{ t('option.openInfo') }}
+              <em class="tiny muted">{{ t('option.openInfo.hint') }}</em>
             </span>
           </label>
-          <button class="btn wide" @click="create">Create room</button>
+          <div class="board-pick">
+            <span class="board-label tiny muted">{{ t('home.board.title') }}</span>
+            <div class="board-options">
+              <button
+                v-for="shape in BOARD_SHAPES"
+                :key="shape"
+                type="button"
+                class="board-option"
+                :class="{ chosen: boardShape === shape }"
+                :title="t(`board.${shape}.hint`)"
+                @click="boardShape = shape"
+              >
+                <BoardGlyph :shape="shape" />
+                <span>{{ t(`board.${shape}`) }}</span>
+              </button>
+            </div>
+          </div>
+
+          <button class="btn wide" @click="create">{{ t('home.create') }}</button>
         </section>
 
         <hr class="rule" />
 
         <section>
-          <h2>Join a table</h2>
-          <p class="muted tiny join-hint">Ask the host for the four-character room code.</p>
+          <h2>{{ t('home.join.title') }}</h2>
+          <p class="muted tiny join-hint">{{ t('home.join.hint') }}</p>
           <input
             v-model="code"
             class="field code"
             maxlength="4"
-            placeholder="ABCD"
+            :placeholder="t('home.join.placeholder')"
             @input="code = code.toUpperCase()"
             @keyup.enter="join"
           />
-          <button class="btn wide ghost" @click="join">Join room</button>
+          <button class="btn wide ghost" @click="join">{{ t('home.join.action') }}</button>
         </section>
 
-        <p class="tiny muted footnote">
-          Two to four players, each on their own device. The board grows with the number of
-          players.
-        </p>
+        <p class="tiny muted footnote">{{ t('home.footnote') }}</p>
       </div>
     </main>
   </div>
@@ -219,6 +238,12 @@ h2 {
   margin: -0.25rem 0 0.7rem;
 }
 
+/* Sits under the name field rather than in a section of its own, which would
+   cost the column a rule and another heading's worth of height. */
+.lang {
+  margin-top: 0.6rem;
+}
+
 .check {
   display: flex;
   gap: 0.55rem;
@@ -230,6 +255,51 @@ h2 {
 
 .check em {
   font-style: normal;
+}
+
+/* The board choice is a row of profiles rather than a select, because the shape
+   is the whole point and a name alone does not convey it. */
+.board-pick {
+  margin: 0.85rem 0 0.9rem;
+}
+
+.board-label {
+  display: block;
+  margin-bottom: 0.4rem;
+}
+
+.board-options {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.4rem;
+}
+
+.board-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.5rem 0.3rem 0.45rem;
+  border: 1px solid rgba(160, 137, 102, 0.35);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+  line-height: 1.2;
+  text-align: center;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+
+.board-option:hover {
+  background: rgba(178, 58, 44, 0.07);
+}
+
+.board-option.chosen {
+  border-color: var(--vermillion);
+  background: rgba(178, 58, 44, 0.12);
+  color: var(--vermillion-dark);
+  font-weight: 600;
 }
 
 .wide {

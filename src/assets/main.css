@@ -45,6 +45,16 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Burmese is written without spaces between words. The copy here is spaced, but
+   a long run still has to be allowed to break inside its box rather than push
+   the layout wider, and Myanmar text needs a font that actually carries the
+   script when the display serif does not. */
+html[lang='my'] body {
+  font-family: 'Noto Sans Myanmar', 'Myanmar Text', Padauk, var(--font-body);
+  overflow-wrap: break-word;
+  line-break: normal;
+}
+
 h1,
 h2,
 h3,
@@ -73,12 +83,24 @@ button:disabled {
   box-shadow: var(--shadow);
 }
 
+/* An explicit line-height, not the default `normal`, is what keeps a row of
+   buttons level. `normal` is resolved from the font's own ascent and descent,
+   and Myanmar carries marks well above and below the baseline, so the very same
+   font-size gives မြန်မာ a much taller line box than Rules or Table — the
+   buttons are sized by their content, so the Burmese one grew and the row went
+   ragged. A number here fixes the line box at 1.2em whatever the script (the
+   marks simply ink into the padding, which has room for them), and the
+   min-height is a floor for any label that is shorter than the padding assumes.
+   Both are set just under what the Latin text already produced, so English
+   buttons keep the height the screens were laid out around. */
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
+  min-height: 2.4rem;
   padding: 0.55rem 1.1rem;
+  line-height: 1.2;
   border-radius: 8px;
   border: 1px solid rgba(140, 42, 31, 0.55);
   background: linear-gradient(180deg, #c2483a, #a1301f);
@@ -116,6 +138,7 @@ button:disabled {
 }
 
 .btn.small {
+  min-height: 1.8rem;
   padding: 0.35rem 0.75rem;
   font-size: 0.85rem;
 }

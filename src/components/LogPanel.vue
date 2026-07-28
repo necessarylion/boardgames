@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
 import { PLAYER_COLOURS } from '@shared/colours'
+import { t } from '@/i18n'
 import { useGameStore } from '@/stores/game'
 
 const game = useGameStore()
@@ -24,8 +25,10 @@ watch(
 
 <template>
   <section class="log">
-    <h3>Play log</h3>
+    <h3>{{ t('log.title') }}</h3>
     <ol ref="list" class="entries scroll">
+      <!-- Entry text is built by the shared engine and arrives already worded,
+           so it is the one string on screen that stays in English. -->
       <li v-for="(entry, i) in entries" :key="i">
         <template v-if="nameOf(entry.player)">
           <strong :style="{ color: PLAYER_COLOURS[nameOf(entry.player)!.colour].ink }">
@@ -35,7 +38,7 @@ watch(
         </template>
         <span v-else class="system">{{ entry.text }}</span>
       </li>
-      <li v-if="!entries.length" class="muted tiny">Nothing has happened yet.</li>
+      <li v-if="!entries.length" class="muted tiny">{{ t('log.empty') }}</li>
     </ol>
   </section>
 </template>

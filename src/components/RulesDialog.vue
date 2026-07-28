@@ -2,7 +2,8 @@
 import GameIcon from './GameIcon.vue'
 import TileReference from './TileReference.vue'
 import { TILES_PER_PLAYER } from '@shared/tiles'
-import { CASTES, CASTE_LABEL, CASTE_PIECE_LABEL } from '@shared/types'
+import { CASTES } from '@shared/types'
+import { casteName, castePiece, t } from '@/i18n'
 
 defineEmits<{ close: [] }>()
 </script>
@@ -11,70 +12,53 @@ defineEmits<{ close: [] }>()
   <div class="backdrop" @click.self="$emit('close')">
     <div class="panel sheet">
       <header class="head">
-        <h2>How Samurai works</h2>
-        <button class="btn ghost small" @click="$emit('close')">Close</button>
+        <h2>{{ t('rules.title') }}</h2>
+        <button class="btn ghost small" @click="$emit('close')">{{ t('rules.close') }}</button>
       </header>
 
-      <section>
-        <h3>The goal</h3>
-        <p>
-          Capture caste pieces to become the leader of a caste. Whoever leads the most castes wins.
-        </p>
-        <ul class="castes">
-          <li v-for="caste in CASTES" :key="caste">
-            <GameIcon :name="caste" :size="20" />
-            <span><strong>{{ CASTE_PIECE_LABEL[caste] }}</strong> — {{ CASTE_LABEL[caste] }}</span>
-          </li>
-        </ul>
-      </section>
+      <div class="body">
+        <div class="rules">
+          <section>
+            <h3>{{ t('rules.goal.title') }}</h3>
+            <p>{{ t('rules.goal.text') }}</p>
+            <ul class="castes">
+              <li v-for="caste in CASTES" :key="caste">
+                <GameIcon :name="caste" :size="20" />
+                <span><strong>{{ castePiece(caste) }}</strong> — {{ casteName(caste) }}</span>
+              </li>
+            </ul>
+          </section>
 
-      <section>
-        <h3>Your turn</h3>
-        <ol>
-          <li>
-            Place <strong>one tile</strong> on an empty land space — plus any number of tiles
-            marked <strong>速</strong> (fast), in any order. Ship tiles go on sea spaces, and are
-            the only tile that can.
-          </li>
-          <li>Any settlement whose adjacent land spaces are all filled is captured.</li>
-          <li>You draw back up to five tiles and your turn ends.</li>
-        </ol>
-      </section>
+          <section>
+            <h3>{{ t('rules.turn.title') }}</h3>
+            <!-- The emphasis inside these sentences is part of the sentence, so
+                 the whole line is one message rather than three fragments. -->
+            <ol>
+              <li v-html="t('rules.turn.place')" />
+              <li>{{ t('rules.turn.capture') }}</li>
+              <li>{{ t('rules.turn.draw') }}</li>
+            </ol>
+          </section>
 
-      <section>
-        <h3>Capturing</h3>
-        <p>
-          Adjacent sea spaces do not have to be filled. When a settlement is surrounded, each of its
-          pieces is contested separately: every player totals the influence of their own tiles
-          adjacent to that settlement which match the piece's caste. Wild tiles — samurai, ronin and
-          ship — count toward all three castes. The single highest total takes the piece; a tie
-          removes it from the game instead.
-        </p>
-      </section>
+          <section>
+            <h3>{{ t('rules.capturing.title') }}</h3>
+            <p>{{ t('rules.capturing.text') }}</p>
+          </section>
 
-      <section>
-        <h3>Your {{ TILES_PER_PLAYER }} tiles</h3>
-        <p>
-          Everyone owns the same set. You pick five to open with, then draw the rest in the order
-          they happen to come up. A tile's number is the influence it lends to every settlement it
-          touches.
-        </p>
+          <section>
+            <h3>{{ t('rules.ending.title') }}</h3>
+            <p>{{ t('rules.ending.text') }}</p>
+            <p v-html="t('rules.ending.tiebreak')" />
+          </section>
+        </div>
 
-        <TileReference />
-      </section>
+        <section class="tiles">
+          <h3>{{ t('rules.tiles.title', { count: TILES_PER_PLAYER }) }}</h3>
+          <p class="lede">{{ t('rules.tiles.lede') }}</p>
 
-      <section>
-        <h3>Ending the game</h3>
-        <p>
-          The game ends at the end of a turn once every piece of any one caste has left the board, or
-          once four pieces have been set aside from ties.
-        </p>
-        <p>
-          Each caste's leader token goes to whoever captured strictly the most of that caste; a tie
-          leaves it unclaimed. Most tokens wins. Tied players then compare pieces from the castes
-          they do <em>not</em> lead, and after that their total pieces.
-        </p>
-      </section>
+          <TileReference />
+        </section>
+      </div>
     </div>
   </div>
 </template>
@@ -92,44 +76,94 @@ defineEmits<{ close: [] }>()
   backdrop-filter: blur(2px);
 }
 
+/* The one place a card survives — it floats over the board, so it keeps the
+   lift. Inside it is ruled like every other screen. The header is a fixed row
+   and only the body scrolls, so the Close button never leaves the top. */
 .sheet {
   width: min(90vw, 100%);
-  max-height: 88vh;
-  overflow-y: auto;
-  padding: 1.4rem 1.75rem 1.8rem;
+  max-height: 92vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   box-shadow: var(--shadow-lg);
 }
 
 .head {
+  flex: none;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  margin-bottom: 0.5rem;
-  position: sticky;
-  top: -1.4rem;
-  padding: 0.6rem 0;
-  background: linear-gradient(180deg, rgba(250, 245, 236, 0.98), rgba(250, 245, 236, 0.86));
+  padding: 0.85rem clamp(1rem, 2.4vw, 1.9rem);
+  border-bottom: 1px solid rgba(160, 137, 102, 0.35);
+}
+
+.body {
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  padding: 1.1rem clamp(1rem, 2.4vw, 1.9rem) 1.45rem;
+}
+
+/* The prose is set as a broadsheet rather than one 200-character-wide column:
+   the browser fits as many 24rem columns as the sheet can hold, balances their
+   heights and draws the divider itself, so no section needs a box around it.
+   Column width, not column count, is what keeps the measure readable at every
+   size — three columns on a wide monitor, two on a laptop. */
+.rules {
+  column-width: 24rem;
+  column-gap: 2.75rem;
+  column-rule: 1px solid rgba(160, 137, 102, 0.35);
+}
+
+/* Sections are the unit the columns break on, so a heading is never stranded
+   at the foot of one column with its text in the next. */
+.rules section {
+  break-inside: avoid;
+  padding-bottom: 1.15rem;
+}
+
+/* Spacing between stacked sections comes from that padding rather than a
+   margin, which a column break would otherwise leave hanging at the top of the
+   next column. */
+.rules section:last-child {
+  padding-bottom: 0;
+}
+
+/* The tile reference wants the full width: it flows into four columns there and
+   stands two rows tall, where in a narrow column it would run to eight. */
+.tiles {
+  margin-top: 1.3rem;
+  padding-top: 1.3rem;
+  border-top: 1px solid rgba(160, 137, 102, 0.35);
+}
+
+.lede {
+  max-width: 34rem;
 }
 
 h2 {
-  font-size: 1.4rem;
+  font-size: 1.35rem;
 }
 
 h3 {
-  font-size: 1rem;
-  margin: 1rem 0 0.35rem;
+  font-size: 1.02rem;
+  margin: 0 0 0.35rem;
   color: var(--vermillion-dark);
 }
 
 p,
 li {
-  line-height: 1.55;
-  font-size: 0.92rem;
+  line-height: 1.5;
+  font-size: 0.88rem;
 }
 
 p {
   margin: 0 0 0.5rem;
+}
+
+p:last-child {
+  margin-bottom: 0;
 }
 
 ol {
@@ -147,7 +181,7 @@ ol li {
   padding: 0;
   display: flex;
   flex-wrap: wrap;
-  gap: 0.9rem;
+  gap: 0.55rem 0.9rem;
 }
 
 .castes li {
@@ -156,4 +190,43 @@ ol li {
   gap: 0.35rem;
 }
 
+/* Short windows — a 720p laptop, or a browser carrying a lot of chrome. Give
+   back the padding and a little leading first; that is usually the difference
+   between the sheet fitting and the body taking a scrollbar. */
+@media (max-height: 900px) {
+  .backdrop {
+    padding: 0.75rem;
+  }
+
+  .head {
+    padding-top: 0.6rem;
+    padding-bottom: 0.6rem;
+  }
+
+  .body {
+    padding-top: 0.85rem;
+    padding-bottom: 1rem;
+  }
+
+  .tiles {
+    margin-top: 0.95rem;
+    padding-top: 0.95rem;
+  }
+
+  p,
+  li {
+    line-height: 1.45;
+  }
+}
+
+/* One column below ~900px, capped at a readable measure — the sheet is wide
+   enough there to run a single line past 100 characters otherwise. */
+@media (max-width: 56.25rem) {
+  .rules {
+    column-width: auto;
+    column-count: 1;
+    column-rule: 0;
+    max-width: 34rem;
+  }
+}
 </style>

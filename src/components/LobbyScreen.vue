@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import { PLAYER_COLOURS } from '@shared/colours'
 import { supplyPerCaste } from '@shared/setup'
+import { t } from '@/i18n'
 import { useGameStore } from '@/stores/game'
 
 const game = useGameStore()
@@ -18,7 +19,7 @@ async function copyLink() {
     copied.value = true
     setTimeout(() => (copied.value = false), 2000)
   } catch {
-    game.showError('Could not copy — select the link and copy it manually.')
+    game.showError(t('lobby.copyFailed'))
   }
 }
 
@@ -33,37 +34,40 @@ function toggle(key: 'randomHands' | 'openInformation') {
   <div class="lobby">
     <header class="head">
       <div>
-        <p class="tiny muted">Room code</p>
+        <p class="tiny muted">{{ t('lobby.roomCode') }}</p>
         <h1 class="code">{{ game.state?.code }}</h1>
       </div>
       <div class="share">
         <button class="btn ghost small" @click="copyLink">
-          {{ copied ? 'Link copied' : 'Copy invite link' }}
+          {{ copied ? t('lobby.linkCopied') : t('lobby.copyLink') }}
         </button>
-        <button class="btn ghost small" @click="game.leaveRoom()">Leave</button>
+        <button class="btn ghost small" @click="game.leaveRoom()">{{ t('lobby.leave') }}</button>
       </div>
     </header>
 
     <div class="grid">
       <section class="panel block">
-        <h2>Players <span class="tiny muted">{{ seats.length }} / 4</span></h2>
+        <h2>
+          {{ t('lobby.players') }}
+          <span class="tiny muted">{{ t('lobby.seatCount', { seated: seats.length }) }}</span>
+        </h2>
         <ul class="seats">
           <li v-for="seat in seats" :key="seat.id" class="seat">
             <span class="swatch" :style="{ background: PLAYER_COLOURS[seat.colour].fill, borderColor: PLAYER_COLOURS[seat.colour].ink }" />
             <span class="seat-name">{{ seat.name }}</span>
-            <span v-if="seat.id === game.state?.hostId" class="badge">Host</span>
-            <span v-if="seat.id === game.you" class="badge you">You</span>
-            <span v-if="!seat.connected" class="badge away">Away</span>
+            <span v-if="seat.id === game.state?.hostId" class="badge">{{ t('lobby.badge.host') }}</span>
+            <span v-if="seat.id === game.you" class="badge you">{{ t('lobby.badge.you') }}</span>
+            <span v-if="!seat.connected" class="badge away">{{ t('lobby.badge.away') }}</span>
           </li>
           <li v-for="n in 4 - seats.length" :key="`empty${n}`" class="seat empty">
             <span class="swatch empty-swatch" />
-            <span class="muted">Waiting for a player…</span>
+            <span class="muted">{{ t('lobby.waitingForPlayer') }}</span>
           </li>
         </ul>
       </section>
 
       <section class="panel block">
-        <h2>Table settings</h2>
+        <h2>{{ t('lobby.settings') }}</h2>
         <label class="check" :class="{ locked: !game.isHost }">
           <input
             type="checkbox"
@@ -71,7 +75,7 @@ function toggle(key: 'randomHands' | 'openInformation') {
             :disabled="!game.isHost"
             @change="toggle('randomHands')"
           />
-          <span>Deal opening hands at random</span>
+          <span>{{ t('option.randomHands') }}</span>
         </label>
         <label class="check" :class="{ locked: !game.isHost }">
           <input
@@ -80,22 +84,25 @@ function toggle(key: 'randomHands' | 'openInformation') {
             :disabled="!game.isHost"
             @change="toggle('openInformation')"
           />
-          <span>Open information (captured pieces stay visible)</span>
+          <span>{{ t('option.openInfo.long') }}</span>
         </label>
-        <p v-if="!game.isHost" class="tiny muted">Only the host can change these.</p>
+        <p v-if="!game.isHost" class="tiny muted">{{ t('lobby.hostOnly') }}</p>
 
         <hr class="rule" />
         <p class="tiny muted">
-          With {{ Math.max(seats.length, 2) }} players the supply is
-          {{ supplyPerCaste(Math.max(seats.length, 2)) }} pieces of each caste, and the board is
-          sized to match.
+          {{
+            t('lobby.supply', {
+              players: Math.max(seats.length, 2),
+              pieces: supplyPerCaste(Math.max(seats.length, 2)),
+            })
+          }}
         </p>
 
         <button class="btn wide" :disabled="!canStart" @click="game.startGame()">
-          {{ game.isHost ? 'Start game' : 'Waiting for the host…' }}
+          {{ game.isHost ? t('lobby.start') : t('lobby.waitingHost') }}
         </button>
         <p v-if="game.isHost && seats.length < 2" class="tiny muted centre">
-          At least two players are needed.
+          {{ t('lobby.needTwo') }}
         </p>
       </section>
     </div>

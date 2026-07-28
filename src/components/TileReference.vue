@@ -1,72 +1,74 @@
 <script setup lang="ts">
 import GameIcon from './GameIcon.vue'
 import { TILE_SET } from '@shared/tiles'
-import { CASTES, CASTE_LABEL, CASTE_PIECE_LABEL } from '@shared/types'
+import { CASTES } from '@shared/types'
 import type { Caste, TileDef } from '@shared/types'
+import { casteNameLower, castePiece, t } from '@/i18n'
+import type { MessageKey } from '@/i18n'
 
 /**
  * What each of the twenty tiles does. Shown both in the rules sheet and beside
  * the draft chooser, so it lives here rather than in either of them.
  *
  * The counts and values are read off TILE_SET rather than written out, so they
- * stay honest if the set is ever re-balanced.
+ * stay honest if the set is ever re-balanced. The wording is looked up when the
+ * row renders rather than built once, so switching language redraws it.
  */
 type TileEntry = {
   icon: string
-  name: string
+  name: () => string
   matches: (tile: TileDef) => boolean
-  text: string
+  text: () => string
 }
 
-const groups: { kind: string; entries: TileEntry[] }[] = [
+const groups: { kind: MessageKey; entries: TileEntry[] }[] = [
   {
-    kind: 'Caste',
+    kind: 'tiles.kind.caste',
     entries: CASTES.map((caste: Caste) => ({
       icon: caste,
-      name: `${CASTE_PIECE_LABEL[caste]} tiles`,
+      name: () => t('tiles.caste.name', { piece: castePiece(caste) }),
       matches: (tile) => tile.kind === 'caste' && tile.caste === caste,
-      text: `The ${CASTE_LABEL[caste].toLowerCase()} caste. Counts toward ${
-        CASTE_PIECE_LABEL[caste]
-      } pieces only, and nothing against the other two.`,
+      text: () =>
+        t('tiles.caste.text', { caste: casteNameLower(caste), piece: castePiece(caste) }),
     })),
   },
   {
-    kind: 'Wild',
+    kind: 'tiles.kind.wild',
     entries: [
       {
         icon: 'samurai',
-        name: 'Samurai',
+        name: () => t('tiles.samurai.name'),
         matches: (tile) => tile.kind === 'samurai',
-        text: 'Wild — counts toward every caste in an adjacent settlement. Your strongest all-purpose tiles.',
+        text: () => t('tiles.samurai.text'),
       },
       {
         icon: 'ronin',
-        name: 'Ronin',
+        name: () => t('tiles.ronin.name'),
         matches: (tile) => tile.kind === 'ronin',
-        text: 'Wild and fast. Low value, but free to drop alongside your real placement.',
+        text: () => t('tiles.ronin.text'),
       },
       {
         icon: 'ship',
-        name: 'Ship',
+        name: () => t('tiles.ship.name'),
         matches: (tile) => tile.kind === 'ship',
-        text: 'Wild and fast, and the only tile for sea spaces. Sea never has to be filled, so a ship adds influence without hastening the capture.',
+        text: () => t('tiles.ship.text'),
       },
     ],
   },
   {
-    kind: 'Action',
+    kind: 'tiles.kind.action',
     entries: [
       {
         icon: 'switch',
-        name: 'Switch',
+        name: () => t('tiles.switch.name'),
         matches: (tile) => tile.kind === 'switch',
-        text: 'Fast, and never placed. Swaps any two caste pieces on the board — no settlement may end up holding two of a type — then leaves the game.',
+        text: () => t('tiles.switch.text'),
       },
       {
         icon: 'move',
-        name: 'Move',
+        name: () => t('tiles.move.name'),
         matches: (tile) => tile.kind === 'move',
-        text: 'Uses your placement. Lifts one of your own earlier non-fast tiles onto any empty land space, and fills the space it left adding no influence.',
+        text: () => t('tiles.move.text'),
       },
     ],
   },
@@ -75,10 +77,12 @@ const groups: { kind: string; entries: TileEntry[] }[] = [
 function describe(entry: TileEntry): string {
   const tiles = TILE_SET.filter(entry.matches)
   const values = [...new Set(tiles.map((tile) => tile.value))].sort((a, b) => a - b)
-  const count = `${tiles.length}×`
-  if (!values.some((value) => value > 0)) return `${count} · no influence`
+  const count = t('tiles.count', { count: tiles.length })
+  if (!values.some((value) => value > 0)) return `${count} · ${t('tiles.noInfluence')}`
   const range =
-    values.length > 1 ? `values ${values[0]}–${values[values.length - 1]}` : `value ${values[0]}`
+    values.length > 1
+      ? t('tiles.valueRange', { from: values[0], to: values[values.length - 1] })
+      : t('tiles.value', { value: values[0] })
   return `${count} · ${range}`
 }
 
@@ -103,20 +107,19 @@ const ICON_SIZE = 56
 <template>
   <div class="reference">
     <dl class="tiles">
-      <div v-for="entry in entries" :key="entry.name" class="tile-row">
+      <div v-for="entry in entries" :key="entry.icon" class="tile-row">
         <GameIcon :name="entry.icon" :size="ICON_SIZE" />
         <dt>
-          {{ entry.name }}
-          <span v-if="isFast(entry)" class="fast-tag" title="Fast">速</span>
-          <span class="tiny muted">{{ entry.kind }} · {{ describe(entry) }}</span>
+          {{ entry.name() }}
+          <span v-if="isFast(entry)" class="fast-tag" :title="t('tiles.fast')">速</span>
+          <span class="tiny muted">{{ t(entry.kind) }} · {{ describe(entry) }}</span>
         </dt>
-        <dd>{{ entry.text }}</dd>
+        <dd>{{ entry.text() }}</dd>
       </div>
     </dl>
 
     <p class="tiny muted footnote">
-      <span class="fast-tag">速</span> marks a fast tile — it does not use up your one placement, so
-      play as many as you like each turn.
+      <span class="fast-tag">速</span> {{ t('tiles.footnote') }}
     </p>
   </div>
 </template>

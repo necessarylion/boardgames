@@ -6,6 +6,7 @@ import { usePanZoom, type Bounds } from '@/composables/usePanZoom'
 import { hexCentre, hexPolygon, type Point } from '@shared/hex'
 import type { PieceRef } from '@shared/rules'
 import { SETTLEMENT_CAPACITY, type PlayerColour, type Space } from '@shared/types'
+import { t } from '@/i18n'
 import { useGameStore } from '@/stores/game'
 
 const game = useGameStore()
@@ -99,7 +100,7 @@ function isSurroundedNow(space: Space): boolean {
       :class="{ dragging }"
       :viewBox="viewBox"
       role="img"
-      aria-label="Samurai game board"
+      :aria-label="t('board.label')"
       v-bind="handlers"
       @click.capture="onClickCapture"
     >
@@ -187,8 +188,8 @@ function isSurroundedNow(space: Space): boolean {
       <button
         class="zoom-btn"
         :disabled="!canZoomIn"
-        title="Zoom in"
-        aria-label="Zoom in"
+        :title="t('board.zoomIn')"
+        :aria-label="t('board.zoomIn')"
         @click="zoomIn"
       >
         +
@@ -196,8 +197,8 @@ function isSurroundedNow(space: Space): boolean {
       <button
         class="zoom-btn"
         :disabled="!canZoomOut"
-        title="Zoom out"
-        aria-label="Zoom out"
+        :title="t('board.zoomOut')"
+        :aria-label="t('board.zoomOut')"
         @click="zoomOut"
       >
         &minus;
@@ -205,11 +206,11 @@ function isSurroundedNow(space: Space): boolean {
       <button
         class="zoom-btn reset"
         :disabled="!canZoomOut"
-        title="Fit the whole board"
-        aria-label="Fit the whole board"
+        :title="t('board.fit')"
+        :aria-label="t('board.fit')"
         @click="reset"
       >
-        Fit
+        {{ t('board.fitShort') }}
       </button>
     </div>
     <p v-if="zoom > 1.02" class="zoom-badge tiny">{{ Math.round(zoom * 100) }}%</p>

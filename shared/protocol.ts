@@ -47,6 +47,8 @@ export interface ClientState {
   current: number
   turnNumber: number
   placedThisTurn: string[]
+  /** Whether the viewer has anything to take back this turn. */
+  canUndo: boolean
   playedNonFast: boolean
   setAside: Caste[]
   log: LogEntry[]
@@ -75,6 +77,7 @@ export type ClientMessage =
   | { t: 'play'; tileId: string; spaceId: string }
   | { t: 'switch'; tileId: string; a: PieceRef; b: PieceRef }
   | { t: 'move'; tileId: string; from: string; to: string }
+  | { t: 'undo' }
   | { t: 'endTurn' }
   | { t: 'rematch' }
   /** Host only: abandon the game in progress and return everyone to the lobby. */

@@ -1,3 +1,4 @@
+import { DEFAULT_OPTIONS } from '../shared/engine'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { WebSocket } from 'ws'
@@ -94,7 +95,7 @@ describe('two browsers playing over the wire', () => {
     expect(host.token).toBeTruthy()
     expect(guest.token).not.toBe(host.token)
 
-    host.send({ t: 'create', name: 'Takeda', options: { randomHands: true, openInformation: false } })
+    host.send({ t: 'create', name: 'Takeda', options: { ...DEFAULT_OPTIONS, randomHands: true, openInformation: false } })
     await host.settle()
     const code = host.state!.code
     expect(host.state!.phase).toBe('lobby')
@@ -126,6 +127,50 @@ describe('two browsers playing over the wire', () => {
     guest.send({ t: 'play', tileId: guestTile, spaceId: buildBoard(2).order[0] })
     await guest.settle()
     expect(guest.errors.at(-1)).toMatch(/not your turn/i)
+
+    // Take-backs, over the wire: place, undo, and confirm the server really
+    // rewound rather than the client merely hiding the tile.
+    {
+      const handBefore = [...host.state!.hand]
+      const hostView = {
+        board: buildBoard(host.state!.playerCount),
+        pieces: host.state!.pieces,
+        placed: host.state!.placed,
+        tiles: Object.fromEntries(host.state!.hand.map((id) => [id, tileFromId(id)])),
+        playerCount: host.state!.playerCount,
+      }
+      const tile = host.state!.hand.map(tileFromId).find(
+        (t) => t.kind !== 'switch' && t.kind !== 'move' && legalPlacements(hostView, t).length > 0,
+      )!
+      const space = legalPlacements(hostView, tile)[0]
+
+      expect(host.state!.canUndo).toBe(false)
+      host.send({ t: 'play', tileId: tile.id, spaceId: space })
+      await host.settle()
+      await guest.settle()
+      expect(host.state!.placed[space]).toBeDefined()
+      expect(host.state!.canUndo).toBe(true)
+      // Only the player whose turn it is may take anything back.
+      expect(guest.state!.canUndo).toBe(false)
+
+      guest.send({ t: 'undo' })
+      await guest.settle()
+      expect(guest.errors.at(-1)).toMatch(/not your turn/i)
+      expect(host.state!.placed[space]).toBeDefined()
+
+      host.send({ t: 'undo' })
+      await host.settle()
+      await guest.settle()
+      expect(host.state!.placed[space]).toBeUndefined()
+      expect(host.state!.hand.slice().sort()).toEqual(handBefore.slice().sort())
+      expect(host.state!.canUndo).toBe(false)
+      // The other player's board really rewound too, not just the mover's.
+      expect(guest.state!.placed[space]).toBeUndefined()
+
+      host.send({ t: 'undo' })
+      await host.settle()
+      expect(host.errors.at(-1)).toMatch(/nothing to take back/i)
+    }
 
     // Play the game out with legal moves until the server declares it over.
     const clients = [host, guest]
@@ -184,7 +229,7 @@ describe('two browsers playing over the wire', () => {
     await host.connect()
     await guest.connect()
 
-    host.send({ t: 'create', name: 'Host', options: { randomHands: true, openInformation: false } })
+    host.send({ t: 'create', name: 'Host', options: { ...DEFAULT_OPTIONS, randomHands: true, openInformation: false } })
     await host.settle()
     const code = host.state!.code
     guest.send({ t: 'join', code, name: 'Guest' })
@@ -211,7 +256,7 @@ describe('two browsers playing over the wire', () => {
     expect(host.state!.players.map((p) => p.name)).toEqual(['Host', 'Guest'])
 
     // Settings can be changed, then a whole new game dealt.
-    host.send({ t: 'options', options: { randomHands: true, openInformation: true } })
+    host.send({ t: 'options', options: { ...DEFAULT_OPTIONS, randomHands: true, openInformation: true } })
     await host.settle()
     host.send({ t: 'start' })
     await host.settle()
@@ -231,7 +276,7 @@ describe('two browsers playing over the wire', () => {
     await host.connect()
     await guest.connect()
 
-    host.send({ t: 'create', name: 'Host', options: { randomHands: true, openInformation: false } })
+    host.send({ t: 'create', name: 'Host', options: { ...DEFAULT_OPTIONS, randomHands: true, openInformation: false } })
     await host.settle()
     guest.send({ t: 'join', code: host.state!.code, name: 'Guest' })
     await guest.settle()
@@ -268,7 +313,7 @@ describe('two browsers playing over the wire', () => {
     await host.connect()
     await guest.connect()
 
-    host.send({ t: 'create', name: 'Host', options: { randomHands: true, openInformation: false } })
+    host.send({ t: 'create', name: 'Host', options: { ...DEFAULT_OPTIONS, randomHands: true, openInformation: false } })
     await host.settle()
     guest.send({ t: 'join', code: host.state!.code, name: 'Guest' })
     await guest.settle()
@@ -293,7 +338,7 @@ describe('two browsers playing over the wire', () => {
     await host.connect()
     await guest.connect()
 
-    host.send({ t: 'create', name: 'Host', options: { randomHands: true, openInformation: false } })
+    host.send({ t: 'create', name: 'Host', options: { ...DEFAULT_OPTIONS, randomHands: true, openInformation: false } })
     await host.settle()
     guest.send({ t: 'join', code: host.state!.code, name: 'Guest' })
     await guest.settle()
@@ -321,7 +366,7 @@ describe('two browsers playing over the wire', () => {
     await host.connect()
     await guest.connect()
 
-    host.send({ t: 'create', name: 'Host', options: { randomHands: true, openInformation: false } })
+    host.send({ t: 'create', name: 'Host', options: { ...DEFAULT_OPTIONS, randomHands: true, openInformation: false } })
     await host.settle()
     guest.send({ t: 'join', code: host.state!.code, name: 'Guest' })
     await guest.settle()

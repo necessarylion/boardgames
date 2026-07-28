@@ -3,7 +3,8 @@ import { computed } from 'vue'
 import TableMenu from './TableMenu.vue'
 import TileGlyph from './TileGlyph.vue'
 import TileReference from './TileReference.vue'
-import { STARTING_HAND_SIZE, tileLabel } from '@shared/tiles'
+import { STARTING_HAND_SIZE } from '@shared/tiles'
+import { t, tileTitle } from '@/i18n'
 import { useGameStore } from '@/stores/game'
 
 const game = useGameStore()
@@ -19,14 +20,11 @@ const waitingOn = computed(() => game.players.filter((p) => !p.ready).map((p) =>
     <aside class="guide">
       <div class="guide-inner">
         <header class="head">
-          <h1>Choose your opening hand</h1>
-          <p class="muted">
-            Pick {{ STARTING_HAND_SIZE }} of your 20 tiles. The other 15 are shuffled into your
-            draw stack. Everyone chooses at the same time, and nobody sees your choice.
-          </p>
+          <h1>{{ t('draft.title') }}</h1>
+          <p class="muted">{{ t('draft.intro', { picks: STARTING_HAND_SIZE }) }}</p>
         </header>
 
-        <h2>What each tile does</h2>
+        <h2>{{ t('draft.reference') }}</h2>
         <TileReference />
       </div>
     </aside>
@@ -44,7 +42,7 @@ const waitingOn = computed(() => game.players.filter((p) => !p.ready).map((p) =>
               :key="tile.id"
               class="tile-btn"
               :class="{ picked: picked.has(tile.id) }"
-              :title="tileLabel(tile)"
+              :title="tileTitle(tile)"
               @click="game.toggleDraftPick(tile.id)"
             >
               <svg
@@ -65,16 +63,18 @@ const waitingOn = computed(() => game.players.filter((p) => !p.ready).map((p) =>
 
           <div class="actions">
             <span class="count">
-              {{ game.draftPicks.length }} / {{ STARTING_HAND_SIZE }} chosen
+              {{ t('draft.chosen', { picked: game.draftPicks.length, total: STARTING_HAND_SIZE }) }}
             </span>
             <div class="buttons">
-              <button class="btn ghost small" @click="game.randomiseDraft()">Choose for me</button>
+              <button class="btn ghost small" @click="game.randomiseDraft()">
+                {{ t('draft.random') }}
+              </button>
               <button
                 class="btn"
                 :disabled="game.draftPicks.length !== STARTING_HAND_SIZE"
                 @click="game.confirmDraft()"
               >
-                Confirm hand
+                {{ t('draft.confirm') }}
               </button>
             </div>
           </div>
@@ -82,8 +82,8 @@ const waitingOn = computed(() => game.players.filter((p) => !p.ready).map((p) =>
       </template>
 
       <div v-else class="waiting">
-        <h2>Your hand is set</h2>
-        <p class="muted">Waiting for {{ waitingOn.join(', ') }}.</p>
+        <h2>{{ t('draft.done') }}</h2>
+        <p class="muted">{{ t('draft.waitingFor', { names: waitingOn.join(', ') }) }}</p>
       </div>
     </main>
   </div>

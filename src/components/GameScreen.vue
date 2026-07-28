@@ -8,6 +8,7 @@ import PlayerPanel from './PlayerPanel.vue'
 import RulesDialog from './RulesDialog.vue'
 import TableMenu from './TableMenu.vue'
 import { PLAYER_COLOURS } from '@shared/colours'
+import { LOCALE_NAME, LOCALES, locale, setLocale, t } from '@/i18n'
 import { useGameStore } from '@/stores/game'
 
 const game = useGameStore()
@@ -15,10 +16,19 @@ const showRules = ref(false)
 const showSidebar = ref(false)
 
 const turnLabel = computed(() => {
-  if (game.phase === 'over') return 'Game over'
-  if (game.isMyTurn) return 'Your turn'
-  return game.activePlayer ? `${game.activePlayer.name}'s turn` : '—'
+  if (game.phase === 'over') return t('game.over')
+  if (game.isMyTurn) return t('game.yourTurn')
+  return game.activePlayer
+    ? t('game.playerTurn', { name: game.activePlayer.name })
+    : t('game.noTurn')
 })
+
+/**
+ * The table menu carries the full language row, but mid-game that is a click
+ * away behind a dropdown. With only two languages a single button that names
+ * the one you are not in is enough, and costs the bar almost nothing.
+ */
+const otherLocale = computed(() => LOCALES.find((code) => code !== locale.value) ?? LOCALES[0])
 
 const accent = computed(() =>
   game.activePlayer ? PLAYER_COLOURS[game.activePlayer.colour].ink : 'var(--ink-soft)',
@@ -31,13 +41,21 @@ const accent = computed(() =>
       <div class="turn">
         <span class="dot" :style="{ background: accent }" />
         <strong>{{ turnLabel }}</strong>
-        <span class="tiny muted">Round {{ game.state?.turnNumber ?? 1 }}</span>
+        <span class="tiny muted">{{ t('game.round', { turn: game.state?.turnNumber ?? 1 }) }}</span>
       </div>
       <div class="top-actions">
-        <span class="tiny muted code">Room {{ game.state?.code }}</span>
-        <button class="btn ghost small" @click="showRules = true">Rules</button>
+        <span class="tiny muted code">{{ t('game.room', { code: game.state?.code ?? '' }) }}</span>
+        <button
+          class="btn ghost small"
+          :lang="otherLocale"
+          :title="t('lang.label')"
+          @click="setLocale(otherLocale)"
+        >
+          {{ LOCALE_NAME[otherLocale] }}
+        </button>
+        <button class="btn ghost small" @click="showRules = true">{{ t('game.rules') }}</button>
         <button class="btn ghost small sidebar-toggle" @click="showSidebar = !showSidebar">
-          {{ showSidebar ? 'Hide' : 'Info' }}
+          {{ showSidebar ? t('game.hideInfo') : t('game.showInfo') }}
         </button>
         <TableMenu />
       </div>
@@ -47,9 +65,7 @@ const accent = computed(() =>
       <div class="board-column">
         <BoardView />
         <HandBar v-if="game.isSeated" />
-        <p v-else class="spectating tiny muted">
-          You are watching this table. Captured pieces stay hidden until the game ends.
-        </p>
+        <p v-else class="spectating tiny muted">{{ t('game.spectating') }}</p>
       </div>
 
       <div class="sidebar" :class="{ open: showSidebar }">

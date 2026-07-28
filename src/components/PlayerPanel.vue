@@ -2,7 +2,8 @@
 import { computed } from 'vue'
 import GameIcon from './GameIcon.vue'
 import { PLAYER_COLOURS } from '@shared/colours'
-import { CASTES, CASTE_LABEL, CASTE_PIECE_LABEL, type Caste } from '@shared/types'
+import { CASTES, type Caste } from '@shared/types'
+import { casteName, castePiece, t } from '@/i18n'
 import { useGameStore } from '@/stores/game'
 
 const game = useGameStore()
@@ -33,37 +34,37 @@ function capturedCounts(captured: Caste[] | null): Record<Caste, number> | null 
 <template>
   <aside class="side">
     <section class="block">
-      <h3>Caste pieces on the board</h3>
+      <h3>{{ t('panel.onBoard') }}</h3>
       <ul class="tally">
         <li v-for="caste in CASTES" :key="caste">
           <GameIcon :name="caste" :size="18" />
-          <span class="tally-name">{{ CASTE_PIECE_LABEL[caste] }}</span>
-          <span class="tally-sub tiny muted">{{ CASTE_LABEL[caste] }}</span>
+          <span class="tally-name">{{ castePiece(caste) }}</span>
+          <span class="tally-sub tiny muted">{{ casteName(caste) }}</span>
           <strong>{{ remaining[caste] }}</strong>
         </li>
       </ul>
-      <p class="tiny muted note">The game ends the moment any caste is cleared from the board.</p>
+      <p class="tiny muted note">{{ t('panel.endNote') }}</p>
     </section>
 
     <section class="block">
       <h3>
-        Set aside
-        <span class="tiny muted">{{ game.state?.setAside.length ?? 0 }} / 4</span>
+        {{ t('panel.setAside') }}
+        <span class="tiny muted">
+          {{ t('panel.setAsideCount', { count: game.state?.setAside.length ?? 0 }) }}
+        </span>
       </h3>
-      <p v-if="!game.state?.setAside.length" class="tiny muted">
-        Nothing contested yet. A tie for the highest influence takes the piece out of the game.
-      </p>
+      <p v-if="!game.state?.setAside.length" class="tiny muted">{{ t('panel.setAsideEmpty') }}</p>
       <ul v-else class="tally compact">
         <li v-for="caste in CASTES" :key="caste" v-show="setAsideCounts[caste] > 0">
           <GameIcon :name="caste" :size="16" />
-          <span class="tally-name">{{ CASTE_PIECE_LABEL[caste] }}</span>
+          <span class="tally-name">{{ castePiece(caste) }}</span>
           <strong>{{ setAsideCounts[caste] }}</strong>
         </li>
       </ul>
     </section>
 
     <section class="block">
-      <h3>Players</h3>
+      <h3>{{ t('panel.players') }}</h3>
       <ul class="players">
         <li
           v-for="player in game.players"
@@ -81,12 +82,17 @@ function capturedCounts(captured: Caste[] | null): Record<Caste, number> | null 
               }"
             />
             <span class="player-name">{{ player.name }}</span>
-            <span v-if="player.id === game.you" class="badge">You</span>
-            <span v-if="!player.connected" class="badge away">Away</span>
+            <span v-if="player.id === game.you" class="badge">{{ t('lobby.badge.you') }}</span>
+            <span v-if="!player.connected" class="badge away">{{ t('lobby.badge.away') }}</span>
           </div>
           <div class="player-stats tiny muted">
-            {{ player.handCount }} in hand · {{ player.stackCount }} in stack ·
-            {{ player.capturedCount }} captured
+            {{
+              t('panel.stats', {
+                hand: player.handCount,
+                stack: player.stackCount,
+                captured: player.capturedCount,
+              })
+            }}
           </div>
           <ul v-if="capturedCounts(player.captured)" class="captured">
             <li v-for="caste in CASTES" :key="caste">
@@ -94,7 +100,7 @@ function capturedCounts(captured: Caste[] | null): Record<Caste, number> | null 
               <span>{{ capturedCounts(player.captured)![caste] }}</span>
             </li>
           </ul>
-          <p v-else class="tiny muted hidden-note">Captured pieces kept behind their screen.</p>
+          <p v-else class="tiny muted hidden-note">{{ t('panel.hiddenCaptured') }}</p>
         </li>
       </ul>
     </section>

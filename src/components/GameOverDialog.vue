@@ -2,7 +2,8 @@
 import { computed } from 'vue'
 import GameIcon from './GameIcon.vue'
 import { PLAYER_COLOURS } from '@shared/colours'
-import { CASTES, CASTE_LABEL, CASTE_PIECE_LABEL } from '@shared/types'
+import { CASTES } from '@shared/types'
+import { casteName, castePiece, t } from '@/i18n'
 import { useGameStore } from '@/stores/game'
 
 const game = useGameStore()
@@ -16,29 +17,32 @@ const rows = computed(() =>
   })),
 )
 const headline = computed(() => {
-  const winners = rows.value.filter((r) => r.won).map((r) => r.player?.name ?? 'Unknown')
-  if (winners.length === 1) return `${winners[0]} wins`
-  return `${winners.join(' and ')} share the victory`
+  const winners = rows.value
+    .filter((r) => r.won)
+    .map((r) => r.player?.name ?? t('over.unknownPlayer'))
+  if (winners.length === 1) return t('over.wins', { name: winners[0] })
+  return t('over.shared', { names: winners.join(t('over.and')) })
 })
 </script>
 
 <template>
   <div v-if="result" class="backdrop">
     <div class="panel dialog">
-      <p class="tiny muted eyebrow">The game has ended</p>
+      <p class="tiny muted eyebrow">{{ t('over.eyebrow') }}</p>
       <h1>{{ headline }}</h1>
+      <!-- The reason is worded by the shared engine, so it stays in English. -->
       <p class="reason">{{ result.reason }}</p>
 
       <table class="scores">
         <thead>
           <tr>
-            <th>Player</th>
-            <th v-for="caste in CASTES" :key="caste" :title="CASTE_LABEL[caste]">
+            <th>{{ t('over.player') }}</th>
+            <th v-for="caste in CASTES" :key="caste" :title="casteName(caste)">
               <GameIcon :name="caste" :size="17" />
-              <span class="sr">{{ CASTE_PIECE_LABEL[caste] }}</span>
+              <span class="sr">{{ castePiece(caste) }}</span>
             </th>
-            <th>Leader tokens</th>
-            <th>Total</th>
+            <th>{{ t('over.leaderTokens') }}</th>
+            <th>{{ t('over.total') }}</th>
           </tr>
         </thead>
         <tbody>
@@ -55,7 +59,7 @@ const headline = computed(() => {
             </td>
             <td v-for="caste in CASTES" :key="caste" class="num">
               {{ row.entry.counts[caste] }}
-              <span v-if="row.entry.leaderTokens.includes(caste)" class="token" title="Leader">*</span>
+              <span v-if="row.entry.leaderTokens.includes(caste)" class="token" :title="t('over.leader')">*</span>
             </td>
             <td class="num">{{ row.entry.leaderTokens.length }}</td>
             <td class="num total">{{ row.entry.totalPieces }}</td>
@@ -64,23 +68,19 @@ const headline = computed(() => {
       </table>
 
       <p v-if="result.unclaimed.length" class="tiny muted">
-        Unclaimed leader tokens:
-        {{ result.unclaimed.map((c) => CASTE_LABEL[c]).join(', ') }} — tied, so nobody leads.
+        {{ t('over.unclaimed', { castes: result.unclaimed.map(casteName).join(', ') }) }}
       </p>
-      <p class="tiny muted">* marks a caste this player leads.</p>
+      <p class="tiny muted">{{ t('over.starNote') }}</p>
 
       <div class="actions">
         <template v-if="game.isHost">
-          <button class="btn" @click="game.rematch()">Play again</button>
-          <button class="btn ghost" @click="game.abandonGame()">Back to lobby</button>
+          <button class="btn" @click="game.rematch()">{{ t('over.playAgain') }}</button>
+          <button class="btn ghost" @click="game.abandonGame()">{{ t('over.backToLobby') }}</button>
         </template>
-        <p v-else class="tiny muted">Waiting for the host to deal another game.</p>
-        <button class="btn ghost" @click="game.leaveRoom()">Leave table</button>
+        <p v-else class="tiny muted">{{ t('over.waitingHost') }}</p>
+        <button class="btn ghost" @click="game.leaveRoom()">{{ t('over.leaveTable') }}</button>
       </div>
-      <p v-if="game.isHost" class="tiny muted">
-        “Play again” deals a fresh game to the same players; “Back to lobby” lets you change the
-        table settings first. Players who have left are dropped either way.
-      </p>
+      <p v-if="game.isHost" class="tiny muted">{{ t('over.hostNote') }}</p>
     </div>
   </div>
 </template>
