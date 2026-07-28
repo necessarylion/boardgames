@@ -61,7 +61,7 @@ class TestClient {
 }
 
 beforeAll(async () => {
-  server = spawn('npx', ['tsx', 'server/index.ts'], {
+  server = spawn('bun', ['server/index.ts'], {
     env: { ...process.env, PORT: String(PORT) },
     stdio: 'ignore',
   })

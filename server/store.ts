@@ -14,6 +14,8 @@ export interface RoomStore {
   loadAll(): Promise<RoomSnapshot[]>
   save(snapshot: RoomSnapshot): Promise<void>
   remove(codes: string[]): Promise<void>
+  /** Delete rooms created before `cutoff`, returning how many rows went. */
+  pruneCreatedBefore(cutoff: Date): Promise<number>
   close(): Promise<void>
 }
 
@@ -26,9 +28,15 @@ const SCHEMA = `
   create table if not exists rooms (
     code text primary key,
     data jsonb not null,
-    last_activity timestamptz not null
+    last_activity timestamptz not null,
+    created_at timestamptz not null default now()
   );
   create index if not exists rooms_last_activity_idx on rooms (last_activity);
+  -- Tables written before created_at existed are missing the column; rows that
+  -- predate it are dated from the migration, so the sweep gives them a full
+  -- lifetime rather than deleting them all on the first pass.
+  alter table rooms add column if not exists created_at timestamptz not null default now();
+  create index if not exists rooms_created_at_idx on rooms (created_at);
 `
 
 export class PostgresRoomStore implements RoomStore {
@@ -72,6 +80,11 @@ export class PostgresRoomStore implements RoomStore {
     return rows.map((row) => row.data)
   }
 
+  /**
+   * `created_at` is deliberately left out of the update: a room is created once
+   * and rewritten on every move, so touching it here would keep pushing the
+   * date forward and no room would ever reach the age the sweep looks for.
+   */
   async save(snapshot: RoomSnapshot): Promise<void> {
     await this.pool.query(
       `insert into rooms (code, data, last_activity) values ($1, $2, to_timestamp($3 / 1000.0))
@@ -83,6 +96,11 @@ export class PostgresRoomStore implements RoomStore {
   async remove(codes: string[]): Promise<void> {
     if (!codes.length) return
     await this.pool.query('delete from rooms where code = any($1::text[])', [codes])
+  }
+
+  async pruneCreatedBefore(cutoff: Date): Promise<number> {
+    const { rowCount } = await this.pool.query('delete from rooms where created_at < $1', [cutoff])
+    return rowCount ?? 0
   }
 
   async close(): Promise<void> {

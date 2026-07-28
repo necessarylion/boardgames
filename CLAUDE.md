@@ -4,23 +4,25 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-An unofficial web implementation of the board game *Samurai*, designed by Reiner Knizia. Vue 3 + TypeScript + Vite client, a Node WebSocket server holding the authoritative state, and a `shared/` rules layer imported unchanged by both.
+An unofficial web implementation of the board game *Samurai*, designed by Reiner Knizia. Vue 3 + TypeScript + Vite client, a Bun WebSocket server holding the authoritative state, and a `shared/` rules layer imported unchanged by both.
 
 The repo ships no rulebook and no publisher artwork, and it must stay that way — rules and mechanics are not copyrightable, but that material is. `shared/board.ts` is an original map, `src/game/icons.ts` carries original SVG silhouettes for every icon, and the raster art in `assets/` must be original too. Never commit a reference PDF, a scan of a rulebook, or a photograph of a published game's components: drop the file from `ICON_IMAGES` and the SVG fallback takes over.
 
 ## Commands
 
+**Bun is the runtime and the package manager**, for both sides — `bun install`, `bun run`, and `bun` itself serving the built server. There is no `package-lock.json`; `bun.lock` is the lockfile. Vitest still runs the tests under Node, because the suite leans on vitest's jsdom environments and Vue Test Utils.
+
 | Command | What it does |
 | --- | --- |
-| `npm run dev` | Server on `:8787` (tsx watch) and Vite on `:5173`, concurrently |
-| `npm run build` | `vue-tsc --noEmit`, then bundles client to `dist/` and server to `dist-server/index.cjs` |
-| `npm start` | Runs the built server, which also serves `dist/` |
-| `npm test` | Full vitest suite, including the end-to-end game over real WebSockets |
-| `npm run typecheck` | `vue-tsc --noEmit` over client, server, shared and tests |
+| `bun run dev` | Server on `:8787` (`bun --watch`) and Vite on `:5173`, concurrently |
+| `bun run build` | `vue-tsc --noEmit`, then bundles client to `dist/` and server to `dist-server/index.js` |
+| `bun start` | Runs the built server, which also serves `dist/` |
+| `bun run test` | Full vitest suite, including the end-to-end game over real WebSockets |
+| `bun run typecheck` | `vue-tsc --noEmit` over client, server, shared and tests |
 
-Run one test file: `npx vitest run tests/rules.test.ts`. One case: `npx vitest run -t "resolving a contest"`. Watch: `npm run test:watch`.
+Run one test file: `bunx vitest run tests/rules.test.ts`. One case: `bunx vitest run -t "resolving a contest"`. Watch: `bun run test:watch`.
 
-`tests/integration.test.ts` spawns a real server via `npx tsx server/index.ts` on port 8899 and drives two scripted WebSocket clients through a whole game — it is slow and needs that port free. `render.test.ts` and `panzoom.test.ts` opt into jsdom with a per-file `// @vitest-environment jsdom` comment; there is no vitest config block, so everything else runs in node. Vitest reads `vite.config.ts`, so the `@` and `@shared` aliases work in tests too.
+`tests/integration.test.ts` spawns a real server via `bun server/index.ts` on port 8899 and drives two scripted WebSocket clients through a whole game — it is slow and needs that port free. `render.test.ts` and `panzoom.test.ts` opt into jsdom with a per-file `// @vitest-environment jsdom` comment; there is no vitest config block, so everything else runs in node. Vitest reads `vite.config.ts`, so the `@` and `@shared` aliases work in tests too.
 
 There is a dev-only visual harness at `http://localhost:5173/dev-preview.html?players=4&turns=30` (`&zoom=4&at=0.45,0.55` to inspect the zoomed view). It simulates a game locally via `src/preview.ts`, so the table can be checked without a server or four browsers.
 
@@ -60,7 +62,7 @@ Two rules details the rulebook constrains without spelling out, already recorded
 
 ## Conventions
 
-- Path aliases: `@/` → `src/`, `@shared/` → `shared/`. Server code uses relative `../shared/...` imports (it is bundled by esbuild, not Vite).
+- Path aliases: `@/` → `src/`, `@shared/` → `shared/`. Server code uses relative `../shared/...` imports (it is bundled by `bun build`, not Vite).
 - TypeScript is strict, with `noUnusedLocals`, `noUnusedParameters` and `verbatimModuleSyntax` — type-only imports must use `import type`.
 - British spelling throughout the codebase (`colour`, `neighbours`, `centre`, `sanitise`).
 - Comments explain *why*, not *what*, and are used sparingly on the non-obvious invariants above. Match that density.
@@ -69,4 +71,4 @@ Two rules details the rulebook constrains without spelling out, already recorded
 
 ## CI and deployment
 
-`.github/workflows/docker-publish.yml` runs `npm ci`, `npm run typecheck` and `npm test` on every push and PR to `main`, and publishes a multi-arch image to GHCR only after the suite passes (never on PRs). The runtime image copies just `dist/` and the self-contained `dist-server/index.cjs`, with no `node_modules`. `PORT`, `HOST` and `STATIC_DIR` are the server's env vars; `/healthz` returns `{ok, rooms}`.
+`.github/workflows/docker-publish.yml` runs `bun install --frozen-lockfile`, `bun run typecheck` and `bun run test` on every push and PR to `main`, and publishes a multi-arch image to GHCR only after the suite passes (never on PRs). The runtime image copies just `dist/` and the self-contained `dist-server/index.js`, with no `node_modules`. `PORT`, `HOST` and `STATIC_DIR` are the server's env vars; `/healthz` returns `{ok, rooms}`.

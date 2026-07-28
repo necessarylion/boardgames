@@ -3,22 +3,29 @@
 # The build stage always runs on the *builder's* architecture. Everything it
 # produces is plain JavaScript, so a multi-architecture image costs no emulation
 # — only the tiny runtime stage differs per target.
-FROM --platform=$BUILDPLATFORM node:22-alpine AS build
+FROM --platform=$BUILDPLATFORM oven/bun:1-alpine AS build
+
+# The image ships a `node` shim that is really Bun, so anything with a
+# `#!/usr/bin/env node` shebang runs under Bun. vue-tsc patches TypeScript to
+# understand .vue files and that patch does not take under Bun, leaving every
+# .vue import unresolved. Real Node is build-only; the runtime stage below is
+# pure Bun and never sees it.
+RUN apk add --no-cache nodejs
 
 WORKDIR /app
 
 # Dependencies first, so a source-only change reuses the cached install layer.
-COPY package.json package-lock.json ./
-RUN npm ci
+COPY package.json bun.lock ./
+RUN bun install --frozen-lockfile
 
 COPY . .
 
 # Typechecks, bundles the client into dist/, and bundles the server — with its
-# dependencies inlined — into dist-server/index.cjs.
-RUN npm run build
+# dependencies inlined — into dist-server/index.js.
+RUN bun run build
 
 
-FROM node:22-alpine AS runtime
+FROM oven/bun:1-alpine AS runtime
 
 ENV NODE_ENV=production \
     PORT=8787 \
@@ -30,14 +37,14 @@ WORKDIR /app
 # The server bundle carries its own dependencies, so there is no node_modules
 # in the runtime image at all.
 COPY --from=build /app/dist ./dist
-COPY --from=build /app/dist-server/index.cjs ./index.cjs
+COPY --from=build /app/dist-server/index.js ./index.js
 
-USER node
+USER bun
 EXPOSE 8787
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
-  CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||8787)+'/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+  CMD bun -e "fetch('http://127.0.0.1:'+(process.env.PORT||8787)+'/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
-# Node is PID 1 here; the server installs its own SIGTERM handler so that stops
+# Bun is PID 1 here; the server installs its own SIGTERM handler so that stops
 # and redeploys shut down cleanly instead of being killed.
-CMD ["node", "index.cjs"]
+CMD ["bun", "index.js"]

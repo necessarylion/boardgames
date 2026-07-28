@@ -304,9 +304,33 @@ setInterval(() => {
 
 setInterval(() => rooms.sweep(), 1000 * 60 * 5).unref()
 
+/**
+ * The in-memory sweep deletes a room's row as it drops the room, but only for
+ * rooms this process is holding. A row written by an instance that was killed
+ * before it swept is never claimed by anyone, so the table is also pruned by
+ * age directly. Nothing playable is at risk: a room is dropped from memory
+ * after three idle hours, far short of this.
+ */
+const ROOM_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 2
+const PRUNE_EVERY_MS = 1000 * 60 * 60
+
+async function pruneOldRooms() {
+  if (!store) return
+  try {
+    const gone = await store.pruneCreatedBefore(new Date(Date.now() - ROOM_MAX_AGE_MS))
+    if (gone) console.log(`[db] pruned ${gone} room(s) older than two days.`)
+  } catch (error) {
+    console.error('[db] could not prune old rooms:', (error as Error).message)
+  }
+}
+
 async function main() {
   if (DATABASE_URL) {
     store = await PostgresRoomStore.connect(DATABASE_URL)
+    // Prune before restoring, so stale rows are not read back into memory only
+    // to be swept out again a few minutes later.
+    await pruneOldRooms()
+    setInterval(pruneOldRooms, PRUNE_EVERY_MS).unref()
     const restored = await rooms.restore(store)
     console.log(`Restored ${restored} room(s) from the database.`)
   } else {

@@ -20,16 +20,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      - uses: oven-sh/setup-bun@v2
         with:
-          node-version: 22
-          cache: npm
+          bun-version: latest
 
-      - run: npm ci
-      - run: npm run typecheck
+      - run: bun install --frozen-lockfile
+      - run: bun run typecheck
       # Includes the end-to-end suite, which starts the real server and plays a
       # full game between two WebSocket clients.
-      - run: npm test
+      - run: bun run test
 
   publish:
     name: Build and push

@@ -10,7 +10,7 @@ WebSockets.
 > ships no rulebook, no scanned components and no publisher artwork. If you enjoy
 > the game, buy a physical copy — it is worth owning.
 
-Vue 3 + TypeScript + Vite on the client, a small Node WebSocket server holding
+Vue 3 + TypeScript + Vite on the client, a small Bun WebSocket server holding
 the authoritative game state.
 
 ![The table mid-game: the hex board, the player panel and the play log](assets/preview2.png)
@@ -26,8 +26,8 @@ with a reference for what each tile does alongside.*
 ## Running it
 
 ```bash
-npm install
-npm run dev
+bun install
+bun run dev
 ```
 
 That starts both processes: the game server on `:8787` and Vite on `:5173`. Open
@@ -40,8 +40,8 @@ Vite binds to every interface, so players on the same network can join at
 For a single-process deployment:
 
 ```bash
-npm run build   # typechecks, then bundles the client into dist/
-npm start       # serves dist/ and the WebSocket endpoint from :8787
+bun run build   # typechecks, then bundles the client into dist/
+bun start       # serves dist/ and the WebSocket endpoint from :8787
 ```
 
 ### Keeping rooms across restarts
@@ -56,7 +56,7 @@ docker run -d --name samurai-pg -p 5432:5432 \
   -e POSTGRES_USER=samurai -e POSTGRES_PASSWORD=samurai -e POSTGRES_DB=samurai \
   postgres:17-alpine
 
-DATABASE_URL=postgres://samurai:samurai@localhost:5432/samurai npm run dev
+DATABASE_URL=postgres://samurai:samurai@localhost:5432/samurai bun run dev
 ```
 
 Without `DATABASE_URL` the server still runs exactly as before, holding rooms in
@@ -86,11 +86,11 @@ tables.
 
 | Command | What it does |
 | --- | --- |
-| `npm run dev` | Server + client with hot reload |
-| `npm run build` | Typecheck and bundle the client |
-| `npm start` | Serve the built client and the game server together |
-| `npm test` | Full suite — rules, engine, board, rendering, and a live end-to-end game over WebSockets |
-| `npm run typecheck` | `vue-tsc` over client, server and shared code |
+| `bun run dev` | Server + client with hot reload |
+| `bun run build` | Typecheck and bundle the client |
+| `bun start` | Serve the built client and the game server together |
+| `bun run test` | Full suite — rules, engine, board, rendering, and a live end-to-end game over WebSockets |
+| `bun run typecheck` | `vue-tsc` over client, server and shared code |
 
 There is also a visual harness at
 <http://localhost:5173/dev-preview.html?players=4&turns=30>, which renders the
