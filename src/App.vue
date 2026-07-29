@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { computed, onMounted } from 'vue'
 import DraftScreen from './components/DraftScreen.vue'
 import GameScreen from './components/GameScreen.vue'
 import HomeScreen from './components/HomeScreen.vue'
@@ -9,12 +9,19 @@ import { useGameStore } from './stores/game'
 
 const game = useGameStore()
 
+/**
+ * Only once there is a table to lose. The first connect runs on load, so on home
+ * the bar announced itself on every visit for something the player had not asked
+ * for yet; an action attempted before the socket is up says so in a toast.
+ */
+const showConnection = computed(() => game.inRoom && game.connection !== 'open')
+
 onMounted(() => game.connect())
 </script>
 
 <template>
   <div class="app">
-    <p v-if="game.connection !== 'open'" class="connection" :class="game.connection">
+    <p v-if="showConnection" class="connection" :class="game.connection">
       {{ game.connection === 'connecting' ? t('app.connecting') : t('app.connectionLost') }}
     </p>
 
