@@ -3,6 +3,7 @@ import { DEFAULT_OPTIONS } from '../shared/engine'
 import { describe, expect, it, beforeEach } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { mount } from '@vue/test-utils'
+import { nextTick } from 'vue'
 
 import DraftScreen from '../src/components/DraftScreen.vue'
 import GameScreen from '../src/components/GameScreen.vue'
@@ -231,5 +232,62 @@ describe('rendering', () => {
 
     expect(game.highlightedSpaces.length).toBeGreaterThan(0)
     expect(wrapper.findAll('.hex-target')).toHaveLength(game.highlightedSpaces.length)
+  })
+})
+
+describe('the capture notice', () => {
+  /**
+   * A turn ending, as the client sees it: the server rewrites `lastCaptures` and
+   * moves the turn on in the same broadcast.
+   */
+  function turnEnded(r: Room, token: string, winner: number) {
+    return {
+      ...r.stateFor(token),
+      current: 1,
+      lastCaptures: [{ caste: 'buddha' as const, spaceId: r.game!.board.order[0], winner }],
+    }
+  }
+
+  it('congratulates the player who took the piece, once', async () => {
+    const r = room()
+    const game = useGameStore()
+    game.state = r.stateFor('token-a')
+    await nextTick()
+
+    game.state = turnEnded(r, 'token-a', 0)
+    await nextTick()
+
+    const wrapper = mount(GameScreen)
+    expect(wrapper.text()).toContain('Yay! You took a Buddha.')
+
+    // Later broadcasts of the same turn must not reopen it once dismissed.
+    await wrapper.find('.backdrop .btn').trigger('click')
+    expect(wrapper.find('.backdrop').exists()).toBe(false)
+
+    game.state = turnEnded(r, 'token-a', 0)
+    await nextTick()
+    expect(wrapper.find('.backdrop').exists()).toBe(false)
+  })
+
+  it('says nothing to the player who did not take it', async () => {
+    const r = room()
+    const game = useGameStore()
+    game.state = r.stateFor('token-b')
+    await nextTick()
+
+    game.state = turnEnded(r, 'token-b', 0) // seat 0 captured; this client is seat 1
+    await nextTick()
+
+    expect(game.capturedNotice).toEqual([])
+    expect(mount(GameScreen).find('.backdrop').exists()).toBe(false)
+  })
+
+  it('does not replay a capture to a client that arrives mid-turn', async () => {
+    const r = room()
+    const game = useGameStore()
+    game.state = turnEnded(r, 'token-a', 0) // the very first state this client sees
+    await nextTick()
+
+    expect(game.capturedNotice).toEqual([])
   })
 })

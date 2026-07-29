@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import BoardView from './BoardView.vue'
+import CaptureDialog from './CaptureDialog.vue'
 import GameOverDialog from './GameOverDialog.vue'
 import HandBar from './HandBar.vue'
 import LogPanel from './LogPanel.vue'
@@ -60,6 +61,7 @@ const accent = computed(() =>
     </main>
 
     <RulesDialog v-if="showRules" @close="showRules = false" />
+    <CaptureDialog />
     <GameOverDialog v-if="game.phase === 'over'" />
   </div>
 </template>

@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { computed, ref, shallowRef } from 'vue'
+import { computed, ref, shallowRef, watch } from 'vue'
 
 import { buildBoard, DEFAULT_BOARD_SHAPE, type Board } from '@shared/board'
 import type { GameOptions } from '@shared/engine'
@@ -14,7 +14,7 @@ import {
   type RulesView,
 } from '@shared/rules'
 import { STARTING_HAND_SIZE, tileFromId } from '@shared/tiles'
-import type { BoardShape, Tile } from '@shared/types'
+import type { BoardShape, Caste, Tile } from '@shared/types'
 import { t } from '@/i18n'
 
 /** What the local player is currently being asked to click. */
@@ -33,6 +33,9 @@ const NAME_KEY = 'samurai.name'
 
 /** No word from the server for this long means the connection is dead. */
 const SILENCE_LIMIT_MS = HEARTBEAT_MS * 3
+
+/** How long the capture notice sits there before dismissing itself. */
+export const CAPTURE_NOTICE_MS = 5000
 
 function socketUrl(): string {
   const protocol = location.protocol === 'https:' ? 'wss' : 'ws'
@@ -222,6 +225,45 @@ export const useGameStore = defineStore('game', () => {
   // --- local interaction ---------------------------------------------------
   const interaction = ref<Interaction>({ mode: 'idle' })
   const draftPicks = ref<string[]>([])
+
+  // --- capture notice ------------------------------------------------------
+  /**
+   * What the local player captured on the turn that just ended, announced once
+   * and only to them — `captured` otherwise grows behind the screen with nothing
+   * on screen to mark it.
+   *
+   * `lastCaptures` is rewritten by the server only when a turn ends, and neither
+   * `turnNumber` nor `current` moves at any other point, so that pair identifies
+   * the turn-end this state belongs to. Keying on it announces each capture
+   * exactly once however many broadcasts follow, and a client that arrives or
+   * reconnects mid-turn takes the key as its baseline instead of replaying a
+   * capture it has already seen. The final turn is deliberately silent: the
+   * engine leaves both fields alone when the game ends, so the result dialog is
+   * the only thing that opens.
+   */
+  const capturedNotice = ref<Caste[]>([])
+  let captureTimer: ReturnType<typeof setTimeout> | null = null
+  let lastTurnKey: string | null = null
+
+  function dismissCaptureNotice() {
+    if (captureTimer) clearTimeout(captureTimer)
+    captureTimer = null
+    capturedNotice.value = []
+  }
+
+  watch(state, (next) => {
+    const key = next ? `${next.turnNumber}:${next.current}` : null
+    if (key === lastTurnKey) return
+    const baseline = lastTurnKey === null
+    lastTurnKey = key
+    if (baseline || !next || next.you === null) return
+
+    const mine = next.lastCaptures.filter((c) => c.winner === next.you).map((c) => c.caste)
+    if (!mine.length) return
+    dismissCaptureNotice()
+    capturedNotice.value = mine
+    captureTimer = setTimeout(dismissCaptureNotice, CAPTURE_NOTICE_MS)
+  })
 
   // --- derived -------------------------------------------------------------
   const inRoom = computed(() => state.value !== null)
@@ -488,6 +530,8 @@ export const useGameStore = defineStore('game', () => {
     canEndTurn,
     canUndo,
     mustPlace,
+    capturedNotice,
+    dismissCaptureNotice,
     // actions
     createRoom,
     joinRoom,

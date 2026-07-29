@@ -10,6 +10,7 @@ import { Game } from '@shared/engine'
 import { legalPlacements } from '@shared/rules'
 import { buildTiles, tileFromId } from '@shared/tiles'
 import type { ClientState } from '@shared/protocol'
+import type { Caste } from '@shared/types'
 import { COLOUR_ORDER } from '@shared/colours'
 import { useGameStore } from './stores/game'
 import './assets/main.css'
@@ -85,8 +86,15 @@ if (screen === 'draft') {
 const pinia = createPinia()
 const app = createApp(screen === 'draft' ? DraftScreen : GameScreen)
 app.use(pinia)
-useGameStore(pinia).state = state
+const store = useGameStore(pinia)
+store.state = state
 app.mount('#app')
+
+// ?captured=buddha,rice opens the capture notice. Only one state is ever handed
+// to the store here, and that first one is the baseline the notice keys off, so
+// it has to be posed rather than played out.
+const posed = new URLSearchParams(location.search).get('captured')
+if (posed) store.capturedNotice = posed.split(',') as Caste[]
 
 // ?zoom=N scrolls the board in by N wheel notches at the given ?at=x,y, so a
 // zoomed view can be captured without a pointer.

@@ -190,6 +190,13 @@ export const en = {
   'rules.tiles.lede':
     "Everyone owns the same set. You pick five to open with, then draw the rest in the order they happen to come up. A tile's number is the influence it lends to every settlement it touches.",
 
+  // --- capture notice ------------------------------------------------------
+  'capture.eyebrow': 'A capture',
+  'capture.one': 'Yay! You took a {piece}.',
+  'capture.many': 'Yay! You took {count} pieces.',
+  'capture.note': 'Kept behind your screen until the game ends.',
+  'capture.ok': 'OK',
+
   // --- game over -----------------------------------------------------------
   'over.eyebrow': 'The game has ended',
   'over.wins': '{name} wins',
