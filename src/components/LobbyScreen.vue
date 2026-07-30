@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import TurnClockOptions from './TurnClockOptions.vue'
 import { PLAYER_COLOURS } from '@shared/colours'
 import { supplyPerCaste } from '@shared/setup'
 import { t } from '@/i18n'
@@ -27,6 +28,12 @@ function toggle(key: 'randomHands' | 'openInformation') {
   const options = game.state?.options
   if (!options) return
   game.setOptions({ ...options, [key]: !options[key] })
+}
+
+function setClock(turnSeconds: number) {
+  const options = game.state?.options
+  if (!options || !game.isHost) return
+  game.setOptions({ ...options, turnSeconds })
 }
 </script>
 
@@ -86,6 +93,11 @@ function toggle(key: 'randomHands' | 'openInformation') {
           />
           <span>{{ t('option.openInfo.long') }}</span>
         </label>
+        <TurnClockOptions
+          :seconds="game.state?.options.turnSeconds ?? 0"
+          :locked="!game.isHost"
+          @pick="setClock"
+        />
         <p v-if="!game.isHost" class="tiny muted">{{ t('lobby.hostOnly') }}</p>
 
         <hr class="rule" />

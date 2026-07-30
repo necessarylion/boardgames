@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import TileGlyph from './TileGlyph.vue'
-import { t, tileTitle } from '@/i18n'
+import { t, tileKindLabel, tileTitle } from '@/i18n'
 import { useGameStore } from '@/stores/game'
 
 const game = useGameStore()
@@ -68,6 +68,7 @@ const prompt = computed(() => {
             :y="SIZE * 1.05"
           />
         </svg>
+        <span class="tile-name tiny muted">{{ tileKindLabel(tile) }}</span>
       </button>
       <p v-if="!game.hand.length" class="muted tiny empty">{{ t('hand.empty') }}</p>
     </div>
@@ -129,6 +130,9 @@ const prompt = computed(() => {
 }
 
 .tile-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   border: 0;
   background: transparent;
   padding: 2px;
@@ -150,6 +154,14 @@ const prompt = computed(() => {
 .tile-btn.unplayable {
   opacity: 0.35;
   filter: grayscale(0.6);
+}
+
+/* Kept on one line: Burmese has no spaces to wrap at, so a narrow hand widens
+   the buttons a little and `.tiles` wraps, rather than breaking mid-syllable. */
+.tile-name {
+  line-height: 1.1;
+  white-space: nowrap;
+  font-size: 0.68rem;
 }
 
 .hand-actions {

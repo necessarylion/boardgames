@@ -5,6 +5,7 @@ import { extname, join, normalize, resolve } from 'node:path'
 import { WebSocketServer, type WebSocket } from 'ws'
 
 import { DEFAULT_BOARD_SHAPE } from '../shared/board'
+import { TURN_SECONDS_CHOICES } from '../shared/engine'
 import type { ClientMessage, ServerMessage } from '../shared/protocol'
 import { HEARTBEAT_MS, PROTOCOL_VERSION } from '../shared/protocol'
 import { BOARD_SHAPES } from '../shared/types'
@@ -94,6 +95,11 @@ function broadcast(room: Room, exceptToken?: string) {
 /** Broadcast a change and queue the room to be written back to the database. */
 function commit(room: Room, exceptToken?: string) {
   rooms.markDirty(room)
+  // Before the state is built, not after: ending a turn hands the clock to the
+  // next player, and a broadcast that went out first would tell everyone what
+  // was left of the *previous* player's period and then never correct itself,
+  // since the tick below only speaks up when a deadline actually passes.
+  room.syncTurnTimer()
   broadcast(room, exceptToken)
 }
 
@@ -281,12 +287,34 @@ function sanitiseOptions(options: unknown) {
   // An unknown shape falls back to the default rather than being rejected, so a
   // stale or hand-rolled client can never leave a room unable to deal a board.
   const shape = BOARD_SHAPES.find((s) => s === o.boardShape) ?? DEFAULT_BOARD_SHAPE
+  const seconds = TURN_SECONDS_CHOICES.find((s) => s === Number(o.turnSeconds)) ?? 0
   return {
     randomHands: Boolean(o.randomHands),
     openInformation: Boolean(o.openInformation),
     boardShape: shape,
+    turnSeconds: seconds,
   }
 }
+
+/**
+ * The shot clock. One sweep for every room beats a timer per room: it needs
+ * nothing reinstated when a room is restored from the database, and it cannot
+ * leak a handle when a room is swept away.
+ *
+ * A timeout that the engine somehow refuses still re-arms, so a room that
+ * cannot be advanced retries once a period instead of once a tick.
+ */
+setInterval(() => {
+  for (const room of rooms.dueTurns()) {
+    const game = room.game
+    if (game) {
+      const outcome = game.timeOut(game.state.current)
+      if (outcome.ok) room.touch()
+    }
+    room.rearmTurnTimer()
+    commit(room)
+  }
+}, 1000).unref()
 
 /**
  * A heartbeat both ways. The ping gives the browser something to hear, so a

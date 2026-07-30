@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import GameIcon from './GameIcon.vue'
 import { PLAYER_COLOURS } from '@shared/colours'
 import { CASTES } from '@shared/types'
@@ -16,20 +16,115 @@ const rows = computed(() =>
     won: result.value!.winners.includes(entry.playerId),
   })),
 )
+
+/** False for a spectator, whose seat is null and so never among the winners. */
+const youWon = computed(
+  () => game.you !== null && (result.value?.winners.includes(game.you) ?? false),
+)
+
 const headline = computed(() => {
-  const winners = rows.value
-    .filter((r) => r.won)
-    .map((r) => r.player?.name ?? t('over.unknownPlayer'))
-  if (winners.length === 1) return t('over.wins', { name: winners[0] })
-  return t('over.shared', { names: winners.join(t('over.and')) })
+  const winners = rows.value.filter((r) => r.won)
+  const name = (row: (typeof winners)[number]) => row.player?.name ?? t('over.unknownPlayer')
+  if (youWon.value) {
+    const others = winners.filter((r) => r.entry.playerId !== game.you).map(name)
+    if (!others.length) return t('over.youWin')
+    return t('over.youShareWin', { names: others.join(t('over.and')) })
+  }
+  const names = winners.map(name)
+  if (names.length === 1) return t('over.wins', { name: names[0] })
+  return t('over.shared', { names: names.join(t('over.and')) })
 })
+
+const myColours = computed(() => (game.me ? PLAYER_COLOURS[game.me.colour] : null))
+
+// --- fireworks -------------------------------------------------------------
+/**
+ * Sparks are plain elements animated by CSS, with their trajectory handed over
+ * as custom properties in an inline style string — a canvas would need a frame
+ * loop running behind a dialog nobody is looking at for long.
+ */
+interface Spark {
+  style: string
+}
+interface Burst {
+  id: number
+  sparks: Spark[]
+  style: string
+}
+
+const SPARKS_PER_BURST = 14
+const BURSTS_PER_VOLLEY = 5
+/** A few volleys and then quiet, rather than a page that animates for ever. */
+const VOLLEYS = 4
+const VOLLEY_MS = 2400
+
+const bursts = ref<Burst[]>([])
+let volleyTimer: ReturnType<typeof setInterval> | null = null
+let nextBurstId = 0
+
+const between = (min: number, max: number) => min + Math.random() * (max - min)
+
+function volley(): Burst[] {
+  const colours = myColours.value
+  if (!colours) return []
+  const tones = [colours.fill, colours.ink, 'var(--gold-line)']
+
+  return Array.from({ length: BURSTS_PER_VOLLEY }, () => {
+    const reach = between(4, 7.5)
+    const delay = Math.round(between(0, 900))
+    const sparks = Array.from({ length: SPARKS_PER_BURST }, (_, i) => {
+      const angle = (i / SPARKS_PER_BURST) * Math.PI * 2 + between(-0.14, 0.14)
+      const distance = reach * between(0.6, 1)
+      const dx = (Math.cos(angle) * distance).toFixed(2)
+      const dy = (Math.sin(angle) * distance).toFixed(2)
+      return {
+        style:
+          `--dx:${dx}rem;--dy:${dy}rem;` +
+          `background:${tones[i % tones.length]};` +
+          `animation-delay:${delay + Math.round(between(0, 70))}ms`,
+      }
+    })
+    return {
+      id: nextBurstId++,
+      sparks,
+      style:
+        `left:${between(10, 90).toFixed(1)}%;top:${between(8, 64).toFixed(1)}%;` +
+        `--tone:${colours.fill};--delay:${delay}ms`,
+    }
+  })
+}
+
+const prefersReducedMotion = () =>
+  typeof window !== 'undefined' &&
+  window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true
+
+function stopVolleys() {
+  if (volleyTimer) clearInterval(volleyTimer)
+  volleyTimer = null
+}
+
+onMounted(() => {
+  if (!youWon.value) return
+  bursts.value = volley()
+  // Reduced motion keeps the one volley, which CSS then draws as a still.
+  if (prefersReducedMotion()) return
+  let fired = 1
+  volleyTimer = setInterval(() => {
+    bursts.value = volley()
+    if (++fired >= VOLLEYS) stopVolleys()
+  }, VOLLEY_MS)
+})
+
+onUnmounted(stopVolleys)
 </script>
 
 <template>
   <div v-if="result" class="backdrop">
     <div class="panel dialog">
-      <p class="tiny muted eyebrow">{{ t('over.eyebrow') }}</p>
-      <h1>{{ headline }}</h1>
+      <p class="tiny muted eyebrow">{{ youWon ? t('over.youEyebrow') : t('over.eyebrow') }}</p>
+      <h1 :class="{ triumph: youWon }" :style="youWon && myColours ? { color: myColours.ink } : undefined">
+        {{ headline }}
+      </h1>
       <!-- The reason is worded by the shared engine, so it stays in English. -->
       <p class="reason">{{ result.reason }}</p>
 
@@ -82,6 +177,12 @@ const headline = computed(() => {
       </div>
       <p v-if="game.isHost" class="tiny muted">{{ t('over.hostNote') }}</p>
     </div>
+
+    <div v-if="bursts.length" class="fireworks" aria-hidden="true">
+      <span v-for="burst in bursts" :key="burst.id" class="burst" :style="burst.style">
+        <i v-for="(spark, i) in burst.sparks" :key="i" class="spark" :style="spark.style" />
+      </span>
+    </div>
   </div>
 </template>
 
@@ -117,9 +218,80 @@ h1 {
   margin: 0.2rem 0 0.35rem;
 }
 
+.triumph {
+  font-size: 2.3rem;
+  letter-spacing: 0.01em;
+}
+
 .reason {
   margin: 0 0 1rem;
   color: var(--ink-soft);
+}
+
+/* Above the dialog, and never in the way of the buttons under it. */
+.fireworks {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.burst {
+  position: absolute;
+  width: 0;
+  height: 0;
+}
+
+.burst::before {
+  content: '';
+  position: absolute;
+  width: 0.7rem;
+  height: 0.7rem;
+  margin: -0.35rem;
+  border: 1px solid var(--tone);
+  border-radius: 50%;
+  opacity: 0;
+  animation: flash 700ms ease-out var(--delay) forwards;
+}
+
+.spark {
+  position: absolute;
+  width: 0.34rem;
+  height: 0.34rem;
+  margin: -0.17rem;
+  border-radius: 50%;
+  opacity: 0;
+  animation: spark 1500ms cubic-bezier(0.15, 0.6, 0.35, 1) forwards;
+}
+
+@keyframes flash {
+  from {
+    opacity: 0.9;
+    transform: scale(0.2);
+  }
+  to {
+    opacity: 0;
+    transform: scale(3.4);
+  }
+}
+
+@keyframes spark {
+  0% {
+    opacity: 0;
+    transform: translate(0, 0) scale(0.9);
+  }
+  12% {
+    opacity: 1;
+  }
+  70% {
+    opacity: 0.85;
+    transform: translate(var(--dx), var(--dy)) scale(0.7);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--dx), calc(var(--dy) + 1.1rem)) scale(0.4);
+  }
 }
 
 .scores {
@@ -196,5 +368,20 @@ h1 {
   height: 1px;
   overflow: hidden;
   clip: rect(0 0 0 0);
+}
+
+/* The sparks hold where they burst, so the celebration reads as a still. */
+@media (prefers-reduced-motion: reduce) {
+  .spark {
+    opacity: 0.7;
+    transform: translate(var(--dx), var(--dy));
+    animation: none;
+  }
+
+  .burst::before {
+    opacity: 0.4;
+    transform: scale(2.4);
+    animation: none;
+  }
 }
 </style>

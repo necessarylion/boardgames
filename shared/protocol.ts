@@ -60,6 +60,12 @@ export interface ClientState {
   /** During the draft, the 20 tiles you choose your opening hand from. */
   draftPool: string[]
   canEndTurn: boolean
+  /**
+   * Milliseconds left on the current player's shot clock, or null when the
+   * table is untimed. Sent as a remainder rather than a deadline so a client
+   * whose clock is off by minutes still counts down the right number.
+   */
+  turnMsLeft: number | null
 }
 
 export type ClientMessage =

@@ -8,7 +8,7 @@ import { STARTING_HAND_SIZE, tileFromId } from '../shared/tiles'
 import type { Tile } from '../shared/types'
 
 function newGame(playerCount = 2, boardShape: BoardShape = DEFAULT_BOARD_SHAPE) {
-  return new Game(playerCount, { randomHands: true, openInformation: false, boardShape }, 12345)
+  return new Game(playerCount, { ...DEFAULT_OPTIONS, randomHands: true, boardShape }, 12345)
 }
 
 /**
@@ -331,6 +331,59 @@ describe('the switch tile', () => {
     )
     expect(result.ok).toBe(false)
     expect(game.state.players[0].hand).toContain(switchTile.id)
+  })
+})
+
+describe('running out of time', () => {
+  it('plays one tile on an empty space and passes the turn on', () => {
+    const game = newGame(2)
+    const hand = game.state.players[0].hand.length
+
+    const result = game.timeOut(0)
+
+    expect(result.ok).toBe(true)
+    expect(Object.keys(game.state.placed)).toHaveLength(1)
+    expect(game.state.current).toBe(1)
+    // One tile left the hand, and the draw at the end of the turn refilled it.
+    expect(game.state.players[0].hand).toHaveLength(hand)
+    expect(game.state.players[0].stack).toHaveLength(20 - hand - 1)
+  })
+
+  it('leaves a placement already made alone and just ends the turn', () => {
+    const game = newGame(2)
+    const tile = findInHand(game, 0, (t) => t.kind === 'caste' && !t.fast)!
+    game.playTile(0, tile.id, legalPlacements(game.view, tile)[0])
+
+    game.timeOut(0)
+
+    // The clock fills a gap; it does not play a second tile on top of a turn
+    // the player had already taken.
+    expect(Object.keys(game.state.placed)).toHaveLength(1)
+    expect(game.state.current).toBe(1)
+  })
+
+  it('resolves the same way twice from the same state', () => {
+    const a = newGame(3)
+    const b = newGame(3)
+    a.timeOut(0)
+    b.timeOut(0)
+    expect(a.state.placed).toEqual(b.state.placed)
+  })
+
+  it('refuses when it is not that player on the clock', () => {
+    const game = newGame(2)
+    expect(game.timeOut(1).ok).toBe(false)
+    expect(Object.keys(game.state.placed)).toHaveLength(0)
+  })
+
+  it('carries a game to its end when nobody ever plays', () => {
+    const game = newGame(2)
+    let guard = 0
+    while (game.state.phase === 'play' && guard++ < 2000) {
+      const outcome = game.timeOut(game.state.current)
+      expect(outcome.ok, `stalled on turn ${game.state.turnNumber}`).toBe(true)
+    }
+    expect(game.state.phase).toBe('over')
   })
 })
 

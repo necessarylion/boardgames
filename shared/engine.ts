@@ -32,12 +32,18 @@ export interface GameOptions {
   openInformation: boolean
   /** Which island chain to play on. The board is rebuilt from this, never sent. */
   boardShape: BoardShape
+  /** Seconds a player has to take their turn; 0 leaves the table untimed. */
+  turnSeconds: number
 }
+
+/** Shot-clock lengths a table can be set up with. 0 is no clock at all. */
+export const TURN_SECONDS_CHOICES = [0, 30, 45, 60, 120] as const
 
 export const DEFAULT_OPTIONS: GameOptions = {
   randomHands: false,
   openInformation: false,
   boardShape: DEFAULT_BOARD_SHAPE,
+  turnSeconds: 0,
 }
 
 export interface EnginePlayer {
@@ -395,6 +401,62 @@ export class Game {
     this.state.playedNonFast = false
     this.state.undoStack = []
     return OK
+  }
+
+  /**
+   * Play for whoever is on the clock when their time runs out: one tile, on a
+   * space picked at random, and the turn ends.
+   *
+   * Deliberately the weakest legal move rather than a good one — the clock is
+   * there to keep the table moving, not to play the game on someone's behalf.
+   * Anything they managed to do before the clock went stands; only the gap is
+   * filled, so a player who placed but never pressed end turn simply has their
+   * turn closed for them.
+   */
+  timeOut(playerId: number): ActionResult {
+    const turn = this.requireTurn(playerId)
+    if (!turn.ok) return turn
+
+    this.log(playerId, 'runs out of time.')
+    if (this.state.placedThisTurn.length === 0) {
+      // Seeded off the turn rather than Math.random, so a room restored from a
+      // snapshot resolves the same timeout the same way instead of inventing a
+      // different move.
+      const seed = this.state.seed + 7919 * this.state.turnNumber + playerId + 1
+      this.playSomething(playerId, new Rng(seed))
+    }
+    // A player with nothing legal left is allowed to end on nothing, which is
+    // the case `canEndTurn` already covers.
+    return this.endTurn(playerId)
+  }
+
+  /** One tile from hand onto one random empty space it may legally go on. */
+  private playSomething(playerId: number, rng: Rng): boolean {
+    const view = this.view
+    const hand = rng.shuffle(this.state.players[playerId].hand)
+
+    for (const tileId of hand) {
+      const tile = tileFromId(tileId)
+      if (tile.kind === 'switch' || tile.kind === 'move') continue
+      const spaces = legalPlacements(view, tile)
+      if (spaces.length) return this.playTile(playerId, tileId, spaces[rng.int(spaces.length)]).ok
+    }
+
+    /*
+     * A move tile only as a last resort: it drags a tile already on the board
+     * rather than simply adding one. It cannot be skipped either, because
+     * `canEndTurn` refuses while any placement remains legal — a hand down to
+     * nothing but a move tile would otherwise leave the turn unable to end and
+     * the clock firing forever.
+     */
+    for (const tileId of hand) {
+      if (tileFromId(tileId).kind !== 'move') continue
+      for (const from of rng.shuffle(movableTiles(view, playerId, this.state.placedThisTurn))) {
+        const to = moveDestinations(view, from)
+        if (to.length) return this.useMove(playerId, tileId, from, to[rng.int(to.length)]).ok
+      }
+    }
+    return false
   }
 
   private resolveCaptures() {

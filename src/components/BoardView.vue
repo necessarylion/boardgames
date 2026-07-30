@@ -85,6 +85,14 @@ function ownerColour(spaceId: string): PlayerColour {
   return game.players.find((p) => p.id === tile?.owner)?.colour ?? 'gold'
 }
 
+/*
+ * A wave delay derived from the hex's own coordinates, so the halo sweeps
+ * across the board instead of every target flashing in lockstep.
+ */
+function haloDelay(space: Space, index = 0): string {
+  return `${(((((space.q + space.r + index) % 5) + 5) % 5) * 0.11).toFixed(2)}s`
+}
+
 function isSurroundedNow(space: Space): boolean {
   return (
     space.kind === 'settlement' &&
@@ -109,6 +117,11 @@ function isSurroundedNow(space: Space): boolean {
         <filter id="tile-drop" x="-30%" y="-30%" width="160%" height="160%">
           <feDropShadow dx="0" dy="1.2" stdDeviation="1.4" flood-color="#3a2a18" flood-opacity="0.35" />
         </filter>
+        <radialGradient id="target-glow">
+          <stop offset="0%" stop-color="#dcf3c4" stop-opacity="0.95" />
+          <stop offset="55%" stop-color="#9ed37c" stop-opacity="0.45" />
+          <stop offset="100%" stop-color="#9ed37c" stop-opacity="0" />
+        </radialGradient>
       </defs>
 
       <g v-for="cell in cells" :key="cell.space.id">
@@ -125,6 +138,23 @@ function isSurroundedNow(space: Space): boolean {
           ]"
           @click="game.clickSpace(cell.space.id)"
         />
+
+        <!-- a light that swells out of a target hex; decoration, so no clicks -->
+        <template v-if="highlighted.has(cell.space.id)">
+          <circle
+            :cx="cell.centre.x"
+            :cy="cell.centre.y"
+            :r="HEX"
+            class="hex-glow"
+            fill="url(#target-glow)"
+            :style="{ animationDelay: haloDelay(cell.space) }"
+          />
+          <polygon
+            :points="cell.points"
+            class="hex-halo"
+            :style="{ animationDelay: haloDelay(cell.space) }"
+          />
+        </template>
 
         <!-- settlement furniture -->
         <template v-if="cell.space.kind === 'settlement'">
@@ -168,6 +198,14 @@ function isSurroundedNow(space: Space): boolean {
               :size="HEX * 0.63"
               :x="cell.centre.x + pieceSlots((pieces[cell.space.id] ?? []).length)[index].x"
               :y="cell.centre.y + pieceSlots((pieces[cell.space.id] ?? []).length)[index].y"
+            />
+            <!-- light growing off the disc edge, so the caste colour stays readable -->
+            <circle
+              :cx="cell.centre.x + pieceSlots((pieces[cell.space.id] ?? []).length)[index].x"
+              :cy="cell.centre.y + pieceSlots((pieces[cell.space.id] ?? []).length)[index].y"
+              :r="HEX * 0.34"
+              class="piece-halo"
+              :style="{ animationDelay: haloDelay(cell.space, index) }"
             />
           </g>
         </template>
@@ -329,20 +367,78 @@ function isSurroundedNow(space: Space): boolean {
   stroke: #4d7a35;
   stroke-width: 2.6;
   cursor: pointer;
-  animation: pulse 1.6s ease-in-out infinite;
 }
 
 .hex-target:hover {
   fill: #b7dea0;
 }
 
-@keyframes pulse {
+/*
+ * Both layers scale about the hex's own centre, which needs `fill-box` —
+ * an SVG transform-origin is otherwise the user-space origin, far off-board.
+ */
+.hex-glow,
+.hex-halo {
+  pointer-events: none;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.hex-glow {
+  animation: glow-swell 2.2s ease-in-out infinite;
+}
+
+.hex-halo {
+  fill: none;
+  stroke: #7fc45c;
+  stroke-width: 2.2;
+  animation: halo-grow 2.2s ease-out infinite;
+}
+
+/* The soft light breathing inside the hex. */
+@keyframes glow-swell {
   0%,
   100% {
-    stroke-opacity: 0.55;
+    opacity: 0.3;
+    transform: scale(0.62);
   }
   50% {
-    stroke-opacity: 1;
+    opacity: 0.85;
+    transform: scale(1);
+  }
+}
+
+/* A ring that grows past the hex edge and fades, like a ripple of light. */
+@keyframes halo-grow {
+  0% {
+    stroke-opacity: 0;
+    transform: scale(0.7);
+  }
+  30% {
+    stroke-opacity: 0.85;
+  }
+  100% {
+    stroke-opacity: 0;
+    transform: scale(1.35);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hex-glow,
+  .hex-halo,
+  .piece-selectable .piece-halo,
+  .piece-chosen .piece-halo {
+    animation: none;
+  }
+
+  .hex-glow {
+    opacity: 0.6;
+  }
+
+  .hex-halo,
+  .piece-selectable .piece-halo,
+  .piece-chosen .piece-halo {
+    stroke-opacity: 0.8;
   }
 }
 
@@ -390,6 +486,41 @@ function isSurroundedNow(space: Space): boolean {
 .piece-chosen .piece-disc {
   stroke: var(--vermillion);
   stroke-width: 3;
+}
+
+/* Dormant until the switch tile asks for a piece; then it grows like the hex halo. */
+.piece-halo {
+  fill: none;
+  stroke: none;
+  stroke-width: 2;
+  pointer-events: none;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.piece-selectable .piece-halo {
+  stroke: #4f9c46;
+  animation: piece-halo-grow 2.2s ease-out infinite;
+}
+
+.piece-chosen .piece-halo {
+  stroke: var(--vermillion);
+  animation: piece-halo-grow 1.5s ease-out infinite;
+}
+
+/* Starts at the disc edge so it never washes over the caste colour. */
+@keyframes piece-halo-grow {
+  0% {
+    stroke-opacity: 0;
+    transform: scale(1);
+  }
+  30% {
+    stroke-opacity: 0.8;
+  }
+  100% {
+    stroke-opacity: 0;
+    transform: scale(1.55);
+  }
 }
 
 .tile-fresh {

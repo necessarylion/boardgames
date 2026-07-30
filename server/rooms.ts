@@ -53,6 +53,14 @@ export class Room {
    * stays at the table as a spectator until they leave.
    */
   members = new Set<string>()
+  /**
+   * The shot clock. Deliberately not part of the snapshot: a server restart
+   * should not cost whoever was thinking their turn, so a restored room simply
+   * arms a fresh period the first time it is ticked.
+   */
+  turnDeadline: number | null = null
+  /** Which turn the deadline above belongs to, so it is armed exactly once. */
+  private turnKey: string | null = null
 
   constructor(code: string) {
     this.code = code
@@ -179,6 +187,27 @@ export class Room {
     this.hostToken = this.seats.find((seat) => seat.connected)?.token ?? this.seats[0]?.token ?? ''
   }
 
+  /** Null whenever nobody is on the clock — untimed table, lobby, draft, over. */
+  private currentTurnKey(): string | null {
+    const s = this.game?.state
+    if (!s || s.phase !== 'play' || !this.options.turnSeconds) return null
+    return `${s.turnNumber}:${s.current}`
+  }
+
+  /** Give whoever is on the clock a full period, whatever was left before. */
+  rearmTurnTimer(now = Date.now()) {
+    this.turnKey = this.currentTurnKey()
+    this.turnDeadline = this.turnKey === null ? null : now + this.options.turnSeconds * 1000
+  }
+
+  /**
+   * Start the clock when the turn passes to someone new, and leave it running
+   * otherwise — placing a tile without ending your turn must not buy more time.
+   */
+  syncTurnTimer(now = Date.now()) {
+    if (this.currentTurnKey() !== this.turnKey) this.rearmTurnTimer(now)
+  }
+
   touch() {
     this.lastActivity = Date.now()
   }
@@ -232,6 +261,7 @@ export class Room {
         captured: [],
         draftPool: [],
         canEndTurn: false,
+        turnMsLeft: null,
       }
     }
 
@@ -262,6 +292,7 @@ export class Room {
       captured: mine ? [...mine.captured] : [],
       draftPool: seat && s.phase === 'draft' && !mine?.draftReady ? game.draftPool(seat.id) : [],
       canEndTurn: seat ? game.canEndTurn(seat.id) : false,
+      turnMsLeft: this.turnDeadline === null ? null : Math.max(0, this.turnDeadline - Date.now()),
     }
   }
 }
@@ -379,6 +410,23 @@ export class RoomManager {
       out += CODE_ALPHABET[Math.floor(Math.random() * CODE_ALPHABET.length)]
     }
     return out
+  }
+
+  /**
+   * Rooms whose current player has run out of time, arming any clock that is
+   * not running yet on the way past.
+   *
+   * Sweeping every room on a tick rather than holding a timer per room is what
+   * makes this survive a restore: a room read back from the database has no
+   * timer to reinstate, and the first tick simply starts one.
+   */
+  dueTurns(now = Date.now()): Room[] {
+    const due: Room[] = []
+    for (const room of this.rooms.values()) {
+      room.syncTurnTimer(now)
+      if (room.turnDeadline !== null && now >= room.turnDeadline) due.push(room)
+    }
+    return due
   }
 
   /** Drop rooms nobody has touched for a while, so memory does not creep. */

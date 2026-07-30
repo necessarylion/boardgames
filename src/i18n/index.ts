@@ -83,6 +83,16 @@ export function tileTitle(tile: TileDef): string {
   return `${tile.value}-${t(`tiles.${tile.kind}.name`)}`
 }
 
+/**
+ * Just the kind of a tile, with no value attached — what the hand prints under
+ * each tile so the pictograms can be learnt. A caste tile is named for its
+ * caste's piece, since that is the word the board and the rules both use.
+ */
+export function tileKindLabel(tile: TileDef): string {
+  if (tile.kind === 'caste') return tile.caste ? castePiece(tile.caste) : ''
+  return t(`tiles.${tile.kind}.name`)
+}
+
 export function useI18n() {
   return { t, locale, setLocale, locales: LOCALES, localeName: LOCALE_NAME }
 }

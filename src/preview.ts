@@ -72,6 +72,7 @@ const state: ClientState = {
   draftPool: [],
   canEndTurn: false,
   canUndo: false,
+  turnMsLeft: null,
 }
 
 // ?screen=draft renders the opening-hand chooser instead of the table, with a

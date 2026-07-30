@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import mainBackground from '../../assets/mainbg.png'
 import BoardGlyph from './BoardGlyph.vue'
+import TurnClockOptions from './TurnClockOptions.vue'
 import { DEFAULT_OPTIONS } from '@shared/engine'
 import { BOARD_SHAPES } from '@shared/types'
 import LanguageMenu from '@/i18n/LanguageMenu.vue'
@@ -22,6 +23,7 @@ const invited = ref(code.value.length > 0)
 const randomHands = ref(DEFAULT_OPTIONS.randomHands)
 const openInformation = ref(DEFAULT_OPTIONS.openInformation)
 const boardShape = ref(DEFAULT_OPTIONS.boardShape)
+const turnSeconds = ref(DEFAULT_OPTIONS.turnSeconds)
 
 function create() {
   if (!name.value.trim()) return game.showError(t('home.error.name'))
@@ -29,6 +31,7 @@ function create() {
     randomHands: randomHands.value,
     openInformation: openInformation.value,
     boardShape: boardShape.value,
+    turnSeconds: turnSeconds.value,
   })
 }
 
@@ -119,6 +122,8 @@ function join() {
                 </button>
               </div>
             </div>
+
+            <TurnClockOptions :seconds="turnSeconds" @pick="turnSeconds = $event" />
 
             <button class="btn wide" @click="create">{{ t('home.create') }}</button>
           </section>

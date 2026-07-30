@@ -8,6 +8,7 @@ import LogPanel from './LogPanel.vue'
 import PlayerPanel from './PlayerPanel.vue'
 import RulesDialog from './RulesDialog.vue'
 import TableMenu from './TableMenu.vue'
+import TurnClock from './TurnClock.vue'
 import { PLAYER_COLOURS } from '@shared/colours'
 import { t } from '@/i18n'
 import { useGameStore } from '@/stores/game'
@@ -36,6 +37,7 @@ const accent = computed(() =>
         <span class="dot" :style="{ background: accent }" />
         <strong>{{ turnLabel }}</strong>
         <span class="tiny muted">{{ t('game.round', { turn: game.state?.turnNumber ?? 1 }) }}</span>
+        <TurnClock />
       </div>
       <div class="top-actions">
         <span class="tiny muted code">{{ t('game.room', { code: game.state?.code ?? '' }) }}</span>

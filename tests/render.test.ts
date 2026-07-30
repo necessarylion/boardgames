@@ -24,6 +24,20 @@ function room(started = true) {
   return r
 }
 
+/**
+ * A tile `playTile` will actually accept. `legalPlacements` answers only which
+ * terrain suits a tile, so it happily returns spaces for a switch or move tile
+ * that the play action then refuses — and since each room is dealt from a fresh
+ * random seed, picking without this filter fails whenever one of those two
+ * happens to come up first.
+ */
+function placeableTile(r: Room) {
+  const view = r.game!.view
+  return r
+    .game!.state.players[0].hand.map(tileFromId)
+    .find((t) => t.kind !== 'switch' && t.kind !== 'move' && legalPlacements(view, t).length > 0)!
+}
+
 beforeEach(() => {
   setActivePinia(createPinia())
   localStorage.clear()
@@ -117,11 +131,8 @@ describe('rendering', () => {
     // Nothing placed yet, so there is nothing to take back.
     expect(mount(GameScreen).text()).not.toContain('Take back')
 
-    const view = r.game!.view
-    const tile = r.game!.state.players[0].hand
-      .map(tileFromId)
-      .find((t) => legalPlacements(view, t).length > 0)!
-    r.game!.playTile(0, tile.id, legalPlacements(view, tile)[0])
+    const tile = placeableTile(r)
+    r.game!.playTile(0, tile.id, legalPlacements(r.game!.view, tile)[0])
     game.state = r.stateFor('token-a')
 
     expect(mount(GameScreen).text()).toContain('Take back')
@@ -129,11 +140,8 @@ describe('rendering', () => {
 
   it('never offers a take-back to the player who is not on turn', () => {
     const r = room()
-    const view = r.game!.view
-    const tile = r.game!.state.players[0].hand
-      .map(tileFromId)
-      .find((t) => legalPlacements(view, t).length > 0)!
-    r.game!.playTile(0, tile.id, legalPlacements(view, tile)[0])
+    const tile = placeableTile(r)
+    r.game!.playTile(0, tile.id, legalPlacements(r.game!.view, tile)[0])
 
     const game = useGameStore()
     game.state = r.stateFor('token-b')

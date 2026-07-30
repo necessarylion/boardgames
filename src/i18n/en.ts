@@ -54,6 +54,12 @@ export const en = {
   'option.openInfo': 'Open information',
   'option.openInfo.hint': "— everyone's captured pieces stay visible",
   'option.openInfo.long': 'Open information (captured pieces stay visible)',
+  'game.timeLeft': 'Time left this turn',
+  'option.turnClock': 'Turn timer',
+  'option.turnClock.hint': '— out of time plays one tile at random and ends the turn',
+  'option.turnClock.off': 'Off',
+  'option.turnClock.seconds': '{n}s',
+  'option.turnClock.minutes': '{n}m',
 
   // --- lobby ---------------------------------------------------------------
   'lobby.roomCode': 'Room code',
@@ -199,8 +205,11 @@ export const en = {
 
   // --- game over -----------------------------------------------------------
   'over.eyebrow': 'The game has ended',
+  'over.youEyebrow': 'The game is yours',
   'over.wins': '{name} wins',
   'over.shared': '{names} share the victory',
+  'over.youWin': 'You win!',
+  'over.youShareWin': 'You win — shared with {names}!',
   'over.and': ' and ',
   'over.unknownPlayer': 'Unknown',
   'over.player': 'Player',
