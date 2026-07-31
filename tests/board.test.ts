@@ -6,7 +6,7 @@ import { TILES_PER_PLAYER } from '../shared/tiles'
 import { distributePieces, supplyPerCaste } from '../shared/setup'
 import { BOARD_SHAPES, CASTES, SETTLEMENT_CAPACITY, type BoardShape, type Caste } from '../shared/types'
 
-const PLAYER_COUNTS = [2, 3, 4]
+const PLAYER_COUNTS = [2, 3, 4, 5, 6]
 
 /**
  * Fewest adjacent land spaces any settlement may have.
@@ -64,7 +64,7 @@ describe('board layout', () => {
   it.each(CASES)('stays small enough to finish on %s at %i players', (shape, count) => {
     const board = buildBoard(count, shape)
     const plainLand = board.order.filter((id) => board.spaces[id].kind === 'land').length
-    // A game ends only when a caste is cleared or four pieces are set aside —
+    // A game ends only when a caste is cleared or enough pieces are set aside —
     // there is no "everyone ran out of tiles" ending. So if the empty land
     // outruns the tile supply, players can exhaust their stacks with the board
     // still open and the game can never end. Keep a real margin.
@@ -89,11 +89,11 @@ describe('board layout', () => {
   })
 
   it.each(BOARD_SHAPES)('nests smaller boards inside larger ones on %s', (shape) => {
-    const two = new Set(buildBoard(2, shape).order)
-    const three = new Set(buildBoard(3, shape).order)
-    const four = buildBoard(4, shape).order
-    for (const id of two) expect(three.has(id)).toBe(true)
-    for (const id of three) expect(four).toContain(id)
+    for (const [i, count] of PLAYER_COUNTS.slice(1).entries()) {
+      const inner = new Set(buildBoard(PLAYER_COUNTS[i], shape).order)
+      const outer = new Set(buildBoard(count, shape).order)
+      for (const id of inner) expect(outer.has(id)).toBe(true)
+    }
   })
 })
 

@@ -15,7 +15,7 @@ import { COLOUR_ORDER } from '@shared/colours'
 import { useGameStore } from './stores/game'
 import './assets/main.css'
 
-const NAMES = ['Takeda', 'Uesugi', 'Hojo', 'Imagawa']
+const NAMES = ['Takeda', 'Uesugi', 'Hojo', 'Imagawa', 'Mori', 'Shimazu']
 const playerCount = Number(new URLSearchParams(location.search).get('players') ?? 4)
 const turns = Number(new URLSearchParams(location.search).get('turns') ?? 26)
 

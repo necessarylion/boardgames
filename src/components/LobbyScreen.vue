@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import TurnClockOptions from './TurnClockOptions.vue'
 import { PLAYER_COLOURS } from '@shared/colours'
 import { supplyPerCaste } from '@shared/setup'
+import { MAX_PLAYERS, MIN_PLAYERS } from '@shared/types'
 import { t } from '@/i18n'
 import { useGameStore } from '@/stores/game'
 
@@ -10,7 +11,8 @@ const game = useGameStore()
 const copied = ref(false)
 
 const seats = computed(() => game.players)
-const canStart = computed(() => game.isHost && seats.value.length >= 2)
+const canStart = computed(() => game.isHost && seats.value.length >= MIN_PLAYERS)
+const emptySeats = computed(() => MAX_PLAYERS - seats.value.length)
 
 const shareLink = computed(() => `${location.origin}${location.pathname}?room=${game.state?.code}`)
 
@@ -56,7 +58,9 @@ function setClock(turnSeconds: number) {
       <section class="panel block">
         <h2>
           {{ t('lobby.players') }}
-          <span class="tiny muted">{{ t('lobby.seatCount', { seated: seats.length }) }}</span>
+          <span class="tiny muted">
+            {{ t('lobby.seatCount', { seated: seats.length, max: MAX_PLAYERS }) }}
+          </span>
         </h2>
         <ul class="seats">
           <li v-for="seat in seats" :key="seat.id" class="seat">
@@ -66,7 +70,7 @@ function setClock(turnSeconds: number) {
             <span v-if="seat.id === game.you" class="badge you">{{ t('lobby.badge.you') }}</span>
             <span v-if="!seat.connected" class="badge away">{{ t('lobby.badge.away') }}</span>
           </li>
-          <li v-for="n in 4 - seats.length" :key="`empty${n}`" class="seat empty">
+          <li v-for="n in emptySeats" :key="`empty${n}`" class="seat empty">
             <span class="swatch empty-swatch" />
             <span class="muted">{{ t('lobby.waitingForPlayer') }}</span>
           </li>
@@ -104,8 +108,8 @@ function setClock(turnSeconds: number) {
         <p class="tiny muted">
           {{
             t('lobby.supply', {
-              players: Math.max(seats.length, 2),
-              pieces: supplyPerCaste(Math.max(seats.length, 2)),
+              players: Math.max(seats.length, MIN_PLAYERS),
+              pieces: supplyPerCaste(seats.length),
             })
           }}
         </p>
@@ -113,7 +117,7 @@ function setClock(turnSeconds: number) {
         <button class="btn wide" :disabled="!canStart" @click="game.startGame()">
           {{ game.isHost ? t('lobby.start') : t('lobby.waitingHost') }}
         </button>
-        <p v-if="game.isHost && seats.length < 2" class="tiny muted centre">
+        <p v-if="game.isHost && seats.length < MIN_PLAYERS" class="tiny muted centre">
           {{ t('lobby.needTwo') }}
         </p>
       </section>

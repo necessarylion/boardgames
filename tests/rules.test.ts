@@ -8,6 +8,7 @@ import {
   isSurrounded,
   legalPlacements,
   scoreGame,
+  setAsideLimit,
 } from '../shared/rules'
 import type { Board } from '../shared/board'
 import { TILE_SET, tileFromId, tileId } from '../shared/tiles'
@@ -221,6 +222,21 @@ describe('end conditions', () => {
     f.pieces[VILLAGE] = ['buddha', 'rice', 'castle']
     expect(checkEnd(f, ['rice', 'rice', 'buddha']).over).toBe(false)
     expect(checkEnd(f, ['rice', 'rice', 'buddha', 'castle']).over).toBe(true)
+  })
+
+  // Four is the published limit and holds for every table the printed game
+  // supports; only the two larger boards raise it.
+  it('raises the set-aside limit only past four players', () => {
+    expect([2, 3, 4].map(setAsideLimit)).toEqual([4, 4, 4])
+    expect([5, 6].map(setAsideLimit)).toEqual([5, 6])
+  })
+
+  it('holds a six-player game open until the sixth piece is set aside', () => {
+    const f = fixture(6)
+    f.pieces[VILLAGE] = ['buddha', 'rice', 'castle']
+    const five: Caste[] = ['rice', 'rice', 'buddha', 'castle', 'castle']
+    expect(checkEnd(f, five).over).toBe(false)
+    expect(checkEnd(f, [...five, 'buddha']).over).toBe(true)
   })
 })
 

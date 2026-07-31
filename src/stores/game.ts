@@ -14,7 +14,7 @@ import {
   type RulesView,
 } from '@shared/rules'
 import { STARTING_HAND_SIZE, tileFromId } from '@shared/tiles'
-import type { BoardShape, Caste, Tile } from '@shared/types'
+import { MAX_PLAYERS, type BoardShape, type Caste, type Tile } from '@shared/types'
 import { t } from '@/i18n'
 
 /** What the local player is currently being asked to click. */
@@ -205,7 +205,7 @@ export const useGameStore = defineStore('game', () => {
       reclaimedFor = null
       return
     }
-    const full = next.players.length >= 4
+    const full = next.players.length >= MAX_PLAYERS
     if (next.phase !== 'lobby' || full || !myName.value || reclaimedFor === next.code) return
     reclaimedFor = next.code
     send({ t: 'join', code: next.code, name: myName.value })

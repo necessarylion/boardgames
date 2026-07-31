@@ -15,6 +15,8 @@ import { distributePieces } from './setup'
 import { STARTING_HAND_SIZE, buildTiles, tileFromId, tileLabel } from './tiles'
 import {
   CASTE_PIECE_LABEL,
+  MAX_PLAYERS,
+  MIN_PLAYERS,
   type BoardShape,
   type Caste,
   type GameResult,
@@ -108,7 +110,9 @@ export class Game {
   state: GameState
 
   constructor(playerCount: number, options: GameOptions, seed: number) {
-    if (playerCount < 2 || playerCount > 4) throw new Error('Samurai is for 2 to 4 players')
+    if (playerCount < MIN_PLAYERS || playerCount > MAX_PLAYERS) {
+      throw new Error(`Samurai is for ${MIN_PLAYERS} to ${MAX_PLAYERS} players`)
+    }
     this.board = buildBoard(playerCount, options.boardShape)
     const rng = new Rng(seed)
 

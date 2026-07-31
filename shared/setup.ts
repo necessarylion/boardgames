@@ -1,12 +1,16 @@
 import { settlementsOf, type Board } from './board'
 import type { Rng } from './rng'
-import { CASTES, type Caste } from './types'
+import { CASTES, MIN_PLAYERS, type Caste } from './types'
 
-/** Caste pieces of each type in the supply, by player count. */
+/**
+ * Caste pieces of each type in the supply, by player count: 7, 10, 13, 16, 19.
+ *
+ * Every section carries three more cities and three more villages than the one
+ * inside it, and a city holds two pieces to a village's one, so each further
+ * player adds nine pieces — three per caste — on top of Edo's one each.
+ */
 export function supplyPerCaste(playerCount: number): number {
-  if (playerCount <= 2) return 7
-  if (playerCount === 3) return 10
-  return 13
+  return 3 * Math.max(playerCount, MIN_PLAYERS) + 1
 }
 
 const CITY_PAIRS: readonly [Caste, Caste][] = [

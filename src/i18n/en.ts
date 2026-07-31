@@ -68,7 +68,7 @@ export const en = {
   'lobby.copyFailed': 'Could not copy — select the link and copy it manually.',
   'lobby.leave': 'Leave',
   'lobby.players': 'Players',
-  'lobby.seatCount': '{seated} / 4',
+  'lobby.seatCount': '{seated} / {max}',
   'lobby.badge.host': 'Host',
   'lobby.badge.you': 'You',
   'lobby.badge.away': 'Away',
@@ -133,7 +133,7 @@ export const en = {
   'panel.onBoard': 'Caste pieces on the board',
   'panel.endNote': 'The game ends the moment any caste is cleared from the board.',
   'panel.setAside': 'Set aside',
-  'panel.setAsideCount': '{count} / 4',
+  'panel.setAsideCount': '{count} / {max}',
   'panel.setAsideEmpty':
     'Nothing contested yet. A tie for the highest influence takes the piece out of the game.',
   'panel.players': 'Players',
@@ -189,7 +189,7 @@ export const en = {
     "Adjacent sea spaces do not have to be filled. When a settlement is surrounded, each of its pieces is contested separately: every player totals the influence of their own tiles adjacent to that settlement which match the piece's caste. Wild tiles — samurai, ronin and ship — count toward all three castes. The single highest total takes the piece; a tie removes it from the game instead.",
   'rules.ending.title': 'Ending the game',
   'rules.ending.text':
-    'The game ends at the end of a turn once every piece of any one caste has left the board, or once four pieces have been set aside from ties.',
+    'The game ends at the end of a turn once every piece of any one caste has left the board, or once {count} pieces have been set aside from ties.',
   'rules.ending.tiebreak':
     "Each caste's leader token goes to whoever captured strictly the most of that caste; a tie leaves it unclaimed. Most tokens wins. Tied players then compare pieces from the castes they do <em>not</em> lead, and after that their total pieces.",
   'rules.tiles.title': 'Your {count} tiles',

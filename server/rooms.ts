@@ -3,11 +3,10 @@ import { randomUUID } from 'node:crypto'
 import { DEFAULT_OPTIONS, Game, type GameOptions, type GameState } from '../shared/engine'
 import type { ClientState, PublicPlayer } from '../shared/protocol'
 import { COLOUR_ORDER } from '../shared/colours'
-import type { PlayerColour } from '../shared/types'
+import { MAX_PLAYERS, MIN_PLAYERS, type PlayerColour } from '../shared/types'
 import type { RoomStore } from './store'
 
-export const MAX_PLAYERS = 4
-export const MIN_PLAYERS = 2
+export { MAX_PLAYERS, MIN_PLAYERS }
 
 /** Codes use an alphabet without characters that are easy to misread aloud. */
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'

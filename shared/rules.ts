@@ -173,8 +173,20 @@ export interface EndCheck {
 }
 
 /**
+ * How many set-aside pieces end the game.
+ *
+ * The published game stops at four, a flat number for a table of at most four
+ * players. Beyond that the same threshold would cut the game short: more players
+ * means more ties, and the board is a third larger again, so the limit follows
+ * the player count once it passes four.
+ */
+export function setAsideLimit(playerCount: number): number {
+  return Math.max(4, playerCount)
+}
+
+/**
  * Checked at the end of every turn: the game ends when a caste has been cleared
- * off the board, or when four pieces have been set aside.
+ * off the board, or when enough pieces have been set aside.
  */
 export function checkEnd(view: RulesView, setAside: Caste[]): EndCheck {
   const counts: Record<Caste, number> = { buddha: 0, rice: 0, castle: 0 }
@@ -188,8 +200,9 @@ export function checkEnd(view: RulesView, setAside: Caste[]): EndCheck {
       reason: `No ${exhausted.join(' or ')} pieces remain on the board.`,
     }
   }
-  if (setAside.length >= 4) {
-    return { over: true, reason: 'Four caste pieces have been set aside.' }
+  const limit = setAsideLimit(view.playerCount)
+  if (setAside.length >= limit) {
+    return { over: true, reason: `${limit} caste pieces have been set aside.` }
   }
   return { over: false, reason: '' }
 }

@@ -388,10 +388,12 @@ describe('running out of time', () => {
 })
 
 describe('a full game', () => {
-  // A game can only end by clearing a caste or setting four pieces aside, so a
+  // A game can only end by clearing a caste or setting enough pieces aside, so a
   // map with more open land than the players have tiles to fill it would leave
-  // everyone stuck mid-game. Every shape a table can pick has to finish.
-  it.each(BOARD_SHAPES.flatMap((shape) => [2, 3, 4].map((n) => [shape, n] as const)))(
+  // everyone stuck mid-game. Every shape a table can pick has to finish, at every
+  // size — the outer sections D and E have no printed board to have been proven
+  // on, so this is what stands in for that.
+  it.each(BOARD_SHAPES.flatMap((shape) => [2, 3, 4, 5, 6].map((n) => [shape, n] as const)))(
     'finishes on %s at %i players',
     (shape, count) => {
       const game = playOut(newGame(count, shape))

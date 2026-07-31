@@ -28,8 +28,15 @@ export const SETTLEMENT_CAPACITY: Record<SettlementKind, number> = {
   edo: 3,
 }
 
-/** Board sections, added as the player count grows. A ⊂ A+B ⊂ A+B+C. */
-export type Section = 'A' | 'B' | 'C'
+/** Board sections, added as the player count grows. A ⊂ A+B ⊂ … ⊂ A+B+C+D+E. */
+export type Section = 'A' | 'B' | 'C' | 'D' | 'E'
+
+/**
+ * Table size. Two to four is the published game; five and six extend it onto
+ * the outer sections D and E, which have no printed counterpart.
+ */
+export const MIN_PLAYERS = 2
+export const MAX_PLAYERS = 6
 
 /**
  * Which island chain a table plays on. Each holds the supply exactly at every
@@ -95,7 +102,7 @@ export interface Player {
   captured: Caste[]
 }
 
-export type PlayerColour = 'gold' | 'red' | 'green' | 'purple'
+export type PlayerColour = 'gold' | 'red' | 'green' | 'purple' | 'teal' | 'rose'
 
 export interface PlacedTile {
   tileId: string

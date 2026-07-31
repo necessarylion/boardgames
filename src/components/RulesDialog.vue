@@ -1,11 +1,20 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import GameIcon from './GameIcon.vue'
 import TileReference from './TileReference.vue'
+import { setAsideLimit } from '@shared/rules'
 import { TILES_PER_PLAYER } from '@shared/tiles'
 import { CASTES } from '@shared/types'
 import { casteName, castePiece, t } from '@/i18n'
+import { useGameStore } from '@/stores/game'
 
 defineEmits<{ close: [] }>()
+
+const game = useGameStore()
+
+// Outside a game there is no player count yet, and the limit falls back to the
+// published four.
+const setAsideMax = computed(() => setAsideLimit(game.state?.playerCount ?? 0))
 </script>
 
 <template>
@@ -47,7 +56,7 @@ defineEmits<{ close: [] }>()
 
           <section>
             <h3>{{ t('rules.ending.title') }}</h3>
-            <p>{{ t('rules.ending.text') }}</p>
+            <p>{{ t('rules.ending.text', { count: setAsideMax }) }}</p>
             <p v-html="t('rules.ending.tiebreak')" />
           </section>
         </div>

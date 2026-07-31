@@ -2,11 +2,14 @@
 import { computed } from 'vue'
 import GameIcon from './GameIcon.vue'
 import { CASTE_COLOURS, PLAYER_COLOURS } from '@shared/colours'
+import { setAsideLimit } from '@shared/rules'
 import { CASTES, type Caste } from '@shared/types'
 import { casteName, castePiece, t } from '@/i18n'
 import { useGameStore } from '@/stores/game'
 
 const game = useGameStore()
+
+const setAsideMax = computed(() => setAsideLimit(game.state?.playerCount ?? 0))
 
 /** Caste pieces still standing on the board. */
 const remaining = computed(() => {
@@ -58,7 +61,7 @@ function capturedCounts(captured: Caste[] | null): Record<Caste, number> | null 
       <h3>
         {{ t('panel.setAside') }}
         <span class="tiny muted">
-          {{ t('panel.setAsideCount', { count: game.state?.setAside.length ?? 0 }) }}
+          {{ t('panel.setAsideCount', { count: game.state?.setAside.length ?? 0, max: setAsideMax }) }}
         </span>
       </h3>
       <p v-if="!game.state?.setAside.length" class="tiny muted">{{ t('panel.setAsideEmpty') }}</p>

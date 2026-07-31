@@ -1,5 +1,8 @@
 import { hexId, neighbourIds, offsetToAxial } from './hex'
-import type { BoardShape, Section, Space, SettlementKind } from './types'
+import { MAX_PLAYERS, MIN_PLAYERS, type BoardShape, type Section, type Space, type SettlementKind } from './types'
+
+/** Sections from the centre of a map outward. */
+export const SECTION_ORDER: readonly Section[] = ['A', 'B', 'C', 'D', 'E']
 
 /**
  * The game boards, authored as text in odd-r offset coordinates.
@@ -7,22 +10,31 @@ import type { BoardShape, Section, Space, SettlementKind } from './types'
  *   ' '  off the map      '~'  sea space        '.'  land space
  *   'v'  village (1 piece)  'c'  city (2 pieces)  'E'  Edo (3 pieces)
  *
- * Every space belongs to one of three sections. Section A alone is the
- * two-player board; A+B is the three-player board; A+B+C is the four-player
- * board — the same nesting the physical board's five map pieces produce.
+ * Every space belongs to one of five sections, each opening up as another player
+ * joins. A alone is the two-player board, A+B the three-player board, A+B+C the
+ * four-player board — the same nesting the physical board's five map pieces
+ * produce. D and E carry that outward to five and six players, which the
+ * published game does not offer; they are outlying islands off each shore.
  *
- * The section piece totals are what make setup work out exactly:
- *   A     = Edo + 6 cities + 6 villages   = 21 pieces (7 of each caste)
- *   A+B   = Edo + 9 cities + 9 villages   = 30 pieces (10 of each caste)
- *   A+B+C = Edo + 12 cities + 12 villages = 39 pieces (13 of each caste)
+ * The section piece totals are what make setup work out exactly, every section
+ * carrying three more cities and three more villages than the one inside it:
+ *   A         = Edo + 6 cities + 6 villages   = 21 pieces (7 of each caste)
+ *   A+B       = Edo + 9 cities + 9 villages   = 30 pieces (10 of each caste)
+ *   A+B+C     = Edo + 12 cities + 12 villages = 39 pieces (13 of each caste)
+ *   A+…+D     = Edo + 15 cities + 15 villages = 48 pieces (16 of each caste)
+ *   A+…+E     = Edo + 18 cities + 18 villages = 57 pieces (19 of each caste)
  *
  * Every map also gives each settlement at least three adjacent land spaces on
  * the smallest board it appears on, since that count is exactly the number of
  * tiles needed to surround it — one or two makes a settlement fall for free.
  *
- * A map's sections are a function of the space, not just its row: the V maps
- * grow upward from the vertex so they split by row, while the mountain grows
- * outward from its valley so it splits by column.
+ * The published maps are ringed by sea, so an outer section can only reach the
+ * landmass by taking over part of that rim. Rather than redraw A, B or C, the
+ * band edges stop one column short of the old map, handing its outermost column
+ * to D. That column is open water on all three maps, so every settlement, every
+ * land space and the whole supply survive untouched at two, three and four
+ * players; the four-player board simply gives up ten spaces of empty sea at its
+ * outer edge, far enough from any settlement that no ship there ever counted.
  */
 interface MapDef {
   rows: readonly string[]
@@ -31,64 +43,70 @@ interface MapDef {
 
 /**
  * Every map grows outward from its middle column, so sections are a function of
- * how far across a space sits — A is the centre, then B, then C at the shores.
- * The centre differs per map because the maps are not all the same width.
+ * how far across a space sits — A is the centre, then B, then C, and D and E out
+ * at the shores. The centre differs per map because the maps are not all the
+ * same width, and so do the band edges, because the maps do not widen at the
+ * same rate.
+ *
+ * `edges` gives the outer reach of every section but the last; anything past
+ * the final edge belongs to the outermost section.
  */
 const outwardFrom =
-  (centre: number, bEdge = 11) =>
+  (centre: number, edges: readonly number[]) =>
   (_row: number, col: number): Section => {
     const dx = Math.abs(col - centre)
-    return dx <= 7 ? 'A' : dx <= bEdge ? 'B' : 'C'
+    const band = edges.findIndex((edge) => dx <= edge)
+    return SECTION_ORDER[band === -1 ? SECTION_ORDER.length - 1 : band]
   }
 
 const MAPS: Record<BoardShape, MapDef> = {
   /** Two peaks either side of a valley. The valley is the two-player board. */
   mountain: {
-    section: outwardFrom(15.5),
+    section: outwardFrom(23.5, [7, 11, 15, 19]),
     rows: [
-      '       ~~~~          ~~~~',
-      '     ~~.c..~        ~.v..~~',
-      '    ~.v...c.~~    ~~.c..c..~',
-      '   ~c...v..v.c~  ~v...c..c..~',
-      '  ~...v~~~~....~~c..v~~~~..c.~',
-      '~~c..~~    ~.E....v.~    ~~.v.~~',
-      '~...~       ~~.v.c~~       ~...~',
-      '~v.~          ~..~          ~v.~',
-      '~.~            ~~            ~.~',
-      '~~                            ~~',
+      '               ~~~~          ~~~~',
+      '             ~~.c..~        ~.v..~~',
+      '            ~.v...c.~~    ~~.c..c..~          ~',
+      '  ~~ ~~~   ~c...v..v.c~  ~v...c..c..~  ~~   ~~.',
+      '~~~.~~..~ ~...v~~~~....~~c..v~~~~..c.~ ..~ ~~..',
+      '.v.c..c..~c..~~    ~.E....v.~    ~~.v.~c.~~.~c~',
+      '~.~..v..c...~       ~~.v.c~~       ~.....v.c...',
+      '.~~v.~~~~v.~          ~..~          ~v.v~...~~~',
+      '~~ ~~~ ~..~            ~~            ~..~~~v~',
+      '       ~.~                            ~~  ~.~',
     ],
   },
   /** A broad chevron, its two shores dropping to a point in the middle. */
   valley: {
-    section: outwardFrom(15, 10),
+    section: outwardFrom(23, [7, 10, 14, 18]),
     rows: [
-      '~~~                         ~~~',
-      '~..~~~                   ~~~v.~',
-      '~.v.v.~~               ~~.....~',
-      '~....v.c~~~         ~~~v..c.c.~',
-      '~~~.c....c.~~~   ~~~.c...v..~~~',
-      '   ~~~.c..v.v.~~~.c....c.~~~',
-      '      ~~.c.....v.....v.~~',
-      '        ~~~c.E..c.v.~~~',
-      '           ~~~.v.~~~',
-      '              ~~~',
+      '..~~.v...~~                         ~~..v...c..',
+      '.v..~.c.c..~~~                   ~~~v.c~.~c..v~',
+      '~~.c......v.v.~~               ~~.......v...~~~',
+      ' ~~.v~~~~....v.c~~~         ~~~v..c.c.~..~.~',
+      '   ~~~  ~~~.c....c.~~~   ~~~.c...v..~~~~~~~~',
+      '           ~~~.c..v.v.~~~.c....c.~~~',
+      '              ~~.c.....v.....v.~~',
+      '                ~~~c.E..c.v.~~~',
+      '                   ~~~.v.~~~',
+      '                      ~~~',
     ],
   },
   /** A rounded bay, its shores curving away either side of a deep centre. */
   bay: {
-    section: outwardFrom(15.5),
+    section: outwardFrom(23.5, [7, 11, 15, 19]),
     rows: [
-      '~~                            ~~',
-      '~.                            .~',
-      '~v~                          ~c~',
-      '~..~                        ~..~',
-      '~~c.~~                    ~~.v~~',
-      '  ....~~~~            ~~~~....',
-      '  ~.v.v.v.~~~~~~~~~~~~.c....c~',
-      '   ~.....v.v.v.v.v.c.....v..~',
-      '    ~~..c.............v.c.~~',
-      '      ~~~~c.c.E.c.c.c.~~~~',
-      '          ~~~~~~~~~~~~',
+      '~.v..v..c~                            ~..v.c..v',
+      'v.~c..c...                            .c..~.c..',
+      '..~......v~                          ~c..v~....',
+      '~~~~~~~~~..~                        ~....~~~~~~',
+      '        ~~c.~~                    ~~.v~~~~',
+      '          ....~~~~            ~~~~....',
+      '          ~.v.v.v.~~~~~~~~~~~~.c....c~',
+      '           ~.....v.v.v.v.v.c.....v..~',
+      '            ~~..c.............v.c.~~',
+      '              ~~~~c.c.E.c.c.c.~~~~',
+      '                  ~~~~~~~~~~~~',
     ],
   },
 }
@@ -103,9 +121,14 @@ const SETTLEMENT_CHARS: Record<string, SettlementKind> = {
 
 /** Sections present on the board for a given player count. */
 export function sectionsFor(playerCount: number): Section[] {
-  if (playerCount <= 2) return ['A']
-  if (playerCount === 3) return ['A', 'B']
-  return ['A', 'B', 'C']
+  // Two players share the innermost section; each further player opens the next
+  // ring outward, so a six-player table plays on all five.
+  const rings = clampPlayers(playerCount) - 1
+  return [...SECTION_ORDER.slice(0, rings)]
+}
+
+function clampPlayers(playerCount: number): number {
+  return Math.min(Math.max(playerCount, MIN_PLAYERS), MAX_PLAYERS)
 }
 
 export interface Board {

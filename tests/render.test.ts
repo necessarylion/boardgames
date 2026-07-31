@@ -12,6 +12,7 @@ import LobbyScreen from '../src/components/LobbyScreen.vue'
 import { Room } from '../server/rooms'
 import { legalPlacements } from '../shared/rules'
 import { tileFromId } from '../shared/tiles'
+import { MAX_PLAYERS } from '../shared/types'
 import { useGameStore } from '../src/stores/game'
 
 /** A real room, driven through the real server code, to render against. */
@@ -92,14 +93,15 @@ describe('rendering', () => {
     expect(wrapper.findAll('button').length).toBeGreaterThanOrEqual(2)
   })
 
-  it('renders the lobby with both seats and two empty slots', () => {
+  it('renders the lobby with both seats and the rest of the table empty', () => {
     const game = useGameStore()
     game.state = room(false).stateFor('token-a')
     const wrapper = mount(LobbyScreen)
     expect(wrapper.text()).toContain('TEST')
     expect(wrapper.text()).toContain('Takeda')
     expect(wrapper.text()).toContain('Uesugi')
-    expect(wrapper.findAll('.seat')).toHaveLength(4)
+    expect(wrapper.findAll('.seat')).toHaveLength(MAX_PLAYERS)
+    expect(wrapper.findAll('.seat.empty')).toHaveLength(MAX_PLAYERS - 2)
   })
 
   it('renders the board, every space and both hands from server state', () => {
