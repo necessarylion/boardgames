@@ -120,6 +120,23 @@ describe('turn structure', () => {
     }
   })
 
+  it('keeps the turn’s placements marked once the turn has passed on', () => {
+    const game = newGame()
+    const tile = findInHand(game, 0, (t) => t.kind === 'caste' && !t.fast)!
+    const space = legalPlacements(game.view, tile)[0]
+    game.playTile(0, tile.id, space)
+    game.endTurn(0)
+
+    expect(game.state.placedThisTurn).toEqual([])
+    expect(game.state.lastPlaced).toEqual([space])
+
+    const next = findInHand(game, 1, (t) => t.kind === 'caste' && !t.fast)!
+    const nextSpace = legalPlacements(game.view, next).find((id) => id !== space)!
+    game.playTile(1, next.id, nextSpace)
+    game.endTurn(1)
+    expect(game.state.lastPlaced).toEqual([nextSpace])
+  })
+
   it('refills the hand to five at the end of a turn', () => {
     const game = newGame()
     const tile = findInHand(game, 0, (t) => t.kind === 'caste')!

@@ -68,7 +68,7 @@ Two rules details the rulebook constrains without spelling out, already recorded
 - TypeScript is strict, with `noUnusedLocals`, `noUnusedParameters` and `verbatimModuleSyntax` — type-only imports must use `import type`.
 - British spelling throughout the codebase (`colour`, `neighbours`, `centre`, `sanitise`).
 - Comments explain *why*, not *what*, and are used sparingly on the non-obvious invariants above. Match that density.
-- Player colours and the seat colour order live in `shared/colours.ts`; the paper/ink design tokens are CSS custom properties in `src/assets/main.css`.
+- Player colours live in `shared/colours.ts`, but the order they are dealt in does not: each room shuffles its own palette into `Room.colours` and stores it in the snapshot, so seat 0 is not always gold and a restart does not recolour the table. The paper/ink design tokens are CSS custom properties in `src/assets/main.css`.
 - Game iconography is in `src/game/icons.ts`: inline 24×24 SVG silhouettes inheriting `currentColor`, plus raster art in `assets/` that `GameIcon` prefers when present. `assets/` is lowercase and imported by relative path — the case matters, because the Docker image builds on Linux even though macOS would not notice.
 
 ## CI and deployment

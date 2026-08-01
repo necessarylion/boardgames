@@ -8,6 +8,8 @@ export const en = {
   'app.connecting': 'Connecting to the game server…',
   'app.connectionLost': 'Connection lost — reconnecting…',
   'app.notConnected': 'Not connected to the server yet.',
+  'app.replaced': 'This table is open in another tab.',
+  'app.replaced.action': 'Play here instead',
 
   'lang.label': 'Language',
 
@@ -190,8 +192,17 @@ export const en = {
   'rules.ending.title': 'Ending the game',
   'rules.ending.text':
     'The game ends at the end of a turn once every piece of any one caste has left the board, or once {count} pieces have been set aside from ties.',
-  'rules.ending.tiebreak':
-    "Each caste's leader token goes to whoever captured strictly the most of that caste; a tie leaves it unclaimed. Most tokens wins. Tied players then compare pieces from the castes they do <em>not</em> lead, and after that their total pieces.",
+  'rules.scoring.title': 'Who wins',
+  'rules.scoring.token':
+    'Each caste has one <strong>leader token</strong>, and it goes to whoever captured strictly the most pieces of that caste. Level with someone and nobody takes it, so three tokens exist and fewer may be handed out.',
+  'rules.scoring.margin':
+    'Leading a caste by one piece is worth exactly as much as leading it by ten. Pieces beyond the lead count for nothing until the tiebreakers.',
+  'rules.scoring.order': 'The winner is settled in this order:',
+  'rules.scoring.tokens': 'Most leader tokens.',
+  'rules.scoring.other':
+    'Level: most pieces from the castes they do <em>not</em> lead — the caste you already led does not count twice.',
+  'rules.scoring.total': 'Still level: most pieces overall.',
+  'rules.scoring.shared': 'Still level: the victory is shared.',
   'rules.tiles.title': 'Your {count} tiles',
   'rules.tiles.lede':
     "Everyone owns the same set. You pick five to open with, then draw the rest in the order they happen to come up. A tile's number is the influence it lends to every settlement it touches.",

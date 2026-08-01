@@ -3,7 +3,13 @@ import { computed, ref, shallowRef, watch } from 'vue'
 
 import { buildBoard, DEFAULT_BOARD_SHAPE, type Board } from '@shared/board'
 import type { GameOptions } from '@shared/engine'
-import { HEARTBEAT_MS, type ClientMessage, type ClientState, type ServerMessage } from '@shared/protocol'
+import {
+  CLOSE_REPLACED,
+  HEARTBEAT_MS,
+  type ClientMessage,
+  type ClientState,
+  type ServerMessage,
+} from '@shared/protocol'
 import {
   canSwitch,
   hasAnySwitch,
@@ -28,8 +34,34 @@ export type Interaction =
 
 export type Connection = 'connecting' | 'open' | 'closed'
 
-const TOKEN_KEY = 'samurai.token'
+/**
+ * Identity is per table, not per browser. The server allows one socket per
+ * token, so a single shared token meant a second tab silently closed the first
+ * — two tables at once was impossible. Keying the token by room code instead
+ * gives each table its own identity, so two tabs at two rooms never collide,
+ * while a refresh or a reopened link still reconnects into the same seat.
+ */
+const tokenKey = (code: string) => `samurai.token.${code.toUpperCase()}`
 const NAME_KEY = 'samurai.name'
+/** Retired: one token for the whole browser, which is what tabs fought over. */
+const LEGACY_TOKEN_KEY = 'samurai.token'
+
+/**
+ * Which table this tab is at. The URL is the only authority — localStorage is
+ * shared by every tab, so it cannot say where *this* one is.
+ */
+function roomFromUrl(): string | null {
+  const code = new URLSearchParams(location.search).get('room')
+  return code ? code.trim().toUpperCase() : null
+}
+
+/** Put the table in the URL, so a refresh — or a second tab — lands back here. */
+function showRoomInUrl(code: string | null) {
+  const url = new URL(location.href)
+  if (code) url.searchParams.set('room', code)
+  else url.searchParams.delete('room')
+  if (url.href !== location.href) history.replaceState(history.state, '', url)
+}
 
 /** No word from the server for this long means the connection is dead. */
 const SILENCE_LIMIT_MS = HEARTBEAT_MS * 3
@@ -48,6 +80,19 @@ export const useGameStore = defineStore('game', () => {
   const state = ref<ClientState | null>(null)
   const error = ref<string | null>(null)
   const myName = ref(localStorage.getItem(NAME_KEY) ?? '')
+  /** Another tab took this seat. Nothing reconnects until the player says so. */
+  const replaced = ref(false)
+
+  /**
+   * This tab's identity. Starts as whatever was stored for the table named in
+   * the URL — null on the home screen, where the server issues a fresh one, so
+   * a tab that hosts a new table never borrows another tab's seat.
+   */
+  let token: string | null = (() => {
+    localStorage.removeItem(LEGACY_TOKEN_KEY)
+    const code = roomFromUrl()
+    return code ? localStorage.getItem(tokenKey(code)) : null
+  })()
 
   let socket: WebSocket | null = null
   let retry = 0
@@ -66,6 +111,7 @@ export const useGameStore = defineStore('game', () => {
       retryTimer = null
     }
     bindWakeListeners()
+    replaced.value = false
     connection.value = 'connecting'
     lastMessageAt = Date.now()
 
@@ -85,7 +131,7 @@ export const useGameStore = defineStore('game', () => {
       connection.value = 'open'
       // Tell the server which table we think we are at, so it can correct us if
       // the room is gone.
-      send({ t: 'hello', token: localStorage.getItem(TOKEN_KEY), code: state.value?.code ?? null })
+      send({ t: 'hello', token, code: state.value?.code ?? roomFromUrl() })
       startWatchdog(opening)
     }
 
@@ -100,11 +146,18 @@ export const useGameStore = defineStore('game', () => {
       handle(message)
     }
 
-    socket.onclose = () => {
+    socket.onclose = (event) => {
       if (socket !== opening) return
       socket = null
       stopWatchdog()
       connection.value = 'closed'
+      // The seat moved to another tab. Reconnecting would take it straight back
+      // and the two tabs would drop each other in turn, forever — so this tab
+      // waits until the player says which one they mean to play in.
+      if (event.code === CLOSE_REPLACED) {
+        replaced.value = true
+        return
+      }
       scheduleRetry()
     }
 
@@ -151,7 +204,7 @@ export const useGameStore = defineStore('game', () => {
     if (listenersBound || typeof window === 'undefined') return
     listenersBound = true
     const wake = () => {
-      if (document.visibilityState === 'hidden') return
+      if (document.visibilityState === 'hidden' || replaced.value) return
       retry = 0
       connect()
     }
@@ -165,17 +218,38 @@ export const useGameStore = defineStore('game', () => {
    */
   let hasLeft = false
 
+  /** Tie this tab's token to the table it is at, in storage and in the URL. */
+  function rememberSeat(code: string) {
+    if (token) localStorage.setItem(tokenKey(code), token)
+    showRoomInUrl(code)
+  }
+
+  /**
+   * The seat is gone, so the token that held it is worth nothing. A null code
+   * means we never got to a table — an invite link to a room that has expired —
+   * and the link stays in the URL for the join form to offer back.
+   */
+  function forgetSeat(code: string | null) {
+    if (!code) return
+    localStorage.removeItem(tokenKey(code))
+    showRoomInUrl(null)
+  }
+
   function handle(message: ServerMessage) {
     switch (message.t) {
       case 'ping':
         send({ t: 'pong' })
         break
       case 'hello':
-        localStorage.setItem(TOKEN_KEY, message.token)
+        token = message.token
+        // Nothing is stored yet if we are still on the home screen: the token
+        // only belongs to a table once we know which table that is.
+        if (state.value) rememberSeat(state.value.code)
         break
       case 'state':
         if (hasLeft) return
         state.value = message.state
+        rememberSeat(message.state.code)
         // Any state the local player did not expect invalidates a half-finished
         // interaction (for example a piece someone else just captured).
         if (message.state.you !== message.state.current) interaction.value = { mode: 'idle' }
@@ -186,6 +260,7 @@ export const useGameStore = defineStore('game', () => {
         interaction.value = { mode: 'idle' }
         break
       case 'left':
+        forgetSeat(state.value?.code ?? null)
         hasLeft = true
         state.value = null
         interaction.value = { mode: 'idle' }
@@ -378,6 +453,12 @@ export const useGameStore = defineStore('game', () => {
   )
 
   // --- room actions --------------------------------------------------------
+  /** Bring the seat back to this tab after another one took it over. */
+  function takeOverSeat() {
+    retry = 0
+    connect()
+  }
+
   function rememberName(name: string) {
     myName.value = name
     localStorage.setItem(NAME_KEY, name)
@@ -392,7 +473,13 @@ export const useGameStore = defineStore('game', () => {
   function joinRoom(code: string, name: string) {
     rememberName(name)
     hasLeft = false
-    send({ t: 'join', code: code.trim().toUpperCase(), name })
+    const wanted = code.trim().toUpperCase()
+    // If this browser already holds a seat at that table, say hello as its owner
+    // before joining, so the seat is reclaimed rather than a second one taken.
+    // Messages are handled in order, so the identity is in place by the join.
+    const held = localStorage.getItem(tokenKey(wanted))
+    if (held && held !== token) send({ t: 'hello', token: held, code: wanted })
+    send({ t: 'join', code: wanted, name })
   }
 
   const leaveRoom = () => send({ t: 'leave' })
@@ -502,6 +589,8 @@ export const useGameStore = defineStore('game', () => {
     // connection
     connection,
     connect,
+    replaced,
+    takeOverSeat,
     error,
     showError,
     myName,

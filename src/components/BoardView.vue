@@ -3,7 +3,7 @@ import { computed, ref } from 'vue'
 import GameIcon from './GameIcon.vue'
 import TileGlyph from './TileGlyph.vue'
 import { usePanZoom, type Bounds } from '@/composables/usePanZoom'
-import { CASTE_COLOURS } from '@shared/colours'
+import { CASTE_COLOURS, PLAYER_COLOURS } from '@shared/colours'
 import { hexCentre, hexPolygon, type Point } from '@shared/hex'
 import type { PieceRef } from '@shared/rules'
 import { SETTLEMENT_CAPACITY, type PlayerColour, type Space } from '@shared/types'
@@ -56,6 +56,18 @@ const chosenFirst = computed(() =>
     : null,
 )
 const justPlaced = computed(() => new Set(game.state?.placedThisTurn ?? []))
+
+/*
+ * The tiles of the move being made, or of the last one made if the player on
+ * the clock has not placed yet — so everyone at the table can see where the
+ * tile went, in the colour of whoever put it there.
+ */
+const freshlyPlaced = computed(() => {
+  const state = game.state
+  if (!state || state.phase !== 'play') return new Set<string>()
+  const ids = state.placedThisTurn.length ? state.placedThisTurn : state.lastPlaced
+  return new Set(ids.filter((id) => id in placed.value))
+})
 
 /** Offsets for laying out a settlement's caste pieces inside its hex. */
 function pieceSlots(count: number): Point[] {
@@ -209,6 +221,14 @@ function isSurroundedNow(space: Space): boolean {
             />
           </g>
         </template>
+
+        <!-- where the last tile went; decoration, so no clicks -->
+        <polygon
+          v-if="freshlyPlaced.has(cell.space.id)"
+          :points="cell.points"
+          class="tile-mark"
+          :style="{ '--mark': PLAYER_COLOURS[ownerColour(cell.space.id)].fill }"
+        />
 
         <!-- placed tile -->
         <g
@@ -435,6 +455,12 @@ function isSurroundedNow(space: Space): boolean {
     opacity: 0.6;
   }
 
+  /* No breathing, but the mark still says its piece and goes after five. */
+  .tile-mark {
+    stroke-opacity: 0.9;
+    animation: mark-fade 5s ease-out forwards;
+  }
+
   .hex-halo,
   .piece-selectable .piece-halo,
   .piece-chosen .piece-halo {
@@ -520,6 +546,47 @@ function isSurroundedNow(space: Space): boolean {
   100% {
     stroke-opacity: 0;
     transform: scale(1.55);
+  }
+}
+
+/*
+ * A ring in the placing player's colour, breathing so it reads from across the
+ * room, and gone five seconds later — long enough to catch the eye, short
+ * enough that the board is not left wearing a mark for the rest of the turn.
+ * It stays inside the hex: a ring that grew past the edge would sit over the
+ * neighbouring tiles and look like it marked them too.
+ *
+ * The element is created the moment the tile lands and is never re-rendered
+ * while it stands, so the countdown starts once, on the placement itself.
+ */
+.tile-mark {
+  fill: none;
+  stroke: var(--mark);
+  stroke-width: 3.4;
+  pointer-events: none;
+  filter: drop-shadow(0 0 3px var(--mark));
+  /* Three breaths and out, so nothing is left animating behind the fade. */
+  animation: mark-pulse 1.6s ease-in-out 3, mark-fade 5s ease-out forwards;
+}
+
+@keyframes mark-pulse {
+  0%,
+  100% {
+    stroke-opacity: 0.45;
+  }
+  50% {
+    stroke-opacity: 1;
+  }
+}
+
+/* Holds full strength, then leaves in the last second of the five. */
+@keyframes mark-fade {
+  0%,
+  80% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
   }
 }
 

@@ -62,6 +62,7 @@ const state: ClientState = {
   current: s.current,
   turnNumber: s.turnNumber,
   placedThisTurn: s.placedThisTurn,
+  lastPlaced: s.lastPlaced,
   playedNonFast: s.playedNonFast,
   setAside: s.setAside,
   log: s.log,

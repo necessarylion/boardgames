@@ -81,6 +81,12 @@ export interface GameState {
   turnNumber: number
   placedThisTurn: string[]
   /**
+   * Where the previous turn's tiles landed. Kept once the turn closes so the
+   * rest of the table can still see the move that was just made — by the time
+   * play reaches you, `placedThisTurn` belongs to you and is empty.
+   */
+  lastPlaced: string[]
+  /**
    * What the current player has done this turn, newest last, so a misclick can
    * be taken back. Emptied by `endTurn`, which is the point everything commits:
    * captures resolve, hands refill, and the board is no longer yours to edit.
@@ -139,6 +145,7 @@ export class Game {
       current: 0,
       turnNumber: 1,
       placedThisTurn: [],
+      lastPlaced: [],
       undoStack: [],
       playedNonFast: false,
       setAside: [],
@@ -165,8 +172,10 @@ export class Game {
   static fromState(state: GameState): Game {
     const game = new Game(state.playerCount, state.options, state.seed)
     // Snapshots written before undo existed have no stack; an empty one simply
-    // means "nothing to take back", which is correct for a restored room.
-    game.state = { ...state, undoStack: state.undoStack ?? [] }
+    // means "nothing to take back", which is correct for a restored room. The
+    // same goes for the last turn's placements: an empty list just means no
+    // tile is marked on the board.
+    game.state = { ...state, undoStack: state.undoStack ?? [], lastPlaced: state.lastPlaced ?? [] }
     return game
   }
 
@@ -387,6 +396,10 @@ export class Game {
     const turn = this.requireTurn(playerId)
     if (!turn.ok) return turn
     if (!this.canEndTurn(playerId)) return fail('You must place a tile before ending your turn.')
+
+    // A move leaves a tile at both ends, so both spaces stay marked; a turn that
+    // placed nothing clears the mark rather than leaving the last one to linger.
+    this.state.lastPlaced = this.state.placedThisTurn.filter((id) => id in this.state.placed)
 
     this.resolveCaptures()
     this.refreshHand(playerId)

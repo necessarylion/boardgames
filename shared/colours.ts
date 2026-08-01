@@ -25,8 +25,10 @@ export const PLAYER_COLOURS: Record<PlayerColour, ColourSet> = {
 }
 
 /**
- * Seat colours are handed out in this order, so appending — never inserting —
- * keeps every existing table's colours where the players left them.
+ * The colours a table has to hand out. Each room shuffles its own copy of this
+ * list (`Room.colours`), so nobody is the same colour at every table they sit
+ * at; the order here is what a room stored before the shuffle existed falls
+ * back to, which is why colours are appended rather than inserted.
  */
 export const COLOUR_ORDER: readonly PlayerColour[] = [
   'gold',

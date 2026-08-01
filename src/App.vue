@@ -21,7 +21,15 @@ onMounted(() => game.connect())
 
 <template>
   <div class="app">
-    <p v-if="showConnection" class="connection" :class="game.connection">
+    <!-- Taken over by another tab: this one holds still rather than fighting for
+         the seat, and offers to take it back. -->
+    <p v-if="game.replaced" class="connection">
+      {{ t('app.replaced') }}
+      <button type="button" class="banner-btn" @click="game.takeOverSeat()">
+        {{ t('app.replaced.action') }}
+      </button>
+    </p>
+    <p v-else-if="showConnection" class="connection" :class="game.connection">
       {{ game.connection === 'connecting' ? t('app.connecting') : t('app.connectionLost') }}
     </p>
 
@@ -63,6 +71,22 @@ onMounted(() => game.connect())
   background: rgba(178, 58, 44, 0.14);
   color: var(--vermillion-dark);
   border-bottom: 1px solid rgba(178, 58, 44, 0.25);
+}
+
+.banner-btn {
+  margin-left: 0.5rem;
+  padding: 0.1rem 0.55rem;
+  border-radius: 6px;
+  border: 1px solid rgba(178, 58, 44, 0.45);
+  background: rgba(255, 252, 245, 0.75);
+  color: var(--vermillion-dark);
+  font: inherit;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.banner-btn:hover {
+  background: #fff;
 }
 
 .connection.connecting {

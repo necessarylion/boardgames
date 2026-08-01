@@ -7,7 +7,7 @@ import { WebSocketServer, type WebSocket } from 'ws'
 import { DEFAULT_BOARD_SHAPE } from '../shared/board'
 import { TURN_SECONDS_CHOICES } from '../shared/engine'
 import type { ClientMessage, ServerMessage } from '../shared/protocol'
-import { HEARTBEAT_MS, PROTOCOL_VERSION } from '../shared/protocol'
+import { CLOSE_REPLACED, HEARTBEAT_MS, PROTOCOL_VERSION } from '../shared/protocol'
 import { BOARD_SHAPES } from '../shared/types'
 import { MAX_PLAYERS, RoomManager, type Room } from './rooms'
 import { PostgresRoomStore, type RoomStore } from './store'
@@ -123,9 +123,16 @@ wss.on('connection', (socket) => {
 
     // The first message must establish (or restore) this client's identity.
     if (msg.t === 'hello') {
-      token = msg.token && /^[0-9a-f-]{36}$/i.test(msg.token) ? msg.token : rooms.newToken()
+      const next = msg.token && /^[0-9a-f-]{36}$/i.test(msg.token) ? msg.token : rooms.newToken()
+      // Saying hello again under another name — a tab reclaiming a seat it
+      // already holds at the table it is joining — would otherwise leave the
+      // old name pointing at this socket long after it stopped meaning anything.
+      if (token && token !== next && sockets.get(token) === socket) sockets.delete(token)
+      token = next
       const previous = sockets.get(token)
-      if (previous && previous !== socket) previous.close(4000, 'Replaced by a newer connection.')
+      if (previous && previous !== socket) {
+        previous.close(CLOSE_REPLACED, 'Replaced by a newer connection.')
+      }
       sockets.set(token, socket)
       send(socket, { t: 'hello', token, version: PROTOCOL_VERSION })
 

@@ -243,6 +243,28 @@ describe('rendering', () => {
     expect(game.highlightedSpaces.length).toBeGreaterThan(0)
     expect(wrapper.findAll('.hex-target')).toHaveLength(game.highlightedSpaces.length)
   })
+
+  it('marks the last tile placed for the player who did not place it', async () => {
+    const r = room()
+    const game = useGameStore()
+    game.state = r.stateFor('token-b') // watching someone else's turn
+
+    const wrapper = mount(GameScreen)
+    expect(wrapper.findAll('.tile-mark')).toHaveLength(0)
+
+    const tile = placeableTile(r)
+    const space = legalPlacements(r.game!.view, tile)[0]
+    r.game!.playTile(0, tile.id, space)
+    game.state = r.stateFor('token-b')
+    await nextTick()
+    expect(wrapper.findAll('.tile-mark')).toHaveLength(1)
+
+    // Still marked once play has passed on, which is when it matters most.
+    r.game!.endTurn(0)
+    game.state = r.stateFor('token-b')
+    await nextTick()
+    expect(wrapper.findAll('.tile-mark')).toHaveLength(1)
+  })
 })
 
 describe('the capture notice', () => {

@@ -57,7 +57,22 @@ const setAsideMax = computed(() => setAsideLimit(game.state?.playerCount ?? 0))
           <section>
             <h3>{{ t('rules.ending.title') }}</h3>
             <p>{{ t('rules.ending.text', { count: setAsideMax }) }}</p>
-            <p v-html="t('rules.ending.tiebreak')" />
+          </section>
+
+          <!-- The order below is the one `scoreGame` walks, step for step: the
+               tiebreakers are where a table argues, so they are numbered rather
+               than run together in a sentence. -->
+          <section>
+            <h3>{{ t('rules.scoring.title') }}</h3>
+            <p v-html="t('rules.scoring.token')" />
+            <p>{{ t('rules.scoring.margin') }}</p>
+            <p>{{ t('rules.scoring.order') }}</p>
+            <ol>
+              <li>{{ t('rules.scoring.tokens') }}</li>
+              <li v-html="t('rules.scoring.other')" />
+              <li>{{ t('rules.scoring.total') }}</li>
+              <li>{{ t('rules.scoring.shared') }}</li>
+            </ol>
           </section>
         </div>
 

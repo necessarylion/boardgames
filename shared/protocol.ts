@@ -11,6 +11,13 @@ export const PROTOCOL_VERSION = 2
  */
 export const HEARTBEAT_MS = 20_000
 
+/**
+ * Close code for a socket dropped because the same seat said hello somewhere
+ * else. The client must not reconnect on it: the two tabs would take the seat
+ * from each other in turn and neither would stay connected.
+ */
+export const CLOSE_REPLACED = 4000
+
 /** What every client knows about every seat. */
 export interface PublicPlayer {
   id: number
@@ -47,6 +54,8 @@ export interface ClientState {
   current: number
   turnNumber: number
   placedThisTurn: string[]
+  /** Where the previous turn's tiles landed, so the whole table can see them. */
+  lastPlaced: string[]
   /** Whether the viewer has anything to take back this turn. */
   canUndo: boolean
   playedNonFast: boolean

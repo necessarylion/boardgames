@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { DEFAULT_OPTIONS, Game, type GameOptions, type GameState } from '../shared/engine'
 import type { ClientState, PublicPlayer } from '../shared/protocol'
 import { COLOUR_ORDER } from '../shared/colours'
+import { Rng, randomSeed } from '../shared/rng'
 import { MAX_PLAYERS, MIN_PLAYERS, type PlayerColour } from '../shared/types'
 import type { RoomStore } from './store'
 
@@ -31,6 +32,8 @@ export interface Client {
 export interface RoomSnapshot {
   code: string
   options: GameOptions
+  /** The table's shuffled palette, so a restart does not recolour the seats. */
+  colours: PlayerColour[]
   seats: Seat[]
   hostToken: string
   /** Client tokens that consider this their current room, seated or watching. */
@@ -41,6 +44,12 @@ export interface RoomSnapshot {
 
 export class Room {
   readonly code: string
+  /**
+   * The order this table hands its colours out in. Shuffled per room, so the
+   * host is not gold at every table they open, and fixed for the room's life,
+   * so nobody's colour moves under them between one game and the next.
+   */
+  colours: PlayerColour[] = new Rng(randomSeed()).shuffle([...COLOUR_ORDER])
   options: GameOptions = { ...DEFAULT_OPTIONS }
   seats: Seat[] = []
   game: Game | null = null
@@ -69,6 +78,7 @@ export class Room {
     return {
       code: this.code,
       options: this.options,
+      colours: this.colours,
       seats: this.seats,
       hostToken: this.hostToken,
       members: [...this.members],
@@ -80,6 +90,9 @@ export class Room {
   static fromSnapshot(snapshot: RoomSnapshot): Room {
     const room = new Room(snapshot.code)
     room.options = snapshot.options
+    // Rooms written before the palette was shuffled were coloured in seat order,
+    // which is exactly what falling back to it reproduces.
+    room.colours = snapshot.colours ?? [...COLOUR_ORDER]
     // Nobody survives a restart still connected; their client reconnects and
     // says hello, which flips the seat back.
     room.seats = snapshot.seats.map((seat) => ({ ...seat, connected: false }))
@@ -108,7 +121,7 @@ export class Room {
       id: this.seats.length,
       token,
       name: name.trim().slice(0, 18) || `Player ${this.seats.length + 1}`,
-      colour: COLOUR_ORDER[this.seats.length],
+      colour: this.colours[this.seats.length],
       connected: true,
     }
     this.seats.push(seat)
@@ -127,7 +140,7 @@ export class Room {
     this.seats = this.seats.filter((s) => s.token !== token)
     this.seats.forEach((seat, i) => {
       seat.id = i
-      seat.colour = COLOUR_ORDER[i]
+      seat.colour = this.colours[i]
     })
     if (this.hostToken === token) this.hostToken = this.seats[0]?.token ?? ''
     this.touch()
@@ -174,7 +187,7 @@ export class Room {
     this.seats = this.seats.filter((seat) => seat.connected)
     this.seats.forEach((seat, i) => {
       seat.id = i
-      seat.colour = COLOUR_ORDER[i]
+      seat.colour = this.colours[i]
     })
     this.ensureHost()
   }
@@ -250,6 +263,7 @@ export class Room {
         current: 0,
         turnNumber: 0,
         placedThisTurn: [],
+        lastPlaced: [],
         canUndo: false,
         playedNonFast: false,
         setAside: [],
@@ -279,6 +293,7 @@ export class Room {
       current: s.current,
       turnNumber: s.turnNumber,
       placedThisTurn: s.placedThisTurn,
+      lastPlaced: s.lastPlaced,
       // Only the player whose turn it is can take anything back, so the flag is
       // false for everyone else and the button never appears for them.
       canUndo: seat?.id === s.current && s.phase === 'play' && s.undoStack.length > 0,

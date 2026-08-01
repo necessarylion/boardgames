@@ -1,6 +1,7 @@
 import { DEFAULT_OPTIONS } from '../shared/engine'
 import { describe, expect, it } from 'vitest'
 
+import { COLOUR_ORDER } from '../shared/colours'
 import { Game } from '../shared/engine'
 import { legalPlacements } from '../shared/rules'
 import { tileFromId } from '../shared/tiles'
@@ -47,6 +48,28 @@ describe('rooms survive a restart', () => {
     expect(back.hostToken).toBe('token-b')
     expect([...back.members].sort()).toEqual(['token-a', 'token-b'])
     expect(back.started).toBe(false)
+  })
+
+  it('restores the shuffled palette, so a seat added later keeps to it', () => {
+    const room = new Room('HUES')
+    room.addSeat('token-a', 'Ada')
+
+    const back = reload(room)
+    expect(back.colours).toEqual(room.colours)
+
+    // A seat taken after the restart must be coloured by the same table, not by
+    // a palette this process happened to shuffle on its own.
+    back.addSeat('token-b', 'Bo')
+    expect(back.seats[1].colour).toBe(room.colours[1])
+  })
+
+  it('colours an older snapshot in seat order, which is how it was written', () => {
+    const room = new Room('OLDR')
+    room.addSeat('token-a', 'Ada')
+    const snapshot = JSON.parse(JSON.stringify(room.toSnapshot())) as RoomSnapshot
+    delete (snapshot as Partial<RoomSnapshot>).colours
+
+    expect(Room.fromSnapshot(snapshot).colours).toEqual([...COLOUR_ORDER])
   })
 
   it('marks everyone as disconnected, since no socket survives a restart', () => {
