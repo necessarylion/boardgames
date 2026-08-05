@@ -334,7 +334,8 @@ h2 {
 
 .board-options {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  /* Wraps rather than squeezing, so another map can be added without a redesign. */
+  grid-template-columns: repeat(auto-fit, minmax(5.2rem, 1fr));
   gap: 0.4rem;
 }
 

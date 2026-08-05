@@ -10,7 +10,7 @@ import { Game } from '@shared/engine'
 import { legalPlacements } from '@shared/rules'
 import { buildTiles, tileFromId } from '@shared/tiles'
 import type { ClientState } from '@shared/protocol'
-import type { Caste } from '@shared/types'
+import type { BoardShape, Caste } from '@shared/types'
 import { COLOUR_ORDER } from '@shared/colours'
 import { useGameStore } from './stores/game'
 import './assets/main.css'
@@ -18,8 +18,16 @@ import './assets/main.css'
 const NAMES = ['Takeda', 'Uesugi', 'Hojo', 'Imagawa', 'Mori', 'Shimazu']
 const playerCount = Number(new URLSearchParams(location.search).get('players') ?? 4)
 const turns = Number(new URLSearchParams(location.search).get('turns') ?? 26)
+// An unknown shape falls back to the default map in buildBoard, so this is safe
+// to take straight off the query string.
+const boardShape = (new URLSearchParams(location.search).get('shape') ??
+  DEFAULT_OPTIONS.boardShape) as BoardShape
 
-const game = new Game(playerCount, { ...DEFAULT_OPTIONS, randomHands: true, openInformation: true }, 20260728)
+const game = new Game(
+  playerCount,
+  { ...DEFAULT_OPTIONS, boardShape, randomHands: true, openInformation: true },
+  20260728,
+)
 
 // Play a few plausible turns so the board is not empty.
 for (let i = 0; i < turns; i++) {

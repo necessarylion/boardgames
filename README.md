@@ -95,8 +95,8 @@ tables.
 There is also a visual harness at
 <http://localhost:5173/dev-preview.html?players=4&turns=30>, which renders the
 table against a locally simulated game so the board can be inspected without
-opening four browsers. `&zoom=4&at=0.45,0.55` additionally scrolls the board in,
-for checking the zoomed view. It is dev-only and is not part of the production
+opening four browsers. `&shape=circle` picks a map, and `&zoom=4&at=0.45,0.55`
+additionally scrolls the board in, for checking the zoomed view. It is dev-only and is not part of the production
 bundle.
 
 ## How it is put together

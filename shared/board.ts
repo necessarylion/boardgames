@@ -42,11 +42,11 @@ interface MapDef {
 }
 
 /**
- * Every map grows outward from its middle column, so sections are a function of
- * how far across a space sits — A is the centre, then B, then C, and D and E out
- * at the shores. The centre differs per map because the maps are not all the
- * same width, and so do the band edges, because the maps do not widen at the
- * same rate.
+ * The long maps grow outward from their middle column, so sections are a
+ * function of how far across a space sits — A is the centre, then B, then C, and
+ * D and E out at the shores. The centre differs per map because the maps are not
+ * all the same width, and so do the band edges, because the maps do not widen at
+ * the same rate.
  *
  * `edges` gives the outer reach of every section but the last; anything past
  * the final edge belongs to the outermost section.
@@ -56,6 +56,31 @@ const outwardFrom =
   (_row: number, col: number): Section => {
     const dx = Math.abs(col - centre)
     const band = edges.findIndex((edge) => dx <= edge)
+    return SECTION_ORDER[band === -1 ? SECTION_ORDER.length - 1 : band]
+  }
+
+/** How far apart two rows sit, measured in column widths. */
+const ROW_PITCH = Math.sqrt(3) / 2
+
+/**
+ * A round map grows out of a point rather than a column, so its sections are
+ * rings rather than bands. The distance has to be measured in the geometry the
+ * board is actually drawn in — odd rows sit half a column to the right, and a
+ * row is only √3/2 of a column tall — or the rings come out as ellipses.
+ *
+ * `edges` are radii, in column widths, on the same footing as `outwardFrom`.
+ *
+ * Row parity is load-bearing here: adding or dropping a row shifts which rows
+ * carry the half-column offset, which is a different lattice and a different set
+ * of neighbours. Mirror the columns as well if a round map ever has to move.
+ */
+const ringsFrom =
+  (centreCol: number, centreRow: number, edges: readonly number[]) =>
+  (row: number, col: number): Section => {
+    const dx = col + (row & 1) * 0.5 - centreCol
+    const dy = (row - centreRow) * ROW_PITCH
+    const distance = Math.hypot(dx, dy)
+    const band = edges.findIndex((edge) => distance <= edge)
     return SECTION_ORDER[band === -1 ? SECTION_ORDER.length - 1 : band]
   }
 
@@ -107,6 +132,35 @@ const MAPS: Record<BoardShape, MapDef> = {
       '            ~~..c.............v.c.~~',
       '              ~~~~c.c.E.c.c.c.~~~~',
       '                  ~~~~~~~~~~~~',
+    ],
+  },
+  /**
+   * A round island with Edo at its centre and lagoons cut into the land. Its
+   * sections are rings rather than bands — the only map where they are — so
+   * every board from two players up to six comes out circular.
+   */
+  circle: {
+    section: ringsFrom(9.5, 9, [4.583, 5.43, 6.041, 6.557]),
+    rows: [
+      '        ~~~~',
+      '     ~~~~.~~~~',
+      '     ~~....c.~~',
+      '   ~~..c.c....~~',
+      '   ~~c....~~.v.~~',
+      '  ~v..~~c~~~...c~',
+      '  ~..c~~~.~~v.v..~',
+      '  ~...~~.c..~~.v~',
+      '  ~.c.c.c..v~~~..~',
+      ' ~v..~~..E..~~..c~',
+      '  ~..~~~c..v.v.v.~',
+      '  ~c.~~..v.~~...~',
+      '  ~..c.c~~.~~~v..~',
+      '  ~v...~~~v~~..c~',
+      '   ~~.c.~~....v~~',
+      '   ~~....v.v..~~',
+      '     ~~.v....~~',
+      '     ~~~~.~~~~',
+      '        ~~~~',
     ],
   },
 }

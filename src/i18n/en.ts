@@ -47,6 +47,8 @@ export const en = {
   'board.valley.hint': 'A broad chevron dropping to a point in the middle.',
   'board.bay': 'Bay',
   'board.bay.hint': 'Shores curving away either side of a deep centre.',
+  'board.circle': 'Circle',
+  'board.circle.hint': 'A round island, growing ring by ring from Edo.',
   'home.error.name': 'Enter a name first.',
   'home.error.code': 'Room codes are four characters.',
 
