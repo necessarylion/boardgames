@@ -11,11 +11,11 @@ const PLAYER_COUNTS = [2, 3, 4, 5, 6]
 /**
  * Fewest adjacent land spaces any settlement may have.
  *
- * Two is a floor, not a target: the map generator takes the roomiest sites
- * first and only drops to two where a section cannot otherwise be filled, so
- * across all four maps only a handful sit this low. Raising the floor to three
- * is possible, but only by widening the maps enough that four players run out
- * of tiles before any caste is cleared — and then no game can ever end.
+ * Two is a floor, not a target: the maps aim for four adjacent land spaces per
+ * settlement and only drop to two where a section cannot otherwise be filled,
+ * so across all six maps only a handful sit this low. Raising the floor to
+ * three is possible, but only by widening the maps enough that four players run
+ * out of tiles before any caste is cleared — and then no game can ever end.
  */
 const MIN_LAND_EDGES = 2
 

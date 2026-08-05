@@ -49,6 +49,10 @@ export const en = {
   'board.bay.hint': 'Shores curving away either side of a deep centre.',
   'board.circle': 'Circle',
   'board.circle.hint': 'A round island, growing ring by ring from Edo.',
+  'board.slash': 'Slash',
+  'board.slash.hint': 'One long island on the diagonal, Edo halfway along it.',
+  'board.serpent': 'Serpent',
+  'board.serpent.hint': 'An island winding an S from north to south.',
   'home.error.name': 'Enter a name first.',
   'home.error.code': 'Room codes are four characters.',
 

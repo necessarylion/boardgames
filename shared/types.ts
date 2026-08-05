@@ -43,7 +43,7 @@ export const MAX_PLAYERS = 6
  * player count, and each keeps its open land inside the tile supply so a game
  * can always reach an ending.
  */
-export const BOARD_SHAPES = ['mountain', 'valley', 'bay', 'circle'] as const
+export const BOARD_SHAPES = ['mountain', 'valley', 'bay', 'circle', 'slash', 'serpent'] as const
 export type BoardShape = (typeof BOARD_SHAPES)[number]
 
 export const BOARD_SHAPE_LABEL: Record<BoardShape, string> = {
@@ -51,6 +51,8 @@ export const BOARD_SHAPE_LABEL: Record<BoardShape, string> = {
   valley: 'Valley',
   bay: 'Bay',
   circle: 'Circle',
+  slash: 'Slash',
+  serpent: 'Serpent',
 }
 
 export const BOARD_SHAPE_HINT: Record<BoardShape, string> = {
@@ -58,6 +60,8 @@ export const BOARD_SHAPE_HINT: Record<BoardShape, string> = {
   valley: 'A broad chevron dropping to a point in the middle.',
   bay: 'Shores curving away either side of a deep centre.',
   circle: 'A round island, growing ring by ring from Edo.',
+  slash: 'One long island on the diagonal, Edo halfway along it.',
+  serpent: 'An island winding an S from north to south.',
 }
 
 export interface Space {

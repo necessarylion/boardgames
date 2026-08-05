@@ -84,6 +84,49 @@ const ringsFrom =
     return SECTION_ORDER[band === -1 ? SECTION_ORDER.length - 1 : band]
   }
 
+/**
+ * A map that doubles back on itself has no centre column to grow from: the same
+ * column holds two different stretches of the island. So its sections are
+ * stretches of a spine instead — every space takes the section of the nearest
+ * point on the curve, measured by how far along the curve that point sits from
+ * its middle.
+ *
+ * `spine` is a curve over t ∈ [-1, 1] in drawn coordinates, for the same reason
+ * ringsFrom measures there: the lattice, not the text grid, is what the bands
+ * have to follow. `edges` are arc lengths either side of the middle.
+ */
+const alongSpine = (
+  spine: (t: number) => { x: number; y: number },
+  edges: readonly number[],
+) => {
+  const SAMPLES = 400
+  const points: { x: number; y: number; along: number }[] = []
+  let length = 0
+  for (let i = 0; i <= SAMPLES; i++) {
+    const { x, y } = spine(-1 + (2 * i) / SAMPLES)
+    if (i > 0) length += Math.hypot(x - points[i - 1].x, y - points[i - 1].y)
+    points.push({ x, y, along: length })
+  }
+  const middle = length / 2
+
+  return (row: number, col: number): Section => {
+    const x = col + (row & 1) * 0.5
+    const y = row * ROW_PITCH
+    let nearest = points[0]
+    let best = Infinity
+    for (const point of points) {
+      const d = Math.hypot(point.x - x, point.y - y)
+      if (d < best) {
+        best = d
+        nearest = point
+      }
+    }
+    const distance = Math.abs(nearest.along - middle)
+    const band = edges.findIndex((edge) => distance <= edge)
+    return SECTION_ORDER[band === -1 ? SECTION_ORDER.length - 1 : band]
+  }
+}
+
 const MAPS: Record<BoardShape, MapDef> = {
   /** Two peaks either side of a valley. The valley is the two-player board. */
   mountain: {
@@ -161,6 +204,73 @@ const MAPS: Record<BoardShape, MapDef> = {
       '     ~~.v....~~',
       '     ~~~~.~~~~',
       '        ~~~~',
+    ],
+  },
+  /**
+   * One long island lying on the diagonal, north-east down to south-west, with
+   * Edo halfway along it. Its column bands cut across the slant, so every board
+   * is a shorter slash of the same island.
+   */
+  slash: {
+    section: outwardFrom(15.5, [2.5, 4.5, 6.5, 8.5]),
+    rows: [
+      '                    ~~~v...v.~',
+      '                  ~~~~..v...~~',
+      '                  ~~v~....v~~~',
+      '                 ~~...c.v~~~',
+      '                ~~~~c.....~',
+      '               ~~.v..c.c~~~',
+      '              ~~~v....~~.~',
+      '             ~~...c.v..~~~',
+      '            ~~~c.....~~~~',
+      '           ~~c....v~~~~',
+      '          ~~~....v.~~',
+      '         ~~c.v.E..c~',
+      '        ~~~......c~~~',
+      '       ~~v.c...v.~~',
+      '      ~~~.....c~~~~',
+      '    ~~~.......~~~',
+      '   ~~~.c.v..v.~~',
+      '   ~......c~~~~',
+      '  ~~~c...v.~~~',
+      '~~~~..v...~~',
+      ' ~.c.c..c~~~',
+    ],
+  },
+  /**
+   * An island winding an S from north to south, Edo at the turn in the middle.
+   * The same column carries three separate stretches of it, so this is the map
+   * the spine sections exist for.
+   */
+  serpent: {
+    section: alongSpine(
+      (t) => ({ x: 7 + 4.2 * Math.sin(1.5 * Math.PI * t), y: (1 + t) * 11 * ROW_PITCH }),
+      [4.816, 7.292, 9.785, 12.496],
+    ),
+    rows: [
+      '         ~.c.~',
+      '    ~~~~~v...~',
+      '   ~~.c~...c~~',
+      ' ~~.~...c.~~',
+      ' ~.v.v...~~',
+      '~~.....v.~',
+      '~..v..v.~~',
+      '~v....~~',
+      '~...c.c~~',
+      '~c.....E~~~',
+      ' ~~v..v..c.~',
+      '  ~.v.....c~~',
+      '   ~~.v..c...~',
+      '    ~~.v...c.~',
+      '      ~~~.v..~',
+      '      ~~~...v~',
+      '     ~~v...c..~',
+      '    ~...c...c~',
+      '   ~~~.....c.~',
+      '  ~..v.c.c~~~',
+      '  ~v...~.~~',
+      '~~...v~~~',
+      '~..c.~~',
     ],
   },
 }

@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import BoardGlyph from './BoardGlyph.vue'
 import TurnClockOptions from './TurnClockOptions.vue'
 import { PLAYER_COLOURS } from '@shared/colours'
+import { DEFAULT_BOARD_SHAPE } from '@shared/board'
 import { supplyPerCaste } from '@shared/setup'
-import { MAX_PLAYERS, MIN_PLAYERS } from '@shared/types'
+import { BOARD_SHAPES, MAX_PLAYERS, MIN_PLAYERS, type BoardShape } from '@shared/types'
 import { t } from '@/i18n'
 import { useGameStore } from '@/stores/game'
 
@@ -36,6 +38,14 @@ function setClock(turnSeconds: number) {
   const options = game.state?.options
   if (!options || !game.isHost) return
   game.setOptions({ ...options, turnSeconds })
+}
+
+const boardShape = computed(() => game.state?.options.boardShape ?? DEFAULT_BOARD_SHAPE)
+
+function setBoard(shape: BoardShape) {
+  const options = game.state?.options
+  if (!options || !game.isHost) return
+  game.setOptions({ ...options, boardShape: shape })
 }
 </script>
 
@@ -102,6 +112,26 @@ function setClock(turnSeconds: number) {
           :locked="!game.isHost"
           @pick="setClock"
         />
+
+        <div class="board-pick" :class="{ locked: !game.isHost }">
+          <span class="board-label tiny muted">{{ t('home.board.title') }}</span>
+          <div class="board-options">
+            <button
+              v-for="shape in BOARD_SHAPES"
+              :key="shape"
+              type="button"
+              class="board-option"
+              :class="{ chosen: boardShape === shape }"
+              :disabled="!game.isHost"
+              :title="t(`board.${shape}.hint`)"
+              @click="setBoard(shape)"
+            >
+              <BoardGlyph :shape="shape" />
+              <span>{{ t(`board.${shape}`) }}</span>
+            </button>
+          </div>
+        </div>
+
         <p v-if="!game.isHost" class="tiny muted">{{ t('lobby.hostOnly') }}</p>
 
         <hr class="rule" />
@@ -241,6 +271,59 @@ h2 {
 
 .check.locked {
   opacity: 0.7;
+}
+
+/* Same row of profiles the home screen hosts with, so the host can still change
+   their mind once everyone is in the room. */
+.board-pick {
+  margin: 0.9rem 0 0.8rem;
+}
+
+.board-pick.locked {
+  opacity: 0.7;
+}
+
+.board-label {
+  display: block;
+  margin-bottom: 0.4rem;
+}
+
+.board-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(5.2rem, 1fr));
+  gap: 0.4rem;
+}
+
+.board-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.5rem 0.3rem 0.45rem;
+  border: 1px solid rgba(160, 137, 102, 0.35);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+  line-height: 1.2;
+  text-align: center;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+
+.board-option:disabled {
+  cursor: default;
+}
+
+.board-option:not(:disabled):hover {
+  background: rgba(178, 58, 44, 0.07);
+}
+
+.board-option.chosen {
+  border-color: var(--vermillion);
+  background: rgba(178, 58, 44, 0.12);
+  color: var(--vermillion-dark);
+  font-weight: 600;
 }
 
 .wide {
