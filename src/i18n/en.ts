@@ -58,7 +58,7 @@ export const en = {
 
   // --- table options (home and lobby) --------------------------------------
   'option.randomHands': 'Deal opening hands at random',
-  'option.randomHands.hint': '— skips the hand-selection step',
+  'option.randomHands.hint': '— skips the hand-selection step; no fast tiles are dealt',
   'option.openInfo': 'Open information',
   'option.openInfo.hint': "— everyone's captured pieces stay visible",
   'option.openInfo.long': 'Open information (captured pieces stay visible)',

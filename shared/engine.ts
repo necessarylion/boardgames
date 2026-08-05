@@ -155,7 +155,15 @@ export class Game {
     }
 
     if (options.randomHands) {
-      for (const player of players) player.hand = player.stack.splice(0, STARTING_HAND_SIZE)
+      // Fast tiles are held back from the deal. They cost no placement, so a
+      // hand of them can be emptied in a single turn — nobody drafting their
+      // own hand would open that way, and a random deal should not force it.
+      // They stay in the stack in their shuffled order and come up on the draw.
+      for (const player of players) {
+        const dealt = player.stack.filter((id) => !tileFromId(id).fast).slice(0, STARTING_HAND_SIZE)
+        for (const id of dealt) player.stack.splice(player.stack.indexOf(id), 1)
+        player.hand = dealt
+      }
       this.log(null, 'Starting hands were dealt at random.')
     }
     this.log(null, `A ${playerCount}-player game begins.`)

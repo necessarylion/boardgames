@@ -60,6 +60,19 @@ describe('turn structure', () => {
     expect(game.state.phase).toBe('play')
   })
 
+  it('keeps fast tiles out of a random opening hand', () => {
+    // Every seed, not just a lucky one: five of the twenty tiles are fast, so a
+    // straight deal off the top of the stack turns one up more often than not.
+    for (let seed = 1; seed <= 40; seed++) {
+      const game = new Game(4, { ...DEFAULT_OPTIONS, randomHands: true }, seed)
+      for (const player of game.state.players) {
+        expect(player.hand.map(tileFromId).some((t) => t.fast)).toBe(false)
+        // Held back, not removed — they are still there to be drawn later.
+        expect(player.stack.map(tileFromId).filter((t) => t.fast)).toHaveLength(5)
+      }
+    }
+  })
+
   it('starts in the draft phase when hands are chosen', () => {
     const game = new Game(2, { ...DEFAULT_OPTIONS, randomHands: false, openInformation: false }, 99)
     expect(game.state.phase).toBe('draft')
