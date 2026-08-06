@@ -263,6 +263,12 @@ wss.on('connection', (socket) => {
           return game.undoLast(seat.id)
         case 'endTurn':
           return game.endTurn(seat.id)
+        case 'redraw':
+          return game.redrawHand(seat.id)
+        case 'pause':
+          return game.pause(seat.id)
+        case 'resume':
+          return game.resume(seat.id)
         default:
           return { ok: false as const, error: 'Unknown action.' }
       }

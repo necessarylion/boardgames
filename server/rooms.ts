@@ -69,6 +69,12 @@ export class Room {
   turnDeadline: number | null = null
   /** Which turn the deadline above belongs to, so it is armed exactly once. */
   private turnKey: string | null = null
+  /**
+   * When the table was paused, or null when it is running. Like the deadline it
+   * is deliberately not part of the snapshot: a restart during a pause simply
+   * arms a fresh period on resume, the same way it does after any restore.
+   */
+  private pausedAt: number | null = null
 
   constructor(code: string) {
     this.code = code
@@ -215,9 +221,28 @@ export class Room {
   /**
    * Start the clock when the turn passes to someone new, and leave it running
    * otherwise — placing a tile without ending your turn must not buy more time.
+   *
+   * A paused table freezes the clock where it stood; resuming pushes the
+   * deadline out by however long the pause lasted, so the player is handed back
+   * exactly the time they had left rather than a whole fresh period.
    */
   syncTurnTimer(now = Date.now()) {
+    if (this.game?.state.paused) {
+      if (this.pausedAt === null) this.pausedAt = now
+      return
+    }
+    if (this.pausedAt !== null) {
+      if (this.turnDeadline !== null) this.turnDeadline += now - this.pausedAt
+      this.pausedAt = null
+    }
     if (this.currentTurnKey() !== this.turnKey) this.rearmTurnTimer(now)
+  }
+
+  /** Milliseconds left on the shot clock, frozen while the table is paused. */
+  turnMsLeft(now = Date.now()): number | null {
+    if (this.turnDeadline === null) return null
+    const at = this.pausedAt ?? now
+    return Math.max(0, this.turnDeadline - at)
   }
 
   touch() {
@@ -275,6 +300,8 @@ export class Room {
         captured: [],
         draftPool: [],
         canEndTurn: false,
+        canRedraw: false,
+        paused: false,
         turnMsLeft: null,
       }
     }
@@ -312,7 +339,9 @@ export class Room {
       captured: mine ? [...mine.captured] : [],
       draftPool: seat && s.phase === 'draft' && !mine?.draftReady ? game.draftPool(seat.id) : [],
       canEndTurn: seat ? game.canEndTurn(seat.id) : false,
-      turnMsLeft: this.turnDeadline === null ? null : Math.max(0, this.turnDeadline - Date.now()),
+      canRedraw: seat ? game.canRedraw(seat.id) : false,
+      paused: s.paused,
+      turnMsLeft: this.turnMsLeft(),
     }
   }
 }
@@ -444,6 +473,9 @@ export class RoomManager {
     const due: Room[] = []
     for (const room of this.rooms.values()) {
       room.syncTurnTimer(now)
+      // A paused table keeps its deadline in the past while frozen; it must not
+      // time anyone out until it is resumed.
+      if (room.game?.state.paused) continue
       if (room.turnDeadline !== null && now >= room.turnDeadline) due.push(room)
     }
     return due

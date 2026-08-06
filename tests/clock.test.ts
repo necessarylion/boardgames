@@ -83,6 +83,41 @@ describe('the turn clock', () => {
     expect(manager.dueTurns()).toEqual([timed])
   })
 
+  it('freezes the clock while paused and hands back the remaining time', () => {
+    const r = room(60)
+    const now = 1_000_000
+    r.syncTurnTimer(now)
+    expect(r.turnDeadline).toBe(now + 60_000)
+
+    // Pause twenty seconds in, with forty left.
+    r.game!.pause(0)
+    r.syncTurnTimer(now + 20_000)
+    expect(r.stateFor('token-a').turnMsLeft).toBe(40_000)
+
+    // No amount of wall-clock time while paused runs the clock down.
+    r.syncTurnTimer(now + 5_000_000)
+    expect(r.stateFor('token-a').turnMsLeft).toBe(40_000)
+
+    // Resume an hour later: the player still has exactly their forty seconds.
+    r.game!.resume(0)
+    r.syncTurnTimer(now + 3_600_000)
+    expect(r.turnDeadline).toBe(now + 3_600_000 + 40_000)
+  })
+
+  it('never reports a paused room as overdue', () => {
+    const manager = new RoomManager()
+    const r = manager.create()
+    r.addSeat('token-a', 'Ada')
+    r.addSeat('token-b', 'Bo')
+    r.options = { ...DEFAULT_OPTIONS, randomHands: true, turnSeconds: 30 }
+    r.start()
+    manager.dueTurns()
+
+    r.game!.pause(0)
+    r.turnDeadline = Date.now() - 1
+    expect(manager.dueTurns()).toEqual([])
+  })
+
   it('stops once the game is over', () => {
     const r = room(30)
     let guard = 0

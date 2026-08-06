@@ -89,6 +89,14 @@ const prompt = computed(() => {
       >
         {{ t('hand.undo') }}
       </button>
+      <button
+        v-if="game.canRedraw"
+        class="btn ghost small"
+        :title="t('hand.redraw.hint')"
+        @click="game.redrawHand()"
+      >
+        {{ t('hand.redraw') }}
+      </button>
       <button class="btn" :disabled="!game.canEndTurn" @click="game.endTurn()">
         {{ t('hand.endTurn') }}
       </button>

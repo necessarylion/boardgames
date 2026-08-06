@@ -82,6 +82,8 @@ const state: ClientState = {
   draftPool: [],
   canEndTurn: false,
   canUndo: false,
+  canRedraw: false,
+  paused: false,
   turnMsLeft: null,
 }
 

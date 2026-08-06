@@ -111,6 +111,11 @@ export const en = {
   'game.hideInfo': 'Hide',
   'game.showInfo': 'Info',
   'game.spectating': 'You are watching this table. Captured pieces stay hidden until the game ends.',
+  'game.pause': 'Pause',
+  'game.resume': 'Resume',
+  'game.paused.badge': 'Paused',
+  'game.paused.title': 'Game paused',
+  'game.paused.body': 'Play is suspended for everyone. Any player can resume the game.',
 
   // --- board ---------------------------------------------------------------
   'board.label': 'Samurai game board',
@@ -134,6 +139,9 @@ export const en = {
   'hand.empty': 'No tiles left.',
   'hand.undo': 'Take back',
   'hand.undo.hint': 'Return the last tile you placed to your hand. Only until you end your turn.',
+  'hand.redraw': 'Redraw hand',
+  'hand.redraw.hint':
+    'Shuffle your hand back into your stack and draw a fresh one. Free, but only once a turn and from round two — you still take your turn as normal.',
   'hand.cancel': 'Cancel',
   'hand.endTurn': 'End turn',
 

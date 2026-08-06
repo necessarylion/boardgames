@@ -503,3 +503,80 @@ describe('a full game', () => {
     expect(onBoard + captured + game.state.setAside.length).toBe(39)
   })
 })
+
+describe('pausing the table', () => {
+  it('blocks every action while paused, whoever is on the clock', () => {
+    const game = newGame()
+    // A player who is not the current one can still pause the table.
+    expect(game.pause(1).ok).toBe(true)
+    expect(game.state.paused).toBe(true)
+
+    const tile = findInHand(game, 0, (t) => t.kind === 'caste' && !t.fast)!
+    const space = legalPlacements(game.view, tile)[0]
+    expect(game.playTile(0, tile.id, space)).toEqual({ ok: false, error: 'The game is paused.' })
+    expect(game.endTurn(0).ok).toBe(false)
+
+    // Pausing again is refused; resuming reopens the board.
+    expect(game.pause(0).ok).toBe(false)
+    expect(game.resume(0).ok).toBe(true)
+    expect(game.state.paused).toBe(false)
+    expect(game.playTile(0, tile.id, space).ok).toBe(true)
+  })
+
+  it('cannot be paused before the game is under way', () => {
+    const drafting = new Game(2, { ...DEFAULT_OPTIONS, randomHands: false }, 5)
+    expect(drafting.state.phase).toBe('draft')
+    expect(drafting.pause(0).ok).toBe(false)
+    expect(drafting.resume(0).ok).toBe(false)
+  })
+})
+
+describe('redrawing a hand', () => {
+  it('is withheld in the opening round', () => {
+    const game = newGame()
+    expect(game.state.turnNumber).toBe(1)
+    expect(game.canRedraw(0)).toBe(false)
+    expect(game.redrawHand(0).ok).toBe(false)
+  })
+
+  it('trades the whole hand for a fresh draw without ending the turn, from round two', () => {
+    const game = newGame()
+    takeTurn(game) // seat 0
+    takeTurn(game) // seat 1 — play comes back to seat 0 in round two
+    expect(game.state.turnNumber).toBe(2)
+    expect(game.state.current).toBe(0)
+    expect(game.canRedraw(0)).toBe(true)
+
+    const poolSize = game.state.players[0].hand.length + game.state.players[0].stack.length
+    expect(game.redrawHand(0).ok).toBe(true)
+
+    // Still seat 0's turn, and the pool is conserved: a redraw hands out no more
+    // tiles than a normal refill would.
+    expect(game.state.current).toBe(0)
+    const after = game.state.players[0].hand
+    expect(after).toHaveLength(Math.min(STARTING_HAND_SIZE, poolSize))
+    expect(after.length + game.state.players[0].stack.length).toBe(poolSize)
+
+    // Only once a turn — and the player still takes their turn as normal.
+    expect(game.canRedraw(0)).toBe(false)
+    expect(game.redrawHand(0).ok).toBe(false)
+    const tile = findInHand(game, 0, (t) => t.kind === 'caste' && !t.fast)!
+    expect(game.playTile(0, tile.id, legalPlacements(game.view, tile)[0]).ok).toBe(true)
+    expect(game.endTurn(0).ok).toBe(true)
+
+    // The allowance comes back on the next turn.
+    takeTurn(game) // seat 1
+    expect(game.state.current).toBe(0)
+    expect(game.canRedraw(0)).toBe(true)
+  })
+
+  it('refuses once a tile has been placed this turn', () => {
+    const game = newGame()
+    takeTurn(game)
+    takeTurn(game)
+    const tile = findInHand(game, 0, (t) => t.kind === 'caste' && !t.fast)!
+    expect(game.playTile(0, tile.id, legalPlacements(game.view, tile)[0]).ok).toBe(true)
+    expect(game.canRedraw(0)).toBe(false)
+    expect(game.redrawHand(0).ok).toBe(false)
+  })
+})
