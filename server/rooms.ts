@@ -264,6 +264,7 @@ export class Room {
         turnNumber: 0,
         placedThisTurn: [],
         lastPlaced: [],
+        sinceYourTurn: [],
         canUndo: false,
         playedNonFast: false,
         setAside: [],
@@ -294,6 +295,11 @@ export class Room {
       turnNumber: s.turnNumber,
       placedThisTurn: s.placedThisTurn,
       lastPlaced: s.lastPlaced,
+      // Public information, but answered per viewer: a seated player gets their
+      // own bucket, a spectator the union, which is the last full lap of the
+      // table. The union needs deduping — one placement lands in every other
+      // seat's bucket.
+      sinceYourTurn: seat ? [...s.unseenPlaced[seat.id]] : [...new Set(s.unseenPlaced.flat())],
       // Only the player whose turn it is can take anything back, so the flag is
       // false for everyone else and the button never appears for them.
       canUndo: seat?.id === s.current && s.phase === 'play' && s.undoStack.length > 0,

@@ -36,6 +36,19 @@ function playOut(game: Game) {
   return game
 }
 
+/** Play one placeable tile for whoever is on the clock, and end their turn. */
+function takeTurn(game: Game): string[] {
+  const seat = game.state.current
+  const tile = game.state.players[seat].hand
+    .map(tileFromId)
+    .filter((t) => t.kind !== 'switch' && t.kind !== 'move')
+    .find((t) => legalPlacements(game.view, t).length > 0)!
+  const space = legalPlacements(game.view, tile)[0]
+  expect(game.playTile(seat, tile.id, space).ok).toBe(true)
+  expect(game.endTurn(seat).ok).toBe(true)
+  return [space]
+}
+
 /** First tile in a player's hand matching a predicate. */
 function findInHand(game: Game, playerId: number, match: (t: Tile) => boolean): Tile | undefined {
   return game.state.players[playerId].hand.map(tileFromId).find(match)
@@ -148,6 +161,51 @@ describe('turn structure', () => {
     game.playTile(1, next.id, nextSpace)
     game.endTurn(1)
     expect(game.state.lastPlaced).toEqual([nextSpace])
+  })
+
+  it('holds every play for each player until they have had their own turn', () => {
+    const game = newGame(4)
+    const a = takeTurn(game)
+    const b = takeTurn(game)
+    const c = takeTurn(game)
+
+    // Seat 3 has been waiting through all three; seat 0 has played since the
+    // first of them, so that one is no longer news to them.
+    expect(game.state.unseenPlaced[3]).toEqual([...a, ...b, ...c])
+    expect(game.state.unseenPlaced[0]).toEqual([...b, ...c])
+    expect(game.state.unseenPlaced[2]).toEqual([])
+
+    const d = takeTurn(game)
+    expect(game.state.unseenPlaced[3]).toEqual([])
+    expect(game.state.unseenPlaced[0]).toEqual([...b, ...c, ...d])
+  })
+
+  it('counts a turn that places nothing as having seen the board', () => {
+    const game = newGame(3)
+    const first = takeTurn(game)
+    expect(game.state.unseenPlaced[1]).toEqual(first)
+
+    // Nothing playable is the one way a turn ends without touching the board.
+    game.state.players[1].hand = []
+    expect(game.canEndTurn(1)).toBe(true)
+    expect(game.endTurn(1).ok).toBe(true)
+
+    expect(game.state.unseenPlaced[1]).toEqual([])
+    expect(game.state.unseenPlaced[2]).toEqual(first)
+  })
+
+  it('passes on the final turn of the game like any other', () => {
+    const game = playOut(newGame(3))
+    expect(game.state.phase).toBe('over')
+    expect(game.state.lastPlaced.length).toBeGreaterThan(0)
+
+    // The game ends before the turn passes on, so `current` is still whoever
+    // closed it out.
+    const ender = game.state.current
+    expect(game.state.unseenPlaced[ender]).toEqual([])
+    for (const seat of [0, 1, 2].filter((id) => id !== ender)) {
+      expect(game.state.unseenPlaced[seat]).toEqual(expect.arrayContaining(game.state.lastPlaced))
+    }
   })
 
   it('refills the hand to five at the end of a turn', () => {

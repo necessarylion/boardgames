@@ -87,6 +87,12 @@ export interface GameState {
    */
   lastPlaced: string[]
   /**
+   * Indexed by seat: the spaces every *other* player has committed since that
+   * seat's own turn last closed. `lastPlaced` holds one turn only, so at a
+   * five-player table four plays go unmarked before play comes back round.
+   */
+  unseenPlaced: string[][]
+  /**
    * What the current player has done this turn, newest last, so a misclick can
    * be taken back. Emptied by `endTurn`, which is the point everything commits:
    * captures resolve, hands refill, and the board is no longer yours to edit.
@@ -146,6 +152,7 @@ export class Game {
       turnNumber: 1,
       placedThisTurn: [],
       lastPlaced: [],
+      unseenPlaced: Array.from({ length: playerCount }, () => []),
       undoStack: [],
       playedNonFast: false,
       setAside: [],
@@ -182,8 +189,15 @@ export class Game {
     // Snapshots written before undo existed have no stack; an empty one simply
     // means "nothing to take back", which is correct for a restored room. The
     // same goes for the last turn's placements: an empty list just means no
-    // tile is marked on the board.
-    game.state = { ...state, undoStack: state.undoStack ?? [], lastPlaced: state.lastPlaced ?? [] }
+    // tile is marked on the board. The buckets are rebuilt to the seat count
+    // rather than defaulted whole, so a short or missing list still gives every
+    // seat one.
+    game.state = {
+      ...state,
+      undoStack: state.undoStack ?? [],
+      lastPlaced: state.lastPlaced ?? [],
+      unseenPlaced: Array.from({ length: state.playerCount }, (_, i) => state.unseenPlaced?.[i] ?? []),
+    }
     return game
   }
 
@@ -408,6 +422,15 @@ export class Game {
     // A move leaves a tile at both ends, so both spaces stay marked; a turn that
     // placed nothing clears the mark rather than leaving the last one to linger.
     this.state.lastPlaced = this.state.placedThisTurn.filter((id) => id in this.state.placed)
+
+    // Hand this turn to everyone who has not acted since, and clear the ending
+    // player's own bucket — they have just had their look at the board. Written
+    // here rather than after the end-of-game check below, which returns early:
+    // the final turn has to reach the table like any other.
+    for (let seat = 0; seat < this.state.playerCount; seat++) {
+      this.state.unseenPlaced[seat] =
+        seat === playerId ? [] : [...this.state.unseenPlaced[seat], ...this.state.lastPlaced]
+    }
 
     this.resolveCaptures()
     this.refreshHand(playerId)

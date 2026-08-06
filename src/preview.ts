@@ -71,6 +71,7 @@ const state: ClientState = {
   turnNumber: s.turnNumber,
   placedThisTurn: s.placedThisTurn,
   lastPlaced: s.lastPlaced,
+  sinceYourTurn: [...s.unseenPlaced[0]],
   playedNonFast: s.playedNonFast,
   setAside: s.setAside,
   log: s.log,

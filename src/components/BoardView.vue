@@ -69,6 +69,18 @@ const freshlyPlaced = computed(() => {
   return new Set(ids.filter((id) => id in placed.value))
 })
 
+/*
+ * Everything the rest of the table has played since this viewer's own turn
+ * closed — at five and six players that is four or five moves they would
+ * otherwise have to spot for themselves. The turn that just ended is in here
+ * too, under the brighter mark that will shortly fade off it.
+ */
+const earlierPlaced = computed(() => {
+  const state = game.state
+  if (!state || state.phase !== 'play') return new Set<string>()
+  return new Set(state.sinceYourTurn.filter((id) => id in placed.value))
+})
+
 /** Offsets for laying out a settlement's caste pieces inside its hex. */
 function pieceSlots(count: number): Point[] {
   if (count <= 1) return [{ x: 0, y: 2 }]
@@ -221,6 +233,14 @@ function isSurroundedNow(space: Space): boolean {
             />
           </g>
         </template>
+
+        <!-- plays since your own turn ended; decoration, so no clicks -->
+        <polygon
+          v-if="earlierPlaced.has(cell.space.id)"
+          :points="cell.points"
+          class="tile-earlier"
+          :style="{ '--mark': PLAYER_COLOURS[ownerColour(cell.space.id)].fill }"
+        />
 
         <!-- where the last tile went; decoration, so no clicks -->
         <polygon
@@ -550,9 +570,29 @@ function isSurroundedNow(space: Space): boolean {
 }
 
 /*
+ * The rest of the lap: the same colour as the fresh mark, and washed across the
+ * whole hex so it carries at the zoom the board opens at, where a ring alone is
+ * a hairline. The stroke stays narrower than the fresh mark's 3.4 so it sits
+ * entirely under it and is simply revealed when that fades.
+ *
+ * No animation — this one stands until your own next turn closes, and five of
+ * them breathing at once would be a strobe.
+ */
+.tile-earlier {
+  fill: var(--mark);
+  fill-opacity: 0.22;
+  stroke: var(--mark);
+  stroke-width: 2.8;
+  stroke-opacity: 0.5;
+  pointer-events: none;
+  filter: drop-shadow(0 0 2px var(--mark));
+}
+
+/*
  * A ring in the placing player's colour, breathing so it reads from across the
- * room, and gone five seconds later — long enough to catch the eye, short
- * enough that the board is not left wearing a mark for the rest of the turn.
+ * room, and gone five seconds later — long enough to say which move is the
+ * newest, after which the steady ring underneath is what the hex is left
+ * wearing.
  * It stays inside the hex: a ring that grew past the edge would sit over the
  * neighbouring tiles and look like it marked them too.
  *
