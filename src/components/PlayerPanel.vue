@@ -4,7 +4,7 @@ import GameIcon from './GameIcon.vue'
 import { CASTE_COLOURS, PLAYER_COLOURS } from '@shared/colours'
 import { setAsideLimit } from '@shared/rules'
 import { CASTES, type Caste } from '@shared/types'
-import { casteName, castePiece, t } from '@/i18n'
+import { casteName, castePiece, t, teamName } from '@/i18n'
 import { useGameStore } from '@/stores/game'
 
 const game = useGameStore()
@@ -95,6 +95,13 @@ function capturedCounts(captured: Caste[] | null): Record<Caste, number> | null 
             <span class="player-name">{{ player.name }}</span>
             <span v-if="player.id === game.you" class="badge">{{ t('lobby.badge.you') }}</span>
             <span v-if="!player.connected" class="badge away">{{ t('lobby.badge.away') }}</span>
+            <span
+              v-if="game.isTeamGame"
+              class="badge team"
+              :class="`team-${game.teamOfPlayer(player.id)}`"
+            >
+              {{ teamName(game.teamOfPlayer(player.id)) }}
+            </span>
           </div>
           <div class="player-stats tiny muted">
             {{
@@ -248,6 +255,25 @@ h3 {
 .badge.away {
   background: rgba(120, 120, 120, 0.2);
   color: var(--ink-soft);
+}
+
+.badge.team {
+  margin-left: auto;
+}
+
+.badge.team-0 {
+  background: rgba(30, 111, 134, 0.18);
+  color: #0f3f52;
+}
+
+.badge.team-1 {
+  background: rgba(168, 51, 111, 0.18);
+  color: #651a41;
+}
+
+.badge.team-2 {
+  background: rgba(47, 122, 69, 0.18);
+  color: #17482a;
 }
 
 .player-stats {

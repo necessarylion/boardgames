@@ -3,17 +3,30 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import GameIcon from './GameIcon.vue'
 import { PLAYER_COLOURS } from '@shared/colours'
 import { CASTES } from '@shared/types'
-import { casteName, castePiece, t } from '@/i18n'
+import { casteName, castePiece, t, teamName } from '@/i18n'
 import { useGameStore } from '@/stores/game'
 
 const game = useGameStore()
 
 const result = computed(() => game.state?.result ?? null)
+/** Team play settles between sides; a free-for-all between the players. */
+const isTeam = computed(() => !!result.value?.teams)
+
 const rows = computed(() =>
   (result.value?.breakdown ?? []).map((entry) => ({
     entry,
     player: game.players.find((p) => p.id === entry.playerId)!,
     won: result.value!.winners.includes(entry.playerId),
+  })),
+)
+
+const teamRows = computed(() =>
+  (result.value?.teams ?? []).map((tb) => ({
+    tb,
+    members: tb.members
+      .map((id) => game.players.find((p) => p.id === id))
+      .filter((p): p is NonNullable<typeof p> => !!p),
+    won: tb.members.some((id) => result.value!.winners.includes(id)),
   })),
 )
 
@@ -23,6 +36,18 @@ const youWon = computed(
 )
 
 const headline = computed(() => {
+  if (!result.value) return ''
+  if (isTeam.value) {
+    const winning = teamRows.value.filter((r) => r.won)
+    if (youWon.value) {
+      const others = winning.filter((r) => r.tb.team !== game.myTeam).map((r) => teamName(r.tb.team))
+      return others.length ? t('over.youShareWin', { names: others.join(t('over.and')) }) : t('over.youTeamWin')
+    }
+    const names = winning.map((r) => teamName(r.tb.team))
+    return names.length === 1
+      ? t('over.teamWins', { name: names[0] })
+      : t('over.teamShared', { names: names.join(t('over.and')) })
+  }
   const winners = rows.value.filter((r) => r.won)
   const name = (row: (typeof winners)[number]) => row.player?.name ?? t('over.unknownPlayer')
   if (youWon.value) {
@@ -128,7 +153,35 @@ onUnmounted(stopVolleys)
       <!-- The reason is worded by the shared engine, so it stays in English. -->
       <p class="reason">{{ result.reason }}</p>
 
-      <table class="scores">
+      <table v-if="isTeam" class="scores">
+        <thead>
+          <tr>
+            <th>{{ t('over.teamCol') }}</th>
+            <th v-for="caste in CASTES" :key="caste" :title="casteName(caste)">
+              <GameIcon :name="caste" :size="17" />
+              <span class="sr">{{ castePiece(caste) }}</span>
+            </th>
+            <th>{{ t('over.leaderTokens') }}</th>
+            <th>{{ t('over.total') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="row in teamRows" :key="row.tb.team" :class="{ winner: row.won }">
+            <td class="who">
+              <span class="team-tag" :class="`team-${row.tb.team}`">{{ teamName(row.tb.team) }}</span>
+              <span class="members tiny muted">{{ row.members.map((m) => m.name).join(', ') }}</span>
+            </td>
+            <td v-for="caste in CASTES" :key="caste" class="num">
+              {{ row.tb.counts[caste] }}
+              <span v-if="row.tb.leaderTokens.includes(caste)" class="token" :title="t('over.leader')">*</span>
+            </td>
+            <td class="num">{{ row.tb.leaderTokens.length }}</td>
+            <td class="num total">{{ row.tb.totalPieces }}</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <table v-else class="scores">
         <thead>
           <tr>
             <th>{{ t('over.player') }}</th>
@@ -338,6 +391,32 @@ h1 {
   align-items: center;
   gap: 0.45rem;
   font-weight: 600;
+}
+
+.team-tag {
+  padding: 0.12rem 0.45rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.team-tag.team-0 {
+  background: rgba(30, 111, 134, 0.18);
+  color: #0f3f52;
+}
+
+.team-tag.team-1 {
+  background: rgba(168, 51, 111, 0.18);
+  color: #651a41;
+}
+
+.team-tag.team-2 {
+  background: rgba(47, 122, 69, 0.18);
+  color: #17482a;
+}
+
+.members {
+  font-weight: 400;
 }
 
 .swatch {

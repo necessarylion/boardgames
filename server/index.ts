@@ -301,11 +301,16 @@ function sanitiseOptions(options: unknown) {
   // stale or hand-rolled client can never leave a room unable to deal a board.
   const shape = BOARD_SHAPES.find((s) => s === o.boardShape) ?? DEFAULT_BOARD_SHAPE
   const seconds = TURN_SECONDS_CHOICES.find((s) => s === Number(o.turnSeconds)) ?? 0
+  // The number of sides, or 0 for a free-for-all; anything under two is neither.
+  // The start check is what holds it to a split that fits the player count.
+  const teamsRaw = typeof o.teams === 'boolean' ? (o.teams ? 2 : 0) : Math.floor(Number(o.teams))
+  const teams = Number.isFinite(teamsRaw) && teamsRaw >= 2 ? teamsRaw : 0
   return {
     randomHands: Boolean(o.randomHands),
     openInformation: Boolean(o.openInformation),
     boardShape: shape,
     turnSeconds: seconds,
+    teams,
   }
 }
 

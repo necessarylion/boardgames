@@ -9,6 +9,7 @@ import {
   legalPlacements,
   scoreGame,
   setAsideLimit,
+  teamArrangements,
 } from '../shared/rules'
 import type { Board } from '../shared/board'
 import { TILE_SET, tileFromId, tileId } from '../shared/tiles'
@@ -157,6 +158,38 @@ describe('resolving a contest', () => {
   })
 })
 
+describe('resolving a contest in teams', () => {
+  // Four seats split by parity: team 0 is {0, 2}, team 1 is {1, 3}.
+  const teamFixture = () => ({ ...fixture(4), teams: 2 })
+
+  it('pools teammates influence so a side takes the piece', () => {
+    const f = teamFixture()
+    const [a, b, c] = f.board.spaces[VILLAGE].landNeighbours
+    place(f, a, 0, RICE_2) // team 0: 2 commerce
+    place(f, c, 2, RICE_2) // team 0: +2 = 4 commerce
+    place(f, b, 1, SAMURAI_2) // team 1: 2 commerce
+    // Team 0 out-influences team 1; the tied members hand it to the lower seat.
+    expect(contest(f, VILLAGE, 'rice').winner).toBe(0)
+  })
+
+  it('hands the piece to the teammate who pushed hardest on it', () => {
+    const f = teamFixture()
+    const [a, b, c] = f.board.spaces[VILLAGE].landNeighbours
+    place(f, a, 0, SAMURAI_2) // seat 0, team 0: 2 religion
+    place(f, c, 2, BUDDHA_3) // seat 2, team 0: 3 religion
+    place(f, b, 1, SAMURAI_2) // seat 1, team 1: 2 religion
+    expect(contest(f, VILLAGE, 'buddha').winner).toBe(2)
+  })
+
+  it('sets a piece aside when the two sides tie on pooled influence', () => {
+    const f = teamFixture()
+    const [a, b] = f.board.spaces[VILLAGE].landNeighbours
+    place(f, a, 0, RICE_2)
+    place(f, b, 1, RICE_2)
+    expect(contest(f, VILLAGE, 'rice').winner).toBeNull()
+  })
+})
+
 describe('placement legality', () => {
   it('keeps ships on sea and everything else on land', () => {
     const f = fixture()
@@ -283,5 +316,67 @@ describe('scoring', () => {
       player(1, ['rice', 'rice', 'buddha', 'castle']),
     ])
     expect(result.winners).toEqual([0, 1])
+  })
+})
+
+describe('team scoring', () => {
+  const player = (id: number, captured: Caste[]) => ({ id, captured })
+
+  it('pools teammates pieces for leader tokens and the winning side', () => {
+    // Teams by parity: {0, 2} against {1, 3}.
+    const result = scoreGame(
+      [
+        player(0, ['buddha', 'rice']),
+        player(1, ['castle']),
+        player(2, ['buddha', 'castle']),
+        player(3, ['rice']),
+      ],
+      2,
+    )
+    // Team 0 holds buddha 2, rice 1, castle 1; team 1 holds rice 1, castle 1.
+    // Only buddha is a strict majority, and it is team 0's.
+    expect(result.teams).not.toBeNull()
+    const team0 = result.teams!.find((tm) => tm.team === 0)!
+    expect(team0.leaderTokens).toEqual(['buddha'])
+    expect(result.unclaimed).toEqual(['rice', 'castle'])
+    expect(result.winners.slice().sort()).toEqual([0, 2])
+    // A side's token belongs to the side, not to either member's row.
+    expect(result.breakdown.every((b) => b.leaderTokens.length === 0)).toBe(true)
+  })
+
+  it('leaves a free-for-all game with no team breakdown', () => {
+    const result = scoreGame([player(0, ['buddha']), player(1, ['rice'])])
+    expect(result.teams).toBeNull()
+  })
+
+  it('pools three sides of two when six play in 2 v 2 v 2', () => {
+    // Sides by parity of three: {0,3}, {1,4}, {2,5}.
+    const result = scoreGame(
+      [
+        player(0, ['buddha', 'buddha']),
+        player(1, ['rice']),
+        player(2, ['castle']),
+        player(3, ['buddha']),
+        player(4, ['rice']),
+        player(5, []),
+      ],
+      3,
+    )
+    expect(result.teams).toHaveLength(3)
+    const sideA = result.teams!.find((tm) => tm.team === 0)!
+    // Side A holds three buddha, a clear lead, and wins on that one token.
+    expect(sideA.counts.buddha).toBe(3)
+    expect(sideA.leaderTokens).toEqual(['buddha'])
+    expect(result.winners.slice().sort()).toEqual([0, 3])
+  })
+})
+
+describe('team arrangements', () => {
+  it('lists the equal splits a player count allows', () => {
+    expect(teamArrangements(4)).toEqual([2])
+    expect(teamArrangements(6)).toEqual([2, 3])
+    expect(teamArrangements(5)).toEqual([])
+    expect(teamArrangements(2)).toEqual([])
+    expect(teamArrangements(3)).toEqual([])
   })
 })

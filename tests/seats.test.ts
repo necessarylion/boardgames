@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { COLOUR_ORDER } from '../shared/colours'
+import { DEFAULT_OPTIONS } from '../shared/engine'
 import { Room } from '../server/rooms'
 import { MAX_PLAYERS } from '../shared/types'
 
@@ -51,5 +52,47 @@ describe('seat colours', () => {
     room.abandon()
 
     expect(room.seats.map((s) => s.colour)).toEqual(before)
+  })
+})
+
+describe('team play', () => {
+  function teamRoom(seatCount: number, teams: number) {
+    const room = new Room('TEAM')
+    for (let i = 0; i < seatCount; i++) room.addSeat(`token-${i}`, `P${i}`)
+    room.options = { ...DEFAULT_OPTIONS, randomHands: true, teams }
+    return room
+  }
+
+  it('only starts a split that divides the table into equal sides', () => {
+    expect(teamRoom(3, 2).start()).not.toBeNull() // three into two is uneven
+    expect(teamRoom(5, 2).start()).not.toBeNull()
+    expect(teamRoom(6, 4).start()).not.toBeNull() // four sides of one and a half
+    expect(teamRoom(4, 2).start()).toBeNull() // 2 v 2
+    expect(teamRoom(6, 2).start()).toBeNull() // 3 v 3
+    expect(teamRoom(6, 3).start()).toBeNull() // 2 v 2 v 2
+  })
+
+  it('opens captured pieces to teammates but not to opponents', () => {
+    const room = teamRoom(4, 2)
+    expect(room.start()).toBeNull()
+    // Seats 0 and 2 are one side; 1 and 3 the other.
+    room.game!.state.players[2].captured.push('buddha')
+    for (const seat of room.seats) seat.connected = true
+
+    const view = room.stateFor('token-0')
+    expect(view.players.find((p) => p.id === 2)!.captured).toEqual(['buddha'])
+    expect(view.players.find((p) => p.id === 1)!.captured).toBeNull()
+  })
+
+  it('splits six into three sides of two when asked', () => {
+    const room = teamRoom(6, 3)
+    expect(room.start()).toBeNull()
+    // Seats 0 and 3 share a side; seat 1 is on another.
+    room.game!.state.players[3].captured.push('rice')
+    for (const seat of room.seats) seat.connected = true
+
+    const view = room.stateFor('token-0')
+    expect(view.players.find((p) => p.id === 3)!.captured).toEqual(['rice'])
+    expect(view.players.find((p) => p.id === 1)!.captured).toBeNull()
   })
 })

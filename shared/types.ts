@@ -139,9 +139,22 @@ export interface ScoreBreakdown {
   totalPieces: number
 }
 
+/** A team's pooled totals, the unit leader tokens are decided on in team play. */
+export interface TeamBreakdown {
+  team: number
+  /** Seat ids on this team, in turn order. */
+  members: number[]
+  counts: Record<Caste, number>
+  leaderTokens: Caste[]
+  otherCastePieces: number
+  totalPieces: number
+}
+
 export interface GameResult {
   winners: number[]
   breakdown: ScoreBreakdown[]
+  /** Pooled per-team totals in a team game; null in a free-for-all. */
+  teams: TeamBreakdown[] | null
   /** Castes whose leader token went unclaimed because of a tie. */
   unclaimed: Caste[]
   reason: string

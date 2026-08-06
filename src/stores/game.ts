@@ -16,6 +16,7 @@ import {
   legalPlacements,
   moveDestinations,
   movableTiles,
+  teamOf,
   type PieceRef,
   type RulesView,
 } from '@shared/rules'
@@ -385,12 +386,19 @@ export const useGameStore = defineStore('game', () => {
     return out
   })
 
+  /** How many sides the table plays in; a free-for-all reads as zero. */
+  const teamCount = computed(() => state.value?.options.teams ?? 0)
+  const isTeamGame = computed(() => teamCount.value >= 2)
+  const teamOfPlayer = (id: number) => teamOf(id, teamCount.value)
+  const myTeam = computed(() => (you.value === null ? null : teamOfPlayer(you.value)))
+
   const view = computed<RulesView>(() => ({
     board: board.value,
     pieces: state.value?.pieces ?? {},
     placed: state.value?.placed ?? {},
     tiles: tiles.value,
     playerCount: state.value?.playerCount ?? 0,
+    teams: teamCount.value,
   }))
 
   function isTilePlayable(tile: Tile): boolean {
@@ -629,6 +637,10 @@ export const useGameStore = defineStore('game', () => {
     hand,
     tiles,
     view,
+    teamCount,
+    isTeamGame,
+    teamOfPlayer,
+    myTeam,
     draftPool,
     draftPicks,
     interaction,

@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 
 import { DEFAULT_OPTIONS, Game, type GameOptions, type GameState } from '../shared/engine'
 import type { ClientState, PublicPlayer } from '../shared/protocol'
+import { teamArrangements, teamOf } from '../shared/rules'
 import { COLOUR_ORDER } from '../shared/colours'
 import { Rng, randomSeed } from '../shared/rng'
 import { MAX_PLAYERS, MIN_PLAYERS, type PlayerColour } from '../shared/types'
@@ -152,9 +153,19 @@ export class Room {
     this.touch()
   }
 
+  /** Team play divides the table into equal sides, so the split has to fit. */
+  private teamsError(playerCount: number): string | null {
+    if (this.options.teams && !teamArrangements(playerCount).includes(this.options.teams)) {
+      return 'That team split does not divide the players into equal sides.'
+    }
+    return null
+  }
+
   start(): string | null {
     if (this.started) return 'The game has already started.'
     if (this.seats.length < MIN_PLAYERS) return 'At least two players are needed.'
+    const teams = this.teamsError(this.seats.length)
+    if (teams) return teams
     this.game = new Game(this.seats.length, this.options, (Math.random() * 0xffffffff) >>> 0)
     this.touch()
     return null
@@ -167,6 +178,8 @@ export class Room {
     if (this.seats.length < MIN_PLAYERS) {
       return 'Not enough players are still connected to start another game.'
     }
+    const teams = this.teamsError(this.seats.length)
+    if (teams) return teams
     this.game = new Game(this.seats.length, this.options, (Math.random() * 0xffffffff) >>> 0)
     this.touch()
     return null
@@ -258,9 +271,13 @@ export class Room {
     const seat = this.seatByToken(token)
     const game = this.game
     const open = this.options.openInformation || game?.state.phase === 'over'
+    // Teammates play with their captures open to one another, so a side can track
+    // its running total; everyone else's stay behind the screen as before.
+    const teams = game ? this.options.teams : 0
 
     const players: PublicPlayer[] = this.seats.map((s) => {
       const p = game?.state.players[s.id]
+      const sameTeam = !!seat && teams > 0 && teamOf(seat.id, teams) === teamOf(s.id, teams)
       return {
         id: s.id,
         name: s.name,
@@ -269,7 +286,7 @@ export class Room {
         handCount: p?.hand.length ?? 0,
         stackCount: p?.stack.length ?? 0,
         capturedCount: p?.captured.length ?? 0,
-        captured: open || (seat && seat.id === s.id) ? [...(p?.captured ?? [])] : null,
+        captured: open || (seat && seat.id === s.id) || sameTeam ? [...(p?.captured ?? [])] : null,
         ready: p?.draftReady ?? false,
       }
     })

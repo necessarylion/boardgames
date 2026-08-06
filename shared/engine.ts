@@ -36,6 +36,13 @@ export interface GameOptions {
   boardShape: BoardShape
   /** Seconds a player has to take their turn; 0 leaves the table untimed. */
   turnSeconds: number
+  /**
+   * How many sides the table plays in, or 0 for a free-for-all. Seats deal round
+   * the sides in turn (A, B, A, B…), so the split has to divide the players into
+   * equal teams of at least two — 2 at four players, 2 or 3 at six. The server
+   * holds a table to a valid split at the start.
+   */
+  teams: number
 }
 
 /** Shot-clock lengths a table can be set up with. 0 is no clock at all. */
@@ -46,6 +53,7 @@ export const DEFAULT_OPTIONS: GameOptions = {
   openInformation: false,
   boardShape: DEFAULT_BOARD_SHAPE,
   turnSeconds: 0,
+  teams: 0,
 }
 
 export interface EnginePlayer {
@@ -224,6 +232,7 @@ export class Game {
       placed: this.state.placed,
       tiles: this.tiles,
       playerCount: this.state.playerCount,
+      teams: this.state.options.teams,
     }
   }
 
@@ -466,7 +475,8 @@ export class Game {
 
     const end = checkEnd(this.view, this.state.setAside)
     if (end.over) {
-      this.state.result = { ...scoreGame(this.state.players), reason: end.reason }
+      const scored = scoreGame(this.state.players, this.state.options.teams)
+      this.state.result = { ...scored, reason: end.reason }
       this.log(null, end.reason)
       this.state.phase = 'over'
       return

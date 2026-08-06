@@ -69,6 +69,15 @@ export const my = {
   'option.turnClock.off': 'ပိတ်',
   'option.turnClock.seconds': '{n}စက္ကန့်',
   'option.turnClock.minutes': '{n}မိနစ်',
+  'option.teams': 'အသင်းလိုက် ကစားခြင်း',
+  'option.teams.hint': '— သိမ်းပိုက်မှုနှင့် ဩဇာကို မျှဝေသော အညီအမျှ အသင်းများ၊ အောက်တွင် ခွဲဝေမှုကို ရွေးပါ',
+
+  // --- teams ---------------------------------------------------------------
+  'team.label': 'အသင်း {name}',
+  'lobby.teams.off': 'ပိတ်',
+  'lobby.teams.mode': '{mode} ကစားနေသည်။',
+  'lobby.teams.need': 'အသင်းလိုက်ကစားရန် အညီအမျှ ခွဲဝေနိုင်သော ကစားသမားအရေအတွက် — လေးဦး သို့မဟုတ် ခြောက်ဦး လိုအပ်သည်။',
+  'panel.teamCaptured': 'သင့်အသင်း သိမ်းပိုက်ရရှိထားသည်',
 
   // --- lobby ---------------------------------------------------------------
   'lobby.roomCode': 'အခန်းကုဒ်',
@@ -236,6 +245,10 @@ export const my = {
   'over.shared': '{names} တို့ ပူးတွဲအနိုင်ရရှိသည်',
   'over.youWin': 'မင်း အနိုင်ရပြီ!',
   'over.youShareWin': 'မင်း အနိုင်ရပြီ — {names} နဲ့ ပူးတွဲ!',
+  'over.teamWins': 'အသင်း {name} အနိုင်ရရှိသည်',
+  'over.youTeamWin': 'သင့်အသင်း အနိုင်ရပြီ!',
+  'over.teamShared': 'အသင်း {names} တို့ ပူးတွဲအနိုင်ရရှိသည်',
+  'over.teamCol': 'အသင်း',
   'over.and': ' နှင့် ',
   'over.unknownPlayer': 'မသိရှိသော ကစားသမား',
   'over.player': 'ကစားသမား',

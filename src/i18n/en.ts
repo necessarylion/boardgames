@@ -68,6 +68,15 @@ export const en = {
   'option.turnClock.off': 'Off',
   'option.turnClock.seconds': '{n}s',
   'option.turnClock.minutes': '{n}m',
+  'option.teams': 'Team play',
+  'option.teams.hint': '— equal sides sharing captures and influence; pick a split below',
+
+  // --- teams ---------------------------------------------------------------
+  'team.label': 'Team {name}',
+  'lobby.teams.off': 'Off',
+  'lobby.teams.mode': 'Playing {mode}.',
+  'lobby.teams.need': 'Team play needs a player count that splits into equal sides — four or six.',
+  'panel.teamCaptured': 'Your team has captured',
 
   // --- lobby ---------------------------------------------------------------
   'lobby.roomCode': 'Room code',
@@ -235,6 +244,10 @@ export const en = {
   'over.shared': '{names} share the victory',
   'over.youWin': 'You win!',
   'over.youShareWin': 'You win — shared with {names}!',
+  'over.teamWins': 'Team {name} wins',
+  'over.youTeamWin': 'Your team wins!',
+  'over.teamShared': 'Teams {names} share the victory',
+  'over.teamCol': 'Team',
   'over.and': ' and ',
   'over.unknownPlayer': 'Unknown',
   'over.player': 'Player',
