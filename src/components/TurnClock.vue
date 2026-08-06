@@ -27,9 +27,12 @@ watch(
 const ticker = setInterval(() => (now.value = Date.now()), 250)
 onUnmounted(() => clearInterval(ticker))
 
-const remaining = computed(() =>
-  deadlineAt.value === null ? null : Math.max(0, deadlineAt.value - now.value),
-)
+const remaining = computed(() => {
+  // Paused: the server freezes the remainder, so show that rather than letting
+  // the local ticker keep draining it between broadcasts.
+  if (game.isPaused) return game.state?.turnMsLeft ?? null
+  return deadlineAt.value === null ? null : Math.max(0, deadlineAt.value - now.value)
+})
 
 /** Rounded up, so the clock only shows 0 when the time really is gone. */
 const label = computed(() => {
@@ -38,7 +41,10 @@ const label = computed(() => {
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`
 })
 
-const urgent = computed(() => remaining.value !== null && remaining.value <= 10_000)
+// A frozen clock should not beat or flash red, however little time is left on it.
+const urgent = computed(
+  () => !game.isPaused && remaining.value !== null && remaining.value <= 10_000,
+)
 </script>
 
 <template>

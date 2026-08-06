@@ -77,10 +77,18 @@ onUnmounted(() => {
         >
           {{ t('game.round', { turn: round }) }}
         </span>
+        <span v-if="game.isPaused" class="paused-badge tiny">{{ t('game.paused.badge') }}</span>
         <TurnClock />
       </div>
       <div class="top-actions">
         <span class="tiny muted code">{{ t('game.room', { code: game.state?.code ?? '' }) }}</span>
+        <button
+          v-if="game.isSeated && game.phase === 'play'"
+          class="btn ghost small"
+          @click="game.togglePause()"
+        >
+          {{ game.isPaused ? t('game.resume') : t('game.pause') }}
+        </button>
         <button class="btn ghost small" @click="showRules = true">{{ t('game.rules') }}</button>
         <button class="btn ghost small sidebar-toggle" @click="showSidebar = !showSidebar">
           {{ showSidebar ? t('game.hideInfo') : t('game.showInfo') }}
@@ -94,6 +102,17 @@ onUnmounted(() => {
         <BoardView />
         <HandBar v-if="game.isSeated" />
         <p v-else class="spectating tiny muted">{{ t('game.spectating') }}</p>
+
+        <!-- Suspends the board for everyone; its own control is the way back. -->
+        <div v-if="game.isPaused" class="pause-veil">
+          <div class="pause-card">
+            <strong>{{ t('game.paused.title') }}</strong>
+            <p class="tiny muted">{{ t('game.paused.body') }}</p>
+            <button v-if="game.isSeated" class="btn" @click="game.togglePause()">
+              {{ t('game.resume') }}
+            </button>
+          </div>
+        </div>
       </div>
 
       <div class="sidebar" :class="{ open: showSidebar }">
@@ -214,6 +233,57 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  /* Anchors the pause veil, which covers the board and hand together. */
+  position: relative;
+}
+
+.paused-badge {
+  align-self: center;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  background: rgba(178, 58, 44, 0.16);
+  color: var(--vermillion-dark);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+/* A wash of the paper tone over the whole board, so it reads as held rather
+   than hidden. It swallows every click beneath it, which is the visible half of
+   the freeze the server also enforces. */
+.pause-veil {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(247, 243, 233, 0.72);
+  backdrop-filter: blur(1.5px);
+}
+
+.pause-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  max-width: 22rem;
+  padding: 1.3rem 1.6rem;
+  text-align: center;
+  border-radius: 12px;
+  border: 1px solid rgba(160, 137, 102, 0.4);
+  background: var(--paper);
+  box-shadow: var(--shadow-lg);
+}
+
+.pause-card strong {
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+}
+
+.pause-card p {
+  margin: 0;
 }
 
 .sidebar {

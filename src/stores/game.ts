@@ -394,7 +394,7 @@ export const useGameStore = defineStore('game', () => {
   }))
 
   function isTilePlayable(tile: Tile): boolean {
-    if (!isMyTurn.value) return false
+    if (!isMyTurn.value || isPaused.value) return false
     if (!tile.fast && state.value?.playedNonFast) return false
     if (tile.kind === 'switch') return hasAnySwitch(view.value)
     if (tile.kind === 'move') {
@@ -410,7 +410,7 @@ export const useGameStore = defineStore('game', () => {
 
   const highlightedSpaces = computed<string[]>(() => {
     const act = interaction.value
-    if (!isMyTurn.value) return []
+    if (!isMyTurn.value || isPaused.value) return []
     switch (act.mode) {
       case 'place':
         return legalPlacements(view.value, tileFromId(act.tileId))
@@ -434,7 +434,7 @@ export const useGameStore = defineStore('game', () => {
 
   const selectablePieces = computed<PieceRef[]>(() => {
     const act = interaction.value
-    if (!isMyTurn.value) return []
+    if (!isMyTurn.value || isPaused.value) return []
     if (act.mode === 'switch-first') {
       const refs = allPieceRefs()
       return refs.filter((ref) => refs.some((other) => canSwitch(view.value, ref, other)))
@@ -445,9 +445,13 @@ export const useGameStore = defineStore('game', () => {
     return []
   })
 
+  /** The table is suspended; nobody may act until any seated player resumes it. */
+  const isPaused = computed(() => state.value?.paused ?? false)
   const canEndTurn = computed(() => isMyTurn.value && (state.value?.canEndTurn ?? false))
   /** The server decides this; it is false for everyone but the active player. */
   const canUndo = computed(() => isMyTurn.value && (state.value?.canUndo ?? false))
+  /** The server gates this on the active player, round two, and no move made yet. */
+  const canRedraw = computed(() => state.value?.canRedraw ?? false)
   const mustPlace = computed(
     () => isMyTurn.value && (state.value?.placedThisTurn.length ?? 0) === 0,
   )
@@ -585,6 +589,21 @@ export const useGameStore = defineStore('game', () => {
     interaction.value = { mode: 'idle' }
   }
 
+  /** Trade the whole hand for a fresh draw — free, once a turn, from round two. */
+  function redrawHand() {
+    if (!canRedraw.value) return
+    send({ t: 'redraw' })
+    interaction.value = { mode: 'idle' }
+  }
+
+  /** Suspend or resume the table for everyone. Any seated player may do either. */
+  function togglePause() {
+    if (!isSeated.value) return
+    send({ t: isPaused.value ? 'resume' : 'pause' })
+    // A half-finished interaction cannot survive the freeze.
+    interaction.value = { mode: 'idle' }
+  }
+
   return {
     // connection
     connection,
@@ -618,6 +637,8 @@ export const useGameStore = defineStore('game', () => {
     selectablePieces,
     canEndTurn,
     canUndo,
+    canRedraw,
+    isPaused,
     mustPlace,
     capturedNotice,
     dismissCaptureNotice,
@@ -638,5 +659,7 @@ export const useGameStore = defineStore('game', () => {
     clickPiece,
     endTurn,
     undoPlacement,
+    redrawHand,
+    togglePause,
   }
 })

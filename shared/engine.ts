@@ -99,11 +99,19 @@ export interface GameState {
    */
   undoStack: UndoEntry[]
   playedNonFast: boolean
+  /** Whether the current player has spent their one hand-redraw this turn. */
+  redrewThisTurn: boolean
   setAside: Caste[]
   log: LogEntry[]
   result: GameResult | null
   /** Captures produced by the most recent completed turn, for the UI recap. */
   lastCaptures: { caste: Caste; spaceId: string; winner: number | null }[]
+  /**
+   * The table is suspended: no seat may play, switch, move, end their turn or
+   * redraw until it is resumed, and the shot clock is frozen. Any seated player
+   * can toggle it, so it is not tied to whose turn it is.
+   */
+  paused: boolean
 }
 
 export type ActionResult = { ok: true } | { ok: false; error: string }
@@ -155,10 +163,12 @@ export class Game {
       unseenPlaced: Array.from({ length: playerCount }, () => []),
       undoStack: [],
       playedNonFast: false,
+      redrewThisTurn: false,
       setAside: [],
       log: [],
       result: null,
       lastCaptures: [],
+      paused: false,
     }
 
     if (options.randomHands) {
@@ -197,6 +207,10 @@ export class Game {
       undoStack: state.undoStack ?? [],
       lastPlaced: state.lastPlaced ?? [],
       unseenPlaced: Array.from({ length: state.playerCount }, (_, i) => state.unseenPlaced?.[i] ?? []),
+      // A snapshot written before pause existed was never paused.
+      paused: state.paused ?? false,
+      // Nor could it have redrawn under a rule it predates.
+      redrewThisTurn: state.redrewThisTurn ?? false,
     }
     return game
   }
@@ -275,6 +289,7 @@ export class Game {
   playTile(playerId: number, tileId: string, spaceId: string): ActionResult {
     const turn = this.requireTurn(playerId)
     if (!turn.ok) return turn
+    if (this.state.paused) return fail('The game is paused.')
     if (!this.holdsTile(playerId, tileId)) return fail('That tile is not in your hand.')
 
     const tile = tileFromId(tileId)
@@ -300,6 +315,7 @@ export class Game {
   useMove(playerId: number, tileId: string, from: string, to: string): ActionResult {
     const turn = this.requireTurn(playerId)
     if (!turn.ok) return turn
+    if (this.state.paused) return fail('The game is paused.')
     if (!this.holdsTile(playerId, tileId)) return fail('That tile is not in your hand.')
     if (tileFromId(tileId).kind !== 'move') return fail('That is not a move tile.')
     if (this.state.playedNonFast) return fail('You have already placed a tile this turn.')
@@ -324,6 +340,7 @@ export class Game {
   useSwitch(playerId: number, tileId: string, a: PieceRef, b: PieceRef): ActionResult {
     const turn = this.requireTurn(playerId)
     if (!turn.ok) return turn
+    if (this.state.paused) return fail('The game is paused.')
     if (!this.holdsTile(playerId, tileId)) return fail('That tile is not in your hand.')
     if (tileFromId(tileId).kind !== 'switch') return fail('That is not a switch tile.')
     if (!canSwitch(this.view, a, b)) return fail('Those two caste pieces cannot be swapped.')
@@ -376,6 +393,7 @@ export class Game {
   undoLast(playerId: number): ActionResult {
     const turn = this.requireTurn(playerId)
     if (!turn.ok) return turn
+    if (this.state.paused) return fail('The game is paused.')
 
     const last = this.state.undoStack.pop()
     if (!last) return fail('There is nothing to take back this turn.')
@@ -417,8 +435,19 @@ export class Game {
   endTurn(playerId: number): ActionResult {
     const turn = this.requireTurn(playerId)
     if (!turn.ok) return turn
+    if (this.state.paused) return fail('The game is paused.')
     if (!this.canEndTurn(playerId)) return fail('You must place a tile before ending your turn.')
+    this.advanceTurn(playerId)
+    return OK
+  }
 
+  /**
+   * Close the current turn and pass play on: resolve captures, refill the
+   * ending player's hand, check whether the game is over, and hand the clock to
+   * the next seat. Shared by ending a turn normally, running out of time, and
+   * redrawing a hand — each spends the whole turn and then advances.
+   */
+  private advanceTurn(playerId: number) {
     // A move leaves a tile at both ends, so both spaces stay marked; a turn that
     // placed nothing clears the mark rather than leaving the last one to linger.
     this.state.lastPlaced = this.state.placedThisTurn.filter((id) => id in this.state.placed)
@@ -440,14 +469,91 @@ export class Game {
       this.state.result = { ...scoreGame(this.state.players), reason: end.reason }
       this.log(null, end.reason)
       this.state.phase = 'over'
-      return OK
+      return
     }
 
     this.state.current = (this.state.current + 1) % this.state.playerCount
     if (this.state.current === 0) this.state.turnNumber += 1
     this.state.placedThisTurn = []
     this.state.playedNonFast = false
+    this.state.redrewThisTurn = false
     this.state.undoStack = []
+  }
+
+  // --- pausing -------------------------------------------------------------
+
+  private canToggle(playerId: number): ActionResult {
+    if (this.state.phase !== 'play') return fail('The game is not in progress.')
+    if (!this.state.players[playerId]) return fail('You are not seated in this game.')
+    return OK
+  }
+
+  /** Suspend the table. Any seated player may do this, whoever is on the clock. */
+  pause(playerId: number): ActionResult {
+    const allowed = this.canToggle(playerId)
+    if (!allowed.ok) return allowed
+    if (this.state.paused) return fail('The game is already paused.')
+    this.state.paused = true
+    this.log(playerId, 'pauses the game.')
+    return OK
+  }
+
+  /** Resume a suspended table. Again open to any seated player. */
+  resume(playerId: number): ActionResult {
+    const allowed = this.canToggle(playerId)
+    if (!allowed.ok) return allowed
+    if (!this.state.paused) return fail('The game is not paused.')
+    this.state.paused = false
+    this.log(playerId, 'resumes the game.')
+    return OK
+  }
+
+  // --- redrawing a hand ----------------------------------------------------
+
+  /**
+   * Whether the current player may shuffle their hand back into their stack and
+   * draw a fresh one. A free action — it does not use up the placement — but
+   * only once per turn, and never in the opening round, so a drafted or dealt
+   * hand is played at least once before it can be swapped. Offered only at the
+   * start of the turn, before anything else has been done.
+   */
+  canRedraw(playerId: number): boolean {
+    return (
+      this.state.phase === 'play' &&
+      !this.state.paused &&
+      this.state.current === playerId &&
+      this.state.turnNumber >= 2 &&
+      !this.state.redrewThisTurn &&
+      this.state.placedThisTurn.length === 0 &&
+      this.state.undoStack.length === 0
+    )
+  }
+
+  /**
+   * Trade the whole hand for a fresh draw and carry on with the turn. Shuffling
+   * hand and stack together and dealing back off the top can never grow the
+   * hand beyond what a normal refill would, so it hands out no free tiles; the
+   * once-per-turn flag is what keeps it from being spun until the hand suits.
+   */
+  redrawHand(playerId: number): ActionResult {
+    const turn = this.requireTurn(playerId)
+    if (!turn.ok) return turn
+    if (this.state.paused) return fail('The game is paused.')
+    if (this.state.turnNumber < 2) return fail('Your hand can only be redrawn from the second round.')
+    if (this.state.redrewThisTurn) return fail('You have already redrawn your hand this turn.')
+    if (this.state.placedThisTurn.length > 0 || this.state.undoStack.length > 0) {
+      return fail('Redraw your hand at the start of your turn, before doing anything else.')
+    }
+
+    const player = this.state.players[playerId]
+    // Seeded off the turn rather than Math.random, so a room restored from a
+    // snapshot would resolve the same redraw the same way.
+    const rng = new Rng(this.state.seed + 6301 * this.state.turnNumber + playerId + 1)
+    const shuffled = rng.shuffle([...player.hand, ...player.stack])
+    player.hand = shuffled.slice(0, STARTING_HAND_SIZE)
+    player.stack = shuffled.slice(STARTING_HAND_SIZE)
+    this.state.redrewThisTurn = true
+    this.log(playerId, 'redraws their hand.')
     return OK
   }
 

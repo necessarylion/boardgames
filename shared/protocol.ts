@@ -71,10 +71,15 @@ export interface ClientState {
   /** During the draft, the 20 tiles you choose your opening hand from. */
   draftPool: string[]
   canEndTurn: boolean
+  /** Whether the viewer may redraw their hand this turn (their turn, round 2+). */
+  canRedraw: boolean
+  /** The table is suspended — any seated player may pause or resume it. */
+  paused: boolean
   /**
    * Milliseconds left on the current player's shot clock, or null when the
    * table is untimed. Sent as a remainder rather than a deadline so a client
-   * whose clock is off by minutes still counts down the right number.
+   * whose clock is off by minutes still counts down the right number. Frozen at
+   * its remaining value while the game is paused.
    */
   turnMsLeft: number | null
 }
@@ -96,6 +101,11 @@ export type ClientMessage =
   | { t: 'move'; tileId: string; from: string; to: string }
   | { t: 'undo' }
   | { t: 'endTurn' }
+  /** Trade the whole hand for a fresh draw, at the cost of the turn (round 2+). */
+  | { t: 'redraw' }
+  /** Suspend or resume the table. Open to any seated player. */
+  | { t: 'pause' }
+  | { t: 'resume' }
   | { t: 'rematch' }
   /** Host only: abandon the game in progress and return everyone to the lobby. */
   | { t: 'abandon' }
