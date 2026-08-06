@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onUnmounted, ref, watch } from 'vue'
 import BoardView from './BoardView.vue'
 import CaptureDialog from './CaptureDialog.vue'
 import GameOverDialog from './GameOverDialog.vue'
@@ -28,6 +28,39 @@ const turnLabel = computed(() => {
 const accent = computed(() =>
   game.activePlayer ? PLAYER_COLOURS[game.activePlayer.colour].ink : 'var(--ink-soft)',
 )
+
+/**
+ * A round only ticks over once play wraps back to the first seat, so the counter
+ * in the corner can sit unchanged for several turns and then move while the eye
+ * is on the board. Flash it when it does.
+ *
+ * The first number seen is a baseline rather than a change: arriving at a table
+ * or reconnecting into round five would otherwise flash a round that started
+ * long ago. Remounting the span on each round keeps the animation restarting
+ * from the top even if two rounds land close together.
+ */
+const ROUND_FLASH_MS = 1600
+const round = computed(() => game.state?.turnNumber ?? 1)
+const roundChanged = ref(false)
+let flashTimer: ReturnType<typeof setTimeout> | null = null
+let lastRound: number | null = null
+
+watch(
+  () => (game.state ? game.state.turnNumber : null),
+  (next) => {
+    const previous = lastRound
+    lastRound = next
+    if (next === null || previous === null || next <= previous) return
+    if (flashTimer) clearTimeout(flashTimer)
+    roundChanged.value = true
+    flashTimer = setTimeout(() => (roundChanged.value = false), ROUND_FLASH_MS)
+  },
+  { immediate: true },
+)
+
+onUnmounted(() => {
+  if (flashTimer) clearTimeout(flashTimer)
+})
 </script>
 
 <template>
@@ -36,7 +69,14 @@ const accent = computed(() =>
       <div class="turn">
         <span class="dot" :style="{ background: accent }" />
         <strong>{{ turnLabel }}</strong>
-        <span class="tiny muted">{{ t('game.round', { turn: game.state?.turnNumber ?? 1 }) }}</span>
+        <span
+          :key="round"
+          class="round tiny muted"
+          :class="{ changed: roundChanged }"
+          aria-live="polite"
+        >
+          {{ t('game.round', { turn: round }) }}
+        </span>
         <TurnClock />
       </div>
       <div class="top-actions">
@@ -97,6 +137,52 @@ const accent = computed(() =>
 .turn strong {
   font-family: var(--font-display);
   font-size: 1.1rem;
+}
+
+.round {
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+  /* The pill only exists while it is flashing; at rest this is plain text. */
+  background: transparent;
+}
+
+.round.changed {
+  animation: round-turn 1.6s ease-out;
+}
+
+/* A struck seal that fades back into the rule of the topbar. Declarations inside
+   a running animation outrank .muted, so the ink can take over and hand back. */
+@keyframes round-turn {
+  0% {
+    background: rgba(178, 58, 44, 0.3);
+    color: var(--vermillion-dark);
+    transform: scale(1);
+  }
+  18% {
+    transform: scale(1.16);
+  }
+  100% {
+    background: rgba(178, 58, 44, 0);
+    color: var(--ink-soft);
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .round.changed {
+    animation: round-turn-still 1.6s ease-out;
+  }
+
+  @keyframes round-turn-still {
+    0% {
+      background: rgba(178, 58, 44, 0.3);
+      color: var(--vermillion-dark);
+    }
+    100% {
+      background: rgba(178, 58, 44, 0);
+      color: var(--ink-soft);
+    }
+  }
 }
 
 .dot {

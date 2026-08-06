@@ -2,7 +2,7 @@ import { DEFAULT_OPTIONS } from '../shared/engine'
 import { describe, expect, it } from 'vitest'
 
 import { COLOUR_ORDER } from '../shared/colours'
-import { Game } from '../shared/engine'
+import { Game, type GameState } from '../shared/engine'
 import { legalPlacements } from '../shared/rules'
 import { tileFromId } from '../shared/tiles'
 import { Room, type RoomSnapshot } from '../server/rooms'
@@ -101,6 +101,24 @@ describe('rooms survive a restart', () => {
     // connection flags, which only a live socket can set.
     for (const seat of back.seats) seat.connected = true
     expect(back.stateFor('token-a')).toEqual(room.stateFor('token-a'))
+  })
+
+  it('gives every seat a bucket when an older snapshot carries none', () => {
+    const room = new Room('UNSN')
+    room.options = { ...DEFAULT_OPTIONS, randomHands: true, openInformation: false }
+    room.addSeat('token-a', 'Ada')
+    room.addSeat('token-b', 'Bo')
+    room.start()
+    playSomeTurns(room.game!, 2)
+
+    const snapshot = JSON.parse(JSON.stringify(room.toSnapshot())) as RoomSnapshot
+    delete (snapshot.game as Partial<GameState>).unseenPlaced
+
+    // Nothing marked is the right default: the table is still playable, it just
+    // starts everyone off with a clean board.
+    const back = Room.fromSnapshot(snapshot)
+    expect(back.game!.state.unseenPlaced).toEqual([[], []])
+    expect(back.stateFor('token-a').sinceYourTurn).toEqual([])
   })
 
   it('keeps playing from where the restored game left off', () => {

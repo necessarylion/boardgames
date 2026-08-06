@@ -56,6 +56,8 @@ export interface ClientState {
   placedThisTurn: string[]
   /** Where the previous turn's tiles landed, so the whole table can see them. */
   lastPlaced: string[]
+  /** Every space another player has filled since your own turn last ended. */
+  sinceYourTurn: string[]
   /** Whether the viewer has anything to take back this turn. */
   canUndo: boolean
   playedNonFast: boolean

@@ -40,7 +40,7 @@ src/       Vue client: board rendering, hand, lobby, draft
 
 **The board is never sent over the wire.** `buildBoard(playerCount)` is deterministic, so the client rebuilds it locally from `state.playerCount` and caches it by count.
 
-**Redaction lives in one place:** `Room.stateFor(token)` in `server/rooms.ts` builds a per-viewer `ClientState`. A player's own stack never leaves the server, opponents' hands travel as counts only, and `captured` is `null` unless the room runs with open information or the game is over. Anything added to `ClientState` has to be redacted here deliberately.
+**Redaction lives in one place:** `Room.stateFor(token)` in `server/rooms.ts` builds a per-viewer `ClientState`. A player's own stack never leaves the server, opponents' hands travel as counts only, and `captured` is `null` unless the room runs with open information or the game is over. Anything added to `ClientState` has to be redacted here deliberately. `sinceYourTurn` is the one field answered from *who is asking* rather than from what they are allowed to see: the engine keeps a bucket of unseen placements per seat (`GameState.unseenPlaced`), filled for everyone but the ending player on each `endTurn`, and `stateFor` hands a seated viewer their own bucket and a spectator the deduped union.
 
 **Seat ids index into the running game**, so seats can only be renumbered between games. That single fact explains several behaviours: a player who disconnects mid-game keeps their seat (marked `connected: false`) and can reconnect into it; a player who disconnects before the game starts is simply removed; and `dropAbsentPlayers()` runs only on rematch/abandon. `ensureHost()` is called wherever someone might leave, so a room is never left without a host.
 

@@ -221,6 +221,26 @@ describe('rendering', () => {
     expect(wrapper.text()).toContain('Leave table')
   })
 
+  it('flashes the round counter when the round turns over, but not on arrival', async () => {
+    const r = room()
+    const game = useGameStore()
+    // Joining a table already several rounds in is not a change to announce.
+    game.state = { ...r.stateFor('token-a'), turnNumber: 3 }
+
+    const wrapper = mount(GameScreen)
+    expect(wrapper.find('.round').text()).toContain('Round 3')
+    expect(wrapper.find('.round.changed').exists()).toBe(false)
+
+    game.state = { ...game.state, turnNumber: 4 }
+    await nextTick()
+    expect(wrapper.find('.round.changed').text()).toContain('Round 4')
+
+    // A broadcast that leaves the round alone leaves the flash alone too.
+    game.state = { ...game.state, current: 1 }
+    await nextTick()
+    expect(wrapper.find('.round.changed').exists()).toBe(true)
+  })
+
   it('highlights legal targets once a tile is selected', async () => {
     const r = room()
     const game = useGameStore()
@@ -264,6 +284,76 @@ describe('rendering', () => {
     game.state = r.stateFor('token-b')
     await nextTick()
     expect(wrapper.findAll('.tile-mark')).toHaveLength(1)
+  })
+})
+
+describe('what each seat has yet to see', () => {
+  /** Three handed, so a viewer can be two turns behind rather than one. */
+  function table() {
+    const r = new Room('LAPS')
+    r.addSeat('token-a', 'Takeda')
+    r.addSeat('token-b', 'Uesugi')
+    r.addSeat('token-c', 'Hojo')
+    r.options = { ...DEFAULT_OPTIONS, randomHands: true, openInformation: false }
+    r.start()
+    return r
+  }
+
+  /** Play a placeable tile for whoever is on the clock and end their turn. */
+  function turn(r: Room): string {
+    const game = r.game!
+    const seat = game.state.current
+    const tile = game.state.players[seat].hand
+      .map(tileFromId)
+      .find(
+        (t) => t.kind !== 'switch' && t.kind !== 'move' && legalPlacements(game.view, t).length > 0,
+      )!
+    const space = legalPlacements(game.view, tile)[0]
+    expect(game.playTile(seat, tile.id, space).ok).toBe(true)
+    expect(game.endTurn(seat).ok).toBe(true)
+    return space
+  }
+
+  it('tells each seat only what has happened since their own turn', () => {
+    const r = table()
+    const first = turn(r)
+    const second = turn(r)
+
+    expect(r.stateFor('token-c').sinceYourTurn).toEqual([first, second])
+    expect(r.stateFor('token-a').sinceYourTurn).toEqual([second])
+    expect(r.stateFor('token-b').sinceYourTurn).toEqual([])
+
+    // A spectator gets the union of every bucket — the last lap of the table —
+    // with each placement in it once, however many seats have yet to see it.
+    expect([...r.stateFor('nobody').sinceYourTurn].sort()).toEqual([first, second].sort())
+  })
+
+  it('keeps the earlier plays marked underneath the newest one', async () => {
+    const r = table()
+    const game = useGameStore()
+    game.state = r.stateFor('token-c')
+
+    const wrapper = mount(GameScreen)
+    expect(wrapper.findAll('.tile-earlier')).toHaveLength(0)
+
+    turn(r)
+    game.state = r.stateFor('token-c')
+    await nextTick()
+    expect(wrapper.findAll('.tile-mark')).toHaveLength(1)
+    expect(wrapper.findAll('.tile-earlier')).toHaveLength(1)
+
+    // The second play takes over the fresh mark; the first is still on the
+    // board rather than being replaced by it.
+    turn(r)
+    game.state = r.stateFor('token-c')
+    await nextTick()
+    expect(wrapper.findAll('.tile-mark')).toHaveLength(1)
+    expect(wrapper.findAll('.tile-earlier')).toHaveLength(2)
+
+    // Seat 1 has just played, so they are caught up and nothing is left over.
+    game.state = r.stateFor('token-b')
+    await nextTick()
+    expect(wrapper.findAll('.tile-earlier')).toHaveLength(0)
   })
 })
 
