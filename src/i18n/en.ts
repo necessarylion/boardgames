@@ -76,7 +76,11 @@ export const en = {
   'lobby.teams.off': 'Off',
   'lobby.teams.mode': 'Playing {mode}.',
   'lobby.teams.need': 'Team play needs a player count that splits into equal sides — four or six.',
+  'lobby.teams.name': "Your team's name (you lead it)",
   'panel.teamCaptured': 'Your team has captured',
+  'panel.yourTeam': 'Your team',
+  'panel.rename': 'Rename',
+  'panel.save': 'Save',
 
   // --- lobby ---------------------------------------------------------------
   'lobby.roomCode': 'Room code',

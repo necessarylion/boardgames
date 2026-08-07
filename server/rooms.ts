@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 
 import { DEFAULT_OPTIONS, Game, type GameOptions, type GameState } from '../shared/engine'
 import type { ClientState, PublicPlayer } from '../shared/protocol'
-import { teamArrangements, teamOf } from '../shared/rules'
+import { teamArrangements, teamLeader, teamOf } from '../shared/rules'
 import { COLOUR_ORDER } from '../shared/colours'
 import { Rng, randomSeed } from '../shared/rng'
 import { MAX_PLAYERS, MIN_PLAYERS, type PlayerColour } from '../shared/types'
@@ -39,6 +39,8 @@ export interface RoomSnapshot {
   hostToken: string
   /** Client tokens that consider this their current room, seated or watching. */
   members: string[]
+  /** Custom side names by team index; empty entries fall back to a letter. */
+  teamNames: string[]
   lastActivity: number
   game: GameState | null
 }
@@ -62,6 +64,8 @@ export class Room {
    * stays at the table as a spectator until they leave.
    */
   members = new Set<string>()
+  /** Custom side names by team index; a blank entry falls back to a letter. */
+  teamNames: string[] = []
   /**
    * The shot clock. Deliberately not part of the snapshot: a server restart
    * should not cost whoever was thinking their turn, so a restored room simply
@@ -89,6 +93,7 @@ export class Room {
       seats: this.seats,
       hostToken: this.hostToken,
       members: [...this.members],
+      teamNames: this.teamNames,
       lastActivity: this.lastActivity,
       game: this.game?.state ?? null,
     }
@@ -105,6 +110,8 @@ export class Room {
     room.seats = snapshot.seats.map((seat) => ({ ...seat, connected: false }))
     room.hostToken = snapshot.hostToken
     room.members = new Set(snapshot.members)
+    // Older snapshots predate custom side names; an empty list is the default.
+    room.teamNames = snapshot.teamNames ?? []
     room.lastActivity = snapshot.lastActivity
     room.game = snapshot.game ? Game.fromState(snapshot.game) : null
     return room
@@ -151,6 +158,21 @@ export class Room {
     })
     if (this.hostToken === token) this.hostToken = this.seats[0]?.token ?? ''
     this.touch()
+  }
+
+  /**
+   * A side's leader renames it; a blank name resets it to its letter. Allowed in
+   * the lobby as well as in play, so a table can name its sides before it starts.
+   */
+  renameTeam(token: string, team: number, name: string): string | null {
+    const seat = this.seatByToken(token)
+    if (!seat) return 'You have no seat in this room.'
+    if (this.options.teams < 2) return 'This table is not playing in teams.'
+    if (!Number.isInteger(team) || team < 0 || team >= this.options.teams) return 'No such team.'
+    if (seat.id !== teamLeader(team)) return 'Only the team leader can rename the team.'
+    this.teamNames[team] = String(name ?? '').trim().slice(0, 20)
+    this.touch()
+    return null
   }
 
   /** Team play divides the table into equal sides, so the split has to fit. */
@@ -318,6 +340,7 @@ export class Room {
         draftPool: [],
         canEndTurn: false,
         canRedraw: false,
+        teamNames: [...this.teamNames],
         paused: false,
         turnMsLeft: null,
       }
@@ -357,6 +380,7 @@ export class Room {
       draftPool: seat && s.phase === 'draft' && !mine?.draftReady ? game.draftPool(seat.id) : [],
       canEndTurn: seat ? game.canEndTurn(seat.id) : false,
       canRedraw: seat ? game.canRedraw(seat.id) : false,
+      teamNames: [...this.teamNames],
       paused: s.paused,
       turnMsLeft: this.turnMsLeft(),
     }

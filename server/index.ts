@@ -207,6 +207,13 @@ wss.on('connection', (socket) => {
         return
       }
 
+      case 'renameTeam': {
+        const error = room.renameTeam(activeToken, msg.team, msg.name)
+        if (error) return fail(socket, error)
+        commit(room)
+        return
+      }
+
       case 'options': {
         if (!room.isHost(activeToken)) return fail(socket, 'Only the host can change settings.')
         if (room.started) return fail(socket, 'The game has already started.')

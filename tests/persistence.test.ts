@@ -50,6 +50,15 @@ describe('rooms survive a restart', () => {
     expect(back.started).toBe(false)
   })
 
+  it('keeps custom side names across a restart', () => {
+    const room = new Room('SIDE')
+    room.options = { ...DEFAULT_OPTIONS, teams: 2 }
+    for (let i = 0; i < 4; i++) room.addSeat(`token-${i}`, `P${i}`)
+    expect(room.renameTeam('token-0', 0, 'Dragons')).toBeNull()
+
+    expect(reload(room).teamNames).toEqual(['Dragons'])
+  })
+
   it('restores the shuffled palette, so a seat added later keeps to it', () => {
     const room = new Room('HUES')
     room.addSeat('token-a', 'Ada')

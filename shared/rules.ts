@@ -38,6 +38,15 @@ export function teamOf(playerId: number, teams: number): number {
 }
 
 /**
+ * The seat that leads a side — its first member in turn order. Sides deal round
+ * the table (A, B, A, B…), so side k always opens with seat k, which makes seat
+ * k both a member of side k and the one who speaks for it (naming it, say).
+ */
+export function teamLeader(team: number): number {
+  return team
+}
+
+/**
  * The team splits a table of `playerCount` can be played in: every count of
  * sides that divides the players into equal teams of at least two. Four gives
  * `[2]` (2 v 2); six gives `[2, 3]` (3 v 3 or 2 v 2 v 2); a prime like five

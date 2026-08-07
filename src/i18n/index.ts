@@ -70,6 +70,10 @@ export const castePiece = (caste: Caste): string => t(`caste.piece.${caste}`)
 /** Sides are named by letter — A, B — so the label reads the same everywhere. */
 export const teamName = (team: number): string =>
   t('team.label', { name: String.fromCharCode(65 + team) })
+
+/** A side's custom name if its leader set one, else its letter (Team A, Team B). */
+export const teamLabel = (team: number, names?: string[]): string =>
+  names?.[team]?.trim() || teamName(team)
 /** English wants a lower-case form mid-sentence; Burmese has no such distinction. */
 export const casteNameLower = (caste: Caste): string => t(`caste.lower.${caste}`)
 

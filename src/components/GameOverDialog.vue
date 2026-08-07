@@ -3,7 +3,7 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import GameIcon from './GameIcon.vue'
 import { PLAYER_COLOURS } from '@shared/colours'
 import { CASTES } from '@shared/types'
-import { casteName, castePiece, t, teamName } from '@/i18n'
+import { casteName, castePiece, t, teamLabel } from '@/i18n'
 import { useGameStore } from '@/stores/game'
 
 const game = useGameStore()
@@ -40,10 +40,12 @@ const headline = computed(() => {
   if (isTeam.value) {
     const winning = teamRows.value.filter((r) => r.won)
     if (youWon.value) {
-      const others = winning.filter((r) => r.tb.team !== game.myTeam).map((r) => teamName(r.tb.team))
+      const others = winning
+        .filter((r) => r.tb.team !== game.myTeam)
+        .map((r) => teamLabel(r.tb.team, game.teamNames))
       return others.length ? t('over.youShareWin', { names: others.join(t('over.and')) }) : t('over.youTeamWin')
     }
-    const names = winning.map((r) => teamName(r.tb.team))
+    const names = winning.map((r) => teamLabel(r.tb.team, game.teamNames))
     return names.length === 1
       ? t('over.teamWins', { name: names[0] })
       : t('over.teamShared', { names: names.join(t('over.and')) })
@@ -168,7 +170,7 @@ onUnmounted(stopVolleys)
         <tbody>
           <tr v-for="row in teamRows" :key="row.tb.team" :class="{ winner: row.won }">
             <td class="who">
-              <span class="team-tag" :class="`team-${row.tb.team}`">{{ teamName(row.tb.team) }}</span>
+              <span class="team-tag" :class="`team-${row.tb.team}`">{{ teamLabel(row.tb.team, game.teamNames) }}</span>
               <span class="members tiny muted">{{ row.members.map((m) => m.name).join(', ') }}</span>
             </td>
             <td v-for="caste in CASTES" :key="caste" class="num">

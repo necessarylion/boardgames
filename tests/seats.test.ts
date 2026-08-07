@@ -95,4 +95,27 @@ describe('team play', () => {
     expect(view.players.find((p) => p.id === 3)!.captured).toEqual(['rice'])
     expect(view.players.find((p) => p.id === 1)!.captured).toBeNull()
   })
+
+  it('lets a side leader rename it, and no one else', () => {
+    const room = teamRoom(4, 2)
+    // Seat 0 leads team 0; seat 2 is a member but not the leader; seat 1 is an
+    // opponent.
+    expect(room.renameTeam('token-2', 0, 'Dragons')).not.toBeNull()
+    expect(room.renameTeam('token-1', 0, 'Dragons')).not.toBeNull()
+    expect(room.renameTeam('token-0', 0, 'Dragons')).toBeNull()
+
+    for (const seat of room.seats) seat.connected = true
+    expect(room.stateFor('token-3').teamNames[0]).toBe('Dragons')
+  })
+
+  it('clears a side name back to its letter and refuses names off-teams', () => {
+    const teamed = teamRoom(4, 2)
+    expect(teamed.renameTeam('token-1', 1, 'Tigers')).toBeNull()
+    expect(teamed.teamNames[1]).toBe('Tigers')
+    expect(teamed.renameTeam('token-1', 1, '   ')).toBeNull()
+    expect(teamed.teamNames[1]).toBe('')
+
+    const solo = teamRoom(4, 0)
+    expect(solo.renameTeam('token-0', 0, 'Dragons')).not.toBeNull()
+  })
 })

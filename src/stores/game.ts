@@ -391,6 +391,15 @@ export const useGameStore = defineStore('game', () => {
   const isTeamGame = computed(() => teamCount.value >= 2)
   const teamOfPlayer = (id: number) => teamOf(id, teamCount.value)
   const myTeam = computed(() => (you.value === null ? null : teamOfPlayer(you.value)))
+  /** Custom side names by team index; blanks fall back to a letter on display. */
+  const teamNames = computed<string[]>(() => state.value?.teamNames ?? [])
+  /**
+   * The side this player leads, or null. Sides open with seats 0, 1, … so the
+   * first `teamCount` seats are the leaders, each leading the side of its own id.
+   */
+  const myLedTeam = computed(() =>
+    you.value !== null && isTeamGame.value && you.value < teamCount.value ? you.value : null,
+  )
 
   const view = computed<RulesView>(() => ({
     board: board.value,
@@ -496,6 +505,8 @@ export const useGameStore = defineStore('game', () => {
 
   const leaveRoom = () => send({ t: 'leave' })
   const setOptions = (options: GameOptions) => send({ t: 'options', options })
+  /** Team leaders only (the server enforces it); a blank name resets to a letter. */
+  const renameTeam = (team: number, name: string) => send({ t: 'renameTeam', team, name })
   const startGame = () => send({ t: 'start' })
   const rematch = () => send({ t: 'rematch' })
   /** Host only: end the game in progress and take everyone back to the lobby. */
@@ -641,6 +652,8 @@ export const useGameStore = defineStore('game', () => {
     isTeamGame,
     teamOfPlayer,
     myTeam,
+    teamNames,
+    myLedTeam,
     draftPool,
     draftPicks,
     interaction,
@@ -659,6 +672,7 @@ export const useGameStore = defineStore('game', () => {
     joinRoom,
     leaveRoom,
     setOptions,
+    renameTeam,
     startGame,
     rematch,
     abandonGame,

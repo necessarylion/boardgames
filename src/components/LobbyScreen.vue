@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import BoardGlyph from './BoardGlyph.vue'
 import TurnClockOptions from './TurnClockOptions.vue'
 import { PLAYER_COLOURS } from '@shared/colours'
@@ -7,7 +7,7 @@ import { DEFAULT_BOARD_SHAPE } from '@shared/board'
 import { supplyPerCaste } from '@shared/setup'
 import { teamArrangements } from '@shared/rules'
 import { BOARD_SHAPES, MAX_PLAYERS, MIN_PLAYERS, type BoardShape } from '@shared/types'
-import { t, teamName } from '@/i18n'
+import { t, teamLabel } from '@/i18n'
 import { useGameStore } from '@/stores/game'
 
 const game = useGameStore()
@@ -32,6 +32,19 @@ function setTeams(teams: number) {
   const options = game.state?.options
   if (!options || !game.isHost) return
   game.setOptions({ ...options, teams })
+}
+
+// The side the local player leads (if any) can be renamed here before the game.
+const ledTeam = computed(() => game.myLedTeam)
+const teamNameDraft = ref('')
+watch(
+  () => (ledTeam.value === null ? '' : game.teamNames[ledTeam.value] ?? ''),
+  (name) => (teamNameDraft.value = name),
+  { immediate: true },
+)
+function saveTeamName() {
+  if (ledTeam.value === null) return
+  game.renameTeam(ledTeam.value, teamNameDraft.value.trim())
 }
 
 const canStart = computed(
@@ -106,7 +119,7 @@ function setBoard(shape: BoardShape) {
               class="badge team"
               :class="`team-${game.teamOfPlayer(seat.id)}`"
             >
-              {{ teamName(game.teamOfPlayer(seat.id)) }}
+              {{ teamLabel(game.teamOfPlayer(seat.id), game.teamNames) }}
             </span>
           </li>
           <li v-for="n in emptySeats" :key="`empty${n}`" class="seat empty">
@@ -163,6 +176,17 @@ function setBoard(shape: BoardShape) {
           <p class="tiny muted team-hint">
             {{ arrangements.length ? t('option.teams.hint') : t('lobby.teams.need') }}
           </p>
+          <label v-if="teamsOn && teamValid && ledTeam !== null" class="team-name-field">
+            <span class="tiny muted">{{ t('lobby.teams.name') }}</span>
+            <input
+              v-model="teamNameDraft"
+              class="team-name-input"
+              :maxlength="20"
+              :placeholder="teamLabel(ledTeam)"
+              @keyup.enter="saveTeamName"
+              @blur="saveTeamName"
+            />
+          </label>
         </div>
         <TurnClockOptions
           :seconds="game.state?.options.turnSeconds ?? 0"
@@ -389,6 +413,22 @@ h2 {
 
 .team-hint {
   margin: 0.4rem 0 0;
+}
+
+.team-name-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin-top: 0.6rem;
+}
+
+.team-name-input {
+  padding: 0.4rem 0.55rem;
+  border: 1px solid rgba(160, 137, 102, 0.5);
+  border-radius: 6px;
+  background: rgba(255, 253, 246, 0.9);
+  font: inherit;
+  font-size: 0.9rem;
 }
 
 .check {
