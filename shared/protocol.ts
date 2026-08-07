@@ -73,6 +73,8 @@ export interface ClientState {
   canEndTurn: boolean
   /** Whether the viewer may redraw their hand this turn (their turn, round 2+). */
   canRedraw: boolean
+  /** Custom side names by team index; a blank or missing one falls back to a letter. */
+  teamNames: string[]
   /** The table is suspended — any seated player may pause or resume it. */
   paused: boolean
   /**
@@ -92,6 +94,8 @@ export type ClientMessage =
   | { t: 'create'; name: string; options: GameOptions }
   | { t: 'join'; code: string; name: string }
   | { t: 'rename'; name: string }
+  /** Team leaders only: rename their side. A blank name resets it to a letter. */
+  | { t: 'renameTeam'; team: number; name: string }
   | { t: 'options'; options: GameOptions }
   | { t: 'start' }
   | { t: 'leave' }

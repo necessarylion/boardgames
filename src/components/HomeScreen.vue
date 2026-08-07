@@ -32,6 +32,8 @@ function create() {
     openInformation: openInformation.value,
     boardShape: boardShape.value,
     turnSeconds: turnSeconds.value,
+    // Team play needs four or six seats, so it is chosen in the lobby, not here.
+    teams: 0,
   })
 }
 

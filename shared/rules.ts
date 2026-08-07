@@ -7,6 +7,7 @@ import {
   type GameResult,
   type PlacedTile,
   type ScoreBreakdown,
+  type TeamBreakdown,
   type Tile,
   type TileDef,
 } from './types'
@@ -21,6 +22,42 @@ export interface RulesView {
   /** Every tile in the game, by tile id. */
   tiles: Record<string, Tile>
   playerCount: number
+  /** Number of teams (two for 2v2 / 3v3), or 0/undefined for a free-for-all. */
+  teams?: number
+}
+
+/**
+ * Which scoring unit a seat belongs to. With `teams` set to a count (two, for a
+ * 2v2 or 3v3), seats alternate between them by parity, so the turn order already
+ * runs A, B, A, B and teammates never sit back to back. With no teams every
+ * player is their own unit — which keeps the free-for-all a special case of the
+ * team logic rather than a separate path through it.
+ */
+export function teamOf(playerId: number, teams: number): number {
+  return teams >= 2 ? playerId % teams : playerId
+}
+
+/**
+ * The seat that leads a side — its first member in turn order. Sides deal round
+ * the table (A, B, A, B…), so side k always opens with seat k, which makes seat
+ * k both a member of side k and the one who speaks for it (naming it, say).
+ */
+export function teamLeader(team: number): number {
+  return team
+}
+
+/**
+ * The team splits a table of `playerCount` can be played in: every count of
+ * sides that divides the players into equal teams of at least two. Four gives
+ * `[2]` (2 v 2); six gives `[2, 3]` (3 v 3 or 2 v 2 v 2); a prime like five
+ * gives none. Turn order deals round the sides, so any of these alternates.
+ */
+export function teamArrangements(playerCount: number): number[] {
+  const out: number[] = []
+  for (let teams = 2; teams <= Math.floor(playerCount / 2); teams++) {
+    if (playerCount % teams === 0) out.push(teams)
+  }
+  return out
 }
 
 /** A single caste piece sitting on a settlement. */
@@ -131,17 +168,35 @@ export function influenceAt(view: RulesView, spaceId: string, caste: Caste): num
  * Resolve one caste piece. The highest total influence takes it; a tie for the
  * highest means nobody does and the piece is set aside. A piece nobody
  * influences at all is also set aside.
+ *
+ * In team play the sides' influence is pooled first, so a piece goes to the team
+ * with the highest combined total. The piece is then physically taken by whoever
+ * on that team pushed hardest on it (ties within a team fall to the lower seat);
+ * scoring pools captures back by team, so which teammate holds it never changes
+ * a score. A free-for-all makes every player a team of one, and the individual
+ * rules fall straight out of this.
  */
 export function contest(view: RulesView, spaceId: string, caste: Caste): CaptureContest {
   const influence = influenceAt(view, spaceId, caste)
-  const best = Math.max(...influence)
-  const leaders = influence.flatMap((value, id) => (value === best ? [id] : []))
-  return {
-    spaceId,
-    caste,
-    influence,
-    winner: best > 0 && leaders.length === 1 ? leaders[0] : null,
+  const teams = view.teams ?? 0
+
+  const byTeam = new Map<number, number>()
+  influence.forEach((value, id) => {
+    const team = teamOf(id, teams)
+    byTeam.set(team, (byTeam.get(team) ?? 0) + value)
+  })
+  const best = Math.max(...byTeam.values())
+  const topTeams = [...byTeam].filter(([, value]) => value === best).map(([team]) => team)
+
+  let winner: number | null = null
+  if (best > 0 && topTeams.length === 1) {
+    const team = topTeams[0]
+    influence.forEach((value, id) => {
+      if (teamOf(id, teams) !== team) return
+      if (winner === null || value > influence[winner]) winner = id
+    })
   }
+  return { spaceId, caste, influence, winner }
 }
 
 /**
@@ -224,11 +279,16 @@ function countCaptured(player: Scoreable): Record<Caste, number> {
 }
 
 /**
- * Leader tokens go to whoever captured strictly the most pieces of a caste; a
- * tie leaves that token unclaimed. Most leader tokens wins, with the rulebook's
- * two tiebreakers behind it.
+ * Leader tokens go to whichever side captured strictly the most pieces of a
+ * caste; a tie leaves that token unclaimed. Most leader tokens wins, with the
+ * rulebook's two tiebreakers behind it.
+ *
+ * The winner is settled between scoring units — a team apiece in a 2v2 or 3v3,
+ * or one per player in a free-for-all, where the two collapse to the same thing.
+ * The per-player `breakdown` is always returned for display; `teams` carries the
+ * pooled totals when the table is playing in sides.
  */
-export function scoreGame(players: Scoreable[]): GameResult {
+export function scoreGame(players: Scoreable[], teams = 0): GameResult {
   const breakdown: ScoreBreakdown[] = players.map((player) => ({
     playerId: player.id,
     counts: countCaptured(player),
@@ -236,69 +296,107 @@ export function scoreGame(players: Scoreable[]): GameResult {
     otherCastePieces: 0,
     totalPieces: player.captured.length,
   }))
+  const byId = new Map(breakdown.map((b) => [b.playerId, b]))
+
+  interface Unit {
+    team: number
+    members: number[]
+    counts: Record<Caste, number>
+    leaderTokens: Caste[]
+    otherCastePieces: number
+    totalPieces: number
+  }
+  const unitIds = [...new Set(players.map((p) => teamOf(p.id, teams)))].sort((a, b) => a - b)
+  const units: Unit[] = unitIds.map((team) => {
+    const members = players.filter((p) => teamOf(p.id, teams) === team)
+    const counts: Record<Caste, number> = { buddha: 0, rice: 0, castle: 0 }
+    for (const m of members) for (const c of m.captured) counts[c]++
+    return {
+      team,
+      members: members.map((m) => m.id),
+      counts,
+      leaderTokens: [],
+      otherCastePieces: 0,
+      totalPieces: members.reduce((n, m) => n + m.captured.length, 0),
+    }
+  })
 
   const unclaimed: Caste[] = []
   for (const caste of CASTES) {
-    const best = Math.max(...breakdown.map((b) => b.counts[caste]))
-    const leaders = breakdown.filter((b) => b.counts[caste] === best)
+    const best = Math.max(...units.map((u) => u.counts[caste]))
+    const leaders = units.filter((u) => u.counts[caste] === best)
     if (best > 0 && leaders.length === 1) leaders[0].leaderTokens.push(caste)
     else unclaimed.push(caste)
   }
-
-  for (const entry of breakdown) {
-    const led = new Set(entry.leaderTokens)
-    entry.otherCastePieces = CASTES.filter((c) => !led.has(c)).reduce(
-      (sum, c) => sum + entry.counts[c],
+  for (const unit of units) {
+    const led = new Set(unit.leaderTokens)
+    unit.otherCastePieces = CASTES.filter((c) => !led.has(c)).reduce(
+      (sum, c) => sum + unit.counts[c],
       0,
     )
+    // A free-for-all's units are single players, so its tokens belong on the row
+    // the score table already renders. A team's tokens are the team's, not any
+    // one member's, so they stay off the per-player rows.
+    if (teams < 2) {
+      const row = byId.get(unit.members[0])!
+      row.leaderTokens = unit.leaderTokens
+      row.otherCastePieces = unit.otherCastePieces
+    }
   }
 
-  const mostTokens = Math.max(...breakdown.map((b) => b.leaderTokens.length))
-  let contenders = breakdown.filter((b) => b.leaderTokens.length === mostTokens)
+  const teamBreakdown: TeamBreakdown[] | null =
+    teams >= 2
+      ? units.map((u) => ({
+          team: u.team,
+          members: u.members,
+          counts: u.counts,
+          leaderTokens: u.leaderTokens,
+          otherCastePieces: u.otherCastePieces,
+          totalPieces: u.totalPieces,
+        }))
+      : null
+
+  const finish = (winning: Unit[], reason: string): GameResult => ({
+    winners: winning.flatMap((u) => u.members),
+    breakdown,
+    teams: teamBreakdown,
+    unclaimed,
+    reason,
+  })
+
+  const mostTokens = Math.max(...units.map((u) => u.leaderTokens.length))
+  let contenders = units.filter((u) => u.leaderTokens.length === mostTokens)
 
   if (contenders.length === 1) {
-    return {
-      winners: [contenders[0].playerId],
-      breakdown,
-      unclaimed,
-      reason: `Claimed ${mostTokens} leader token${mostTokens === 1 ? '' : 's'}.`,
-    }
+    return finish(contenders, `Claimed ${mostTokens} leader token${mostTokens === 1 ? '' : 's'}.`)
   }
 
   // No leader tokens at all: most captured pieces overall wins.
   if (mostTokens === 0) {
-    const best = Math.max(...contenders.map((b) => b.totalPieces))
-    const winners = contenders.filter((b) => b.totalPieces === best)
-    return {
-      winners: winners.map((b) => b.playerId),
-      breakdown,
-      unclaimed,
-      reason: 'No leader tokens were claimed — most caste pieces overall wins.',
-    }
+    const best = Math.max(...contenders.map((u) => u.totalPieces))
+    return finish(
+      contenders.filter((u) => u.totalPieces === best),
+      'No leader tokens were claimed — most caste pieces overall wins.',
+    )
   }
 
   // Tied on leader tokens: compare pieces from the castes they do not lead.
-  const bestOther = Math.max(...contenders.map((b) => b.otherCastePieces))
-  contenders = contenders.filter((b) => b.otherCastePieces === bestOther)
+  const bestOther = Math.max(...contenders.map((u) => u.otherCastePieces))
+  contenders = contenders.filter((u) => u.otherCastePieces === bestOther)
   if (contenders.length === 1) {
-    return {
-      winners: [contenders[0].playerId],
-      breakdown,
-      unclaimed,
-      reason: `Tied on leader tokens — most pieces from the other two castes (${bestOther}).`,
-    }
+    return finish(
+      contenders,
+      `Tied on leader tokens — most pieces from the other two castes (${bestOther}).`,
+    )
   }
 
   // Still tied: most pieces across all castes, and failing that the win is shared.
-  const bestTotal = Math.max(...contenders.map((b) => b.totalPieces))
-  const winners = contenders.filter((b) => b.totalPieces === bestTotal)
-  return {
-    winners: winners.map((b) => b.playerId),
-    breakdown,
-    unclaimed,
-    reason:
-      winners.length === 1
-        ? `Tied on leader tokens and other castes — most caste pieces overall (${bestTotal}).`
-        : 'Tied on every tiebreaker — the victory is shared.',
-  }
+  const bestTotal = Math.max(...contenders.map((u) => u.totalPieces))
+  contenders = contenders.filter((u) => u.totalPieces === bestTotal)
+  return finish(
+    contenders,
+    contenders.length === 1
+      ? `Tied on leader tokens and other castes — most caste pieces overall (${bestTotal}).`
+      : 'Tied on every tiebreaker — the victory is shared.',
+  )
 }

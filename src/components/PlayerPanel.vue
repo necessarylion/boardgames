@@ -3,11 +3,34 @@ import { computed } from 'vue'
 import GameIcon from './GameIcon.vue'
 import { CASTE_COLOURS, PLAYER_COLOURS } from '@shared/colours'
 import { setAsideLimit } from '@shared/rules'
+import { ref, watch } from 'vue'
 import { CASTES, type Caste } from '@shared/types'
-import { casteName, castePiece, t } from '@/i18n'
+import { casteName, castePiece, t, teamLabel } from '@/i18n'
 import { useGameStore } from '@/stores/game'
 
 const game = useGameStore()
+
+// --- renaming the side you lead -------------------------------------------
+const editingTeam = ref(false)
+const teamNameDraft = ref('')
+
+function startTeamEdit() {
+  if (game.myLedTeam === null) return
+  teamNameDraft.value = game.teamNames[game.myLedTeam] ?? ''
+  editingTeam.value = true
+}
+
+function saveTeamName() {
+  if (!editingTeam.value || game.myLedTeam === null) return
+  editingTeam.value = false
+  game.renameTeam(game.myLedTeam, teamNameDraft.value.trim())
+}
+
+// A rename from elsewhere (or a fresh game) should not sit under an open editor.
+watch(
+  () => game.myLedTeam,
+  () => (editingTeam.value = false),
+)
 
 const setAsideMax = computed(() => setAsideLimit(game.state?.playerCount ?? 0))
 
@@ -36,6 +59,27 @@ function capturedCounts(captured: Caste[] | null): Record<Caste, number> | null 
 
 <template>
   <aside class="side">
+    <section v-if="game.isTeamGame && game.myLedTeam !== null" class="block team-edit">
+      <h3>{{ t('panel.yourTeam') }}</h3>
+      <div v-if="!editingTeam" class="team-current">
+        <span class="badge team" :class="`team-${game.myLedTeam}`">
+          {{ teamLabel(game.myLedTeam, game.teamNames) }}
+        </span>
+        <button class="btn ghost small" @click="startTeamEdit">{{ t('panel.rename') }}</button>
+      </div>
+      <div v-else class="team-form">
+        <input
+          v-model="teamNameDraft"
+          class="team-input"
+          :maxlength="20"
+          :placeholder="teamLabel(game.myLedTeam)"
+          @keyup.enter="saveTeamName"
+          @keyup.esc="editingTeam = false"
+        />
+        <button class="btn small" @click="saveTeamName">{{ t('panel.save') }}</button>
+      </div>
+    </section>
+
     <section class="block">
       <h3>{{ t('panel.onBoard') }}</h3>
       <ul class="tally">
@@ -95,6 +139,13 @@ function capturedCounts(captured: Caste[] | null): Record<Caste, number> | null 
             <span class="player-name">{{ player.name }}</span>
             <span v-if="player.id === game.you" class="badge">{{ t('lobby.badge.you') }}</span>
             <span v-if="!player.connected" class="badge away">{{ t('lobby.badge.away') }}</span>
+            <span
+              v-if="game.isTeamGame"
+              class="badge team"
+              :class="`team-${game.teamOfPlayer(player.id)}`"
+            >
+              {{ teamLabel(game.teamOfPlayer(player.id), game.teamNames) }}
+            </span>
           </div>
           <div class="player-stats tiny muted">
             {{
@@ -248,6 +299,47 @@ h3 {
 .badge.away {
   background: rgba(120, 120, 120, 0.2);
   color: var(--ink-soft);
+}
+
+.badge.team {
+  margin-left: auto;
+}
+
+.badge.team-0 {
+  background: rgba(30, 111, 134, 0.18);
+  color: #0f3f52;
+}
+
+.badge.team-1 {
+  background: rgba(168, 51, 111, 0.18);
+  color: #651a41;
+}
+
+.badge.team-2 {
+  background: rgba(47, 122, 69, 0.18);
+  color: #17482a;
+}
+
+.team-current,
+.team-form {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.team-current .badge.team {
+  margin-left: 0;
+}
+
+.team-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid rgba(160, 137, 102, 0.5);
+  border-radius: 6px;
+  background: rgba(255, 253, 246, 0.9);
+  font: inherit;
+  font-size: 0.9rem;
 }
 
 .player-stats {

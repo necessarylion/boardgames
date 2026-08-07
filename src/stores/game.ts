@@ -16,6 +16,8 @@ import {
   legalPlacements,
   moveDestinations,
   movableTiles,
+  teamLeader,
+  teamOf,
   type PieceRef,
   type RulesView,
 } from '@shared/rules'
@@ -385,12 +387,30 @@ export const useGameStore = defineStore('game', () => {
     return out
   })
 
+  /** How many sides the table plays in; a free-for-all reads as zero. */
+  const teamCount = computed(() => state.value?.options.teams ?? 0)
+  const isTeamGame = computed(() => teamCount.value >= 2)
+  const teamOfPlayer = (id: number) => teamOf(id, teamCount.value)
+  const myTeam = computed(() => (you.value === null ? null : teamOfPlayer(you.value)))
+  /** Custom side names by team index; blanks fall back to a letter on display. */
+  const teamNames = computed<string[]>(() => state.value?.teamNames ?? [])
+  /**
+   * The side this player leads, or null. The leadership rule lives in
+   * `teamLeader` so the client and the server agree on who may rename a side.
+   */
+  const myLedTeam = computed(() => {
+    if (you.value === null || !isTeamGame.value) return null
+    const team = teamOfPlayer(you.value)
+    return teamLeader(team) === you.value ? team : null
+  })
+
   const view = computed<RulesView>(() => ({
     board: board.value,
     pieces: state.value?.pieces ?? {},
     placed: state.value?.placed ?? {},
     tiles: tiles.value,
     playerCount: state.value?.playerCount ?? 0,
+    teams: teamCount.value,
   }))
 
   function isTilePlayable(tile: Tile): boolean {
@@ -488,6 +508,8 @@ export const useGameStore = defineStore('game', () => {
 
   const leaveRoom = () => send({ t: 'leave' })
   const setOptions = (options: GameOptions) => send({ t: 'options', options })
+  /** Team leaders only (the server enforces it); a blank name resets to a letter. */
+  const renameTeam = (team: number, name: string) => send({ t: 'renameTeam', team, name })
   const startGame = () => send({ t: 'start' })
   const rematch = () => send({ t: 'rematch' })
   /** Host only: end the game in progress and take everyone back to the lobby. */
@@ -629,6 +651,12 @@ export const useGameStore = defineStore('game', () => {
     hand,
     tiles,
     view,
+    teamCount,
+    isTeamGame,
+    teamOfPlayer,
+    myTeam,
+    teamNames,
+    myLedTeam,
     draftPool,
     draftPicks,
     interaction,
@@ -647,6 +675,7 @@ export const useGameStore = defineStore('game', () => {
     joinRoom,
     leaveRoom,
     setOptions,
+    renameTeam,
     startGame,
     rematch,
     abandonGame,

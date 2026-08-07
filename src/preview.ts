@@ -83,6 +83,7 @@ const state: ClientState = {
   canEndTurn: false,
   canUndo: false,
   canRedraw: false,
+  teamNames: [],
   paused: false,
   turnMsLeft: null,
 }
