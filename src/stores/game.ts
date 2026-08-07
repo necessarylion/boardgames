@@ -16,6 +16,7 @@ import {
   legalPlacements,
   moveDestinations,
   movableTiles,
+  teamLeader,
   teamOf,
   type PieceRef,
   type RulesView,
@@ -394,12 +395,14 @@ export const useGameStore = defineStore('game', () => {
   /** Custom side names by team index; blanks fall back to a letter on display. */
   const teamNames = computed<string[]>(() => state.value?.teamNames ?? [])
   /**
-   * The side this player leads, or null. Sides open with seats 0, 1, … so the
-   * first `teamCount` seats are the leaders, each leading the side of its own id.
+   * The side this player leads, or null. The leadership rule lives in
+   * `teamLeader` so the client and the server agree on who may rename a side.
    */
-  const myLedTeam = computed(() =>
-    you.value !== null && isTeamGame.value && you.value < teamCount.value ? you.value : null,
-  )
+  const myLedTeam = computed(() => {
+    if (you.value === null || !isTeamGame.value) return null
+    const team = teamOfPlayer(you.value)
+    return teamLeader(team) === you.value ? team : null
+  })
 
   const view = computed<RulesView>(() => ({
     board: board.value,
