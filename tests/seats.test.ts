@@ -3,7 +3,11 @@ import { describe, expect, it } from 'vitest'
 import { COLOUR_ORDER } from '../shared/colours'
 import { DEFAULT_OPTIONS } from '../shared/engine'
 import { Room } from '../server/rooms'
+import type { ClientState } from '../shared/protocol'
 import { MAX_PLAYERS } from '../shared/types'
+
+/** These rooms all play Samurai, so read their state as a Samurai ClientState. */
+const sfor = (r: Room, token: string): ClientState => r['stateFor'](token) as ClientState
 
 /** A full table, seated in order. */
 function fullRoom(code: string) {
@@ -79,7 +83,7 @@ describe('team play', () => {
     room.game!.state.players[2].captured.push('buddha')
     for (const seat of room.seats) seat.connected = true
 
-    const view = room.stateFor('token-0')
+    const view = sfor(room, 'token-0')
     expect(view.players.find((p) => p.id === 2)!.captured).toEqual(['buddha'])
     expect(view.players.find((p) => p.id === 1)!.captured).toBeNull()
   })
@@ -91,7 +95,7 @@ describe('team play', () => {
     room.game!.state.players[3].captured.push('rice')
     for (const seat of room.seats) seat.connected = true
 
-    const view = room.stateFor('token-0')
+    const view = sfor(room, 'token-0')
     expect(view.players.find((p) => p.id === 3)!.captured).toEqual(['rice'])
     expect(view.players.find((p) => p.id === 1)!.captured).toBeNull()
   })
@@ -105,7 +109,7 @@ describe('team play', () => {
     expect(room.renameTeam('token-0', 0, 'Dragons')).toBeNull()
 
     for (const seat of room.seats) seat.connected = true
-    expect(room.stateFor('token-3').teamNames[0]).toBe('Dragons')
+    expect(sfor(room, 'token-3').teamNames[0]).toBe('Dragons')
   })
 
   it('clears a side name back to its letter and refuses names off-teams', () => {

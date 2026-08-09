@@ -1,5 +1,14 @@
 import type { HexId } from './hex'
 
+/**
+ * Which game a room is playing. `samurai` is the original Knizia implementation;
+ * `halligalli` is a second, unrelated real-time card game that shares only this
+ * app's room, seat and reconnection machinery, never its rules layer.
+ */
+export type GameKind = 'samurai' | 'halligalli'
+
+export const GAME_KINDS: readonly GameKind[] = ['samurai', 'halligalli']
+
 /** The three societal castes competed over in the game. */
 export type Caste = 'buddha' | 'rice' | 'castle'
 

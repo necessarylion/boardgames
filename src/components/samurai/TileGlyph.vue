@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, useId } from 'vue'
-import GameIcon from './GameIcon.vue'
+import GameIcon from '../common/GameIcon.vue'
 import { CASTE_COLOURS, PLAYER_COLOURS } from '@shared/colours'
 import { hexPolygon } from '@shared/hex'
 import type { PlayerColour, Tile } from '@shared/types'

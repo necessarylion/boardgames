@@ -1,7 +1,13 @@
 import { randomUUID } from 'node:crypto'
 
 import { DEFAULT_OPTIONS, Game, type GameOptions, type GameState } from '../shared/engine'
-import type { ClientState, PublicPlayer } from '../shared/protocol'
+import { HalliGame, fruitTotals, ringingFruit, type HalliGameState } from '../shared/halligalli'
+import type {
+  AnyClientState,
+  HalliClientState,
+  HalliPublicPlayer,
+  PublicPlayer,
+} from '../shared/protocol'
 import { teamArrangements, teamLeader, teamOf } from '../shared/rules'
 import { COLOUR_ORDER } from '../shared/colours'
 import { Rng, randomSeed } from '../shared/rng'
@@ -43,6 +49,8 @@ export interface RoomSnapshot {
   teamNames: string[]
   lastActivity: number
   game: GameState | null
+  /** The Halli Galli engine's state, when this is a Halli Galli table. */
+  hg?: HalliGameState | null
 }
 
 export class Room {
@@ -56,6 +64,8 @@ export class Room {
   options: GameOptions = { ...DEFAULT_OPTIONS }
   seats: Seat[] = []
   game: Game | null = null
+  /** The running Halli Galli game, when this room's kind is halligalli. */
+  hg: HalliGame | null = null
   hostToken = ''
   lastActivity = Date.now()
   /**
@@ -96,6 +106,7 @@ export class Room {
       teamNames: this.teamNames,
       lastActivity: this.lastActivity,
       game: this.game?.state ?? null,
+      hg: this.hg?.state ?? null,
     }
   }
 
@@ -114,11 +125,18 @@ export class Room {
     room.teamNames = snapshot.teamNames ?? []
     room.lastActivity = snapshot.lastActivity
     room.game = snapshot.game ? Game.fromState(snapshot.game) : null
+    room.hg = snapshot.hg ? HalliGame.fromState(snapshot.hg) : null
     return room
   }
 
   get started(): boolean {
-    return this.game !== null
+    return this.game !== null || this.hg !== null
+  }
+
+  /** Whether whichever game is running has finished. */
+  private get gameOver(): boolean {
+    if (this.hg) return this.hg.state.phase === 'over'
+    return this.game?.state.phase === 'over'
   }
 
   seatByToken(token: string): Seat | undefined {
@@ -183,26 +201,38 @@ export class Room {
     return null
   }
 
+  /** Deal whichever game the room's options ask for. */
+  private deal(): void {
+    const seed = (Math.random() * 0xffffffff) >>> 0
+    if (this.options.kind === 'halligalli') {
+      this.hg = new HalliGame(this.seats.length, seed)
+      this.game = null
+    } else {
+      this.game = new Game(this.seats.length, this.options, seed)
+      this.hg = null
+    }
+  }
+
   start(): string | null {
     if (this.started) return 'The game has already started.'
     if (this.seats.length < MIN_PLAYERS) return 'At least two players are needed.'
     const teams = this.teamsError(this.seats.length)
     if (teams) return teams
-    this.game = new Game(this.seats.length, this.options, (Math.random() * 0xffffffff) >>> 0)
+    this.deal()
     this.touch()
     return null
   }
 
   /** Deal a fresh game to the players who are still here. */
   rematch(): string | null {
-    if (!this.game || this.game.state.phase !== 'over') return 'The game is still in progress.'
+    if (!this.started || !this.gameOver) return 'The game is still in progress.'
     this.dropAbsentPlayers()
     if (this.seats.length < MIN_PLAYERS) {
       return 'Not enough players are still connected to start another game.'
     }
     const teams = this.teamsError(this.seats.length)
     if (teams) return teams
-    this.game = new Game(this.seats.length, this.options, (Math.random() * 0xffffffff) >>> 0)
+    this.deal()
     this.touch()
     return null
   }
@@ -212,8 +242,9 @@ export class Room {
    * can change the settings and deal again.
    */
   abandon(): string | null {
-    if (!this.game) return 'No game is in progress.'
+    if (!this.started) return 'No game is in progress.'
     this.game = null
+    this.hg = null
     this.dropAbsentPlayers()
     this.touch()
     return null
@@ -289,7 +320,8 @@ export class Room {
   }
 
   /** Build the redacted state for one viewer. `token` may belong to a spectator. */
-  stateFor(token: string): ClientState {
+  stateFor(token: string): AnyClientState {
+    if (this.options.kind === 'halligalli') return this.halliStateFor(token)
     const seat = this.seatByToken(token)
     const game = this.game
     const open = this.options.openInformation || game?.state.phase === 'over'
@@ -315,6 +347,7 @@ export class Room {
 
     if (!game) {
       return {
+        kind: 'samurai',
         code: this.code,
         phase: 'lobby',
         options: this.options,
@@ -349,6 +382,7 @@ export class Room {
     const s = game.state
     const mine = seat ? s.players[seat.id] : null
     return {
+      kind: 'samurai',
       code: this.code,
       phase: s.phase,
       options: this.options,
@@ -383,6 +417,65 @@ export class Room {
       teamNames: [...this.teamNames],
       paused: s.paused,
       turnMsLeft: this.turnMsLeft(),
+    }
+  }
+
+  /** The redacted Halli Galli state for one viewer — stacks as counts only. */
+  private halliStateFor(token: string): HalliClientState {
+    const seat = this.seatByToken(token)
+    const hg = this.hg
+    const hostId = this.seats.find((s) => s.token === this.hostToken)?.id ?? 0
+
+    const players: HalliPublicPlayer[] = this.seats.map((s) => {
+      const p = hg?.state.players[s.id]
+      return {
+        id: s.id,
+        name: s.name,
+        colour: s.colour,
+        connected: s.connected,
+        stackCount: p?.stack.length ?? 0,
+        faceUp: p ? [...p.faceUp] : [],
+        out: p?.out ?? false,
+      }
+    })
+
+    const base = {
+      kind: 'halligalli' as const,
+      code: this.code,
+      options: this.options,
+      hostId,
+      you: seat?.id ?? null,
+      players,
+      playerCount: this.seats.length,
+    }
+
+    if (!hg) {
+      return {
+        ...base,
+        phase: 'lobby',
+        current: 0,
+        turnNumber: 0,
+        totals: { banana: 0, lime: 0, strawberry: 0, plum: 0 },
+        ring: null,
+        lastEvent: null,
+        log: [],
+        result: null,
+        paused: false,
+      }
+    }
+
+    const s = hg.state
+    return {
+      ...base,
+      phase: s.phase,
+      current: s.current,
+      turnNumber: s.turnNumber,
+      totals: fruitTotals(s.players),
+      ring: ringingFruit(s.players),
+      lastEvent: s.lastEvent,
+      log: s.log,
+      result: s.result,
+      paused: s.paused,
     }
   }
 }

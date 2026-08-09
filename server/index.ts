@@ -8,7 +8,7 @@ import { DEFAULT_BOARD_SHAPE } from '../shared/board'
 import { TURN_SECONDS_CHOICES } from '../shared/engine'
 import type { ClientMessage, ServerMessage } from '../shared/protocol'
 import { CLOSE_REPLACED, HEARTBEAT_MS, PROTOCOL_VERSION } from '../shared/protocol'
-import { BOARD_SHAPES } from '../shared/types'
+import { BOARD_SHAPES, GAME_KINDS } from '../shared/types'
 import { MAX_PLAYERS, RoomManager, type Room } from './rooms'
 import { PostgresRoomStore, type RoomStore } from './store'
 
@@ -251,6 +251,31 @@ wss.on('connection', (socket) => {
         break
     }
 
+    // Halli Galli is a separate engine sharing this room; its actions route here
+    // rather than through the Samurai game below.
+    if (room.hg) {
+      if (!seat) return fail(socket, 'You are watching this game, not playing it.')
+      const hg = room.hg
+      const outcome = (() => {
+        switch (msg.t) {
+          case 'flip':
+            return hg.flip(seat.id)
+          case 'slap':
+            return hg.slap(seat.id)
+          case 'pause':
+            return hg.pause(seat.id)
+          case 'resume':
+            return hg.resume(seat.id)
+          default:
+            return { ok: false as const, error: 'Unknown action.' }
+        }
+      })()
+      if (!outcome.ok) return fail(socket, outcome.error)
+      room.touch()
+      commit(room)
+      return
+    }
+
     // Everything below is a game action and needs a seat and a running game.
     if (!seat) return fail(socket, 'You are watching this game, not playing it.')
     const game = room.game
@@ -312,7 +337,9 @@ function sanitiseOptions(options: unknown) {
   // The start check is what holds it to a split that fits the player count.
   const teamsRaw = typeof o.teams === 'boolean' ? (o.teams ? 2 : 0) : Math.floor(Number(o.teams))
   const teams = Number.isFinite(teamsRaw) && teamsRaw >= 2 ? teamsRaw : 0
+  const kind = GAME_KINDS.find((k) => k === o.kind) ?? 'samurai'
   return {
+    kind,
     randomHands: Boolean(o.randomHands),
     openInformation: Boolean(o.openInformation),
     boardShape: shape,

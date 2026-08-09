@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import GameIcon from './GameIcon.vue'
+import GameIcon from '../common/GameIcon.vue'
 import TileReference from './TileReference.vue'
 import { setAsideLimit } from '@shared/rules'
 import { TILES_PER_PLAYER } from '@shared/tiles'

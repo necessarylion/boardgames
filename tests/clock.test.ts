@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
 import { DEFAULT_OPTIONS } from '../shared/engine'
+import type { ClientState } from '../shared/protocol'
 import { Room, RoomManager } from '../server/rooms'
+
+/** These rooms all play Samurai, so read their state as a Samurai ClientState. */
+const sfor = (r: Room, token: string): ClientState => r['stateFor'](token) as ClientState
 
 /** A started two-player room, timed unless told otherwise. */
 function room(turnSeconds = 30): Room {
@@ -18,7 +22,7 @@ describe('the turn clock', () => {
     const r = room(0)
     r.syncTurnTimer()
     expect(r.turnDeadline).toBeNull()
-    expect(r.stateFor('token-a').turnMsLeft).toBeNull()
+    expect(sfor(r, 'token-a').turnMsLeft).toBeNull()
   })
 
   it('arms a full period when the turn passes to someone new', () => {
@@ -39,12 +43,12 @@ describe('the turn clock', () => {
   it('reports the remainder to clients and never a negative one', () => {
     const r = room(30)
     r.syncTurnTimer()
-    const left = r.stateFor('token-a').turnMsLeft!
+    const left = sfor(r, 'token-a').turnMsLeft!
     expect(left).toBeGreaterThan(29_000)
     expect(left).toBeLessThanOrEqual(30_000)
 
     r.turnDeadline = Date.now() - 5_000
-    expect(r.stateFor('token-a').turnMsLeft).toBe(0)
+    expect(sfor(r, 'token-a').turnMsLeft).toBe(0)
   })
 
   it('starts a fresh period for a room read back from the database', () => {
@@ -92,11 +96,11 @@ describe('the turn clock', () => {
     // Pause twenty seconds in, with forty left.
     r.game!.pause(0)
     r.syncTurnTimer(now + 20_000)
-    expect(r.stateFor('token-a').turnMsLeft).toBe(40_000)
+    expect(sfor(r, 'token-a').turnMsLeft).toBe(40_000)
 
     // No amount of wall-clock time while paused runs the clock down.
     r.syncTurnTimer(now + 5_000_000)
-    expect(r.stateFor('token-a').turnMsLeft).toBe(40_000)
+    expect(sfor(r, 'token-a').turnMsLeft).toBe(40_000)
 
     // Resume an hour later: the player still has exactly their forty seconds.
     r.game!.resume(0)
@@ -127,6 +131,6 @@ describe('the turn clock', () => {
     expect(r.game!.state.phase).toBe('over')
     r.syncTurnTimer()
     expect(r.turnDeadline).toBeNull()
-    expect(r.stateFor('token-a').turnMsLeft).toBeNull()
+    expect(sfor(r, 'token-a').turnMsLeft).toBeNull()
   })
 })

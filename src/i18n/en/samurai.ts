@@ -1,9 +1,11 @@
 /**
- * The English catalogue, and the list of keys every other language has to fill.
+ * The English catalogue for Samurai and the shared shell (app, home, lobby,
+ * landing chrome). Halli Galli's keys live alongside in `../halli_galli`, and
+ * `../index` merges the two into the full catalogue every other language fills.
  * Keys are grouped by the screen they appear on; `{name}` placeholders are
  * substituted by `t()`.
  */
-export const en = {
+export const enSamurai = {
   // --- app shell -----------------------------------------------------------
   'app.connecting': 'Connecting to the game server…',
   'app.connectionLost': 'Connection lost — reconnecting…',
@@ -278,4 +280,17 @@ export const en = {
   'menu.leaveTable': 'Leave table',
   'menu.leaveHint': 'Return to the start screen',
   'menu.cancel': 'Cancel',
+
+  // --- landing (choose a game) --------------------------------------------
+  'landing.title': 'Game Table',
+  'landing.tagline': 'Two board games, one table. Pick one to host or join a room with friends.',
+  'landing.play': 'Play',
+  'landing.samurai.name': 'Samurai',
+  'landing.samurai.blurb': 'Place your influence across feudal Japan and lead the most castes.',
+  'landing.samurai.meta': '2–6 players · strategy',
+  'landing.footnote':
+    'An unofficial fan project. It ships no rulebooks or publisher artwork — only the rules, which no one owns.',
+
+  // --- home (per game) -----------------------------------------------------
+  'home.backToGames': '← Choose a different game',
 }

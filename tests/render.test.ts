@@ -5,15 +5,19 @@ import { createPinia, setActivePinia } from 'pinia'
 import { mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
 
-import DraftScreen from '../src/components/DraftScreen.vue'
-import GameScreen from '../src/components/GameScreen.vue'
-import HomeScreen from '../src/components/HomeScreen.vue'
-import LobbyScreen from '../src/components/LobbyScreen.vue'
+import DraftScreen from '../src/components/samurai/DraftScreen.vue'
+import GameScreen from '../src/components/samurai/GameScreen.vue'
+import HomeScreen from '../src/components/common/HomeScreen.vue'
+import LobbyScreen from '../src/components/samurai/LobbyScreen.vue'
 import { Room } from '../server/rooms'
+import type { ClientState } from '../shared/protocol'
 import { legalPlacements } from '../shared/rules'
 import { tileFromId } from '../shared/tiles'
 import { MAX_PLAYERS } from '../shared/types'
 import { useGameStore } from '../src/stores/game'
+
+/** These rooms all play Samurai, so read their state as a Samurai ClientState. */
+const sfor = (r: Room, token: string): ClientState => r['stateFor'](token) as ClientState
 
 /** A real room, driven through the real server code, to render against. */
 function room(started = true) {
@@ -51,10 +55,10 @@ describe('ending and restarting', () => {
     expect(r.abandon()).toBeNull()
 
     expect(r.started).toBe(false)
-    expect(r.stateFor('token-a').phase).toBe('lobby')
+    expect(sfor(r, 'token-a').phase).toBe('lobby')
     expect(r.seats.map((s) => s.name)).toEqual(['Takeda', 'Uesugi'])
     // The board is gone, so a fresh game can be dealt with new settings.
-    expect(r.stateFor('token-a').pieces).toEqual({})
+    expect(sfor(r, 'token-a').pieces).toEqual({})
     expect(r.start()).toBeNull()
   })
 
@@ -95,7 +99,7 @@ describe('rendering', () => {
 
   it('renders the lobby with both seats and the rest of the table empty', () => {
     const game = useGameStore()
-    game.state = room(false).stateFor('token-a')
+    game.state = sfor(room(false), 'token-a')
     const wrapper = mount(LobbyScreen)
     expect(wrapper.text()).toContain('TEST')
     expect(wrapper.text()).toContain('Takeda')
@@ -107,7 +111,7 @@ describe('rendering', () => {
   it('renders the board, every space and both hands from server state', () => {
     const r = room()
     const game = useGameStore()
-    game.state = r.stateFor('token-a')
+    game.state = sfor(r, 'token-a')
 
     const wrapper = mount(GameScreen)
     const svg = wrapper.find('svg.board')
@@ -128,14 +132,14 @@ describe('rendering', () => {
   it('offers a take-back only once something has been placed this turn', () => {
     const r = room()
     const game = useGameStore()
-    game.state = r.stateFor('token-a')
+    game.state = sfor(r, 'token-a')
 
     // Nothing placed yet, so there is nothing to take back.
     expect(mount(GameScreen).text()).not.toContain('Take back')
 
     const tile = placeableTile(r)
     r.game!.playTile(0, tile.id, legalPlacements(r.game!.view, tile)[0])
-    game.state = r.stateFor('token-a')
+    game.state = sfor(r, 'token-a')
 
     expect(mount(GameScreen).text()).toContain('Take back')
   })
@@ -146,14 +150,14 @@ describe('rendering', () => {
     r.game!.playTile(0, tile.id, legalPlacements(r.game!.view, tile)[0])
 
     const game = useGameStore()
-    game.state = r.stateFor('token-b')
+    game.state = sfor(r, 'token-b')
     expect(mount(GameScreen).text()).not.toContain('Take back')
   })
 
   it('shows the opponent as waiting and hides their captured pieces', () => {
     const r = room()
     const game = useGameStore()
-    game.state = r.stateFor('token-b') // the player who is not on turn
+    game.state = sfor(r, 'token-b') // the player who is not on turn
 
     const wrapper = mount(GameScreen)
     expect(wrapper.text()).toContain("Takeda's turn")
@@ -170,7 +174,7 @@ describe('rendering', () => {
     r.start()
 
     const game = useGameStore()
-    game.state = r.stateFor('token-a')
+    game.state = sfor(r, 'token-a')
     const wrapper = mount(DraftScreen)
     expect(wrapper.findAll('.tile-btn')).toHaveLength(20)
 
@@ -189,7 +193,7 @@ describe('rendering', () => {
   it('ends the game only after a confirming second click', async () => {
     const r = room()
     const game = useGameStore()
-    game.state = r.stateFor('token-a') // the host
+    game.state = sfor(r, 'token-a') // the host
     const sent: string[] = []
     // Intercept outgoing messages instead of opening a real socket.
     game.abandonGame = () => sent.push('abandon')
@@ -213,7 +217,7 @@ describe('rendering', () => {
   it('does not offer ending the game to a player who is not the host', async () => {
     const r = room()
     const game = useGameStore()
-    game.state = r.stateFor('token-b')
+    game.state = sfor(r, 'token-b')
 
     const wrapper = mount(GameScreen)
     await wrapper.find('.menu-wrap > button').trigger('click')
@@ -225,7 +229,7 @@ describe('rendering', () => {
     const r = room()
     const game = useGameStore()
     // Joining a table already several rounds in is not a change to announce.
-    game.state = { ...r.stateFor('token-a'), turnNumber: 3 }
+    game.state = { ...sfor(r, 'token-a'), turnNumber: 3 }
 
     const wrapper = mount(GameScreen)
     expect(wrapper.find('.round').text()).toContain('Round 3')
@@ -244,7 +248,7 @@ describe('rendering', () => {
   it('highlights legal targets once a tile is selected', async () => {
     const r = room()
     const game = useGameStore()
-    game.state = r.stateFor('token-a')
+    game.state = sfor(r, 'token-a')
 
     const wrapper = mount(GameScreen)
     expect(wrapper.findAll('.hex-target')).toHaveLength(0)
@@ -267,7 +271,7 @@ describe('rendering', () => {
   it('marks the last tile placed for the player who did not place it', async () => {
     const r = room()
     const game = useGameStore()
-    game.state = r.stateFor('token-b') // watching someone else's turn
+    game.state = sfor(r, 'token-b') // watching someone else's turn
 
     const wrapper = mount(GameScreen)
     expect(wrapper.findAll('.tile-mark')).toHaveLength(0)
@@ -275,13 +279,13 @@ describe('rendering', () => {
     const tile = placeableTile(r)
     const space = legalPlacements(r.game!.view, tile)[0]
     r.game!.playTile(0, tile.id, space)
-    game.state = r.stateFor('token-b')
+    game.state = sfor(r, 'token-b')
     await nextTick()
     expect(wrapper.findAll('.tile-mark')).toHaveLength(1)
 
     // Still marked once play has passed on, which is when it matters most.
     r.game!.endTurn(0)
-    game.state = r.stateFor('token-b')
+    game.state = sfor(r, 'token-b')
     await nextTick()
     expect(wrapper.findAll('.tile-mark')).toHaveLength(1)
   })
@@ -319,25 +323,25 @@ describe('what each seat has yet to see', () => {
     const first = turn(r)
     const second = turn(r)
 
-    expect(r.stateFor('token-c').sinceYourTurn).toEqual([first, second])
-    expect(r.stateFor('token-a').sinceYourTurn).toEqual([second])
-    expect(r.stateFor('token-b').sinceYourTurn).toEqual([])
+    expect(sfor(r, 'token-c').sinceYourTurn).toEqual([first, second])
+    expect(sfor(r, 'token-a').sinceYourTurn).toEqual([second])
+    expect(sfor(r, 'token-b').sinceYourTurn).toEqual([])
 
     // A spectator gets the union of every bucket — the last lap of the table —
     // with each placement in it once, however many seats have yet to see it.
-    expect([...r.stateFor('nobody').sinceYourTurn].sort()).toEqual([first, second].sort())
+    expect([...sfor(r, 'nobody').sinceYourTurn].sort()).toEqual([first, second].sort())
   })
 
   it('keeps the earlier plays marked underneath the newest one', async () => {
     const r = table()
     const game = useGameStore()
-    game.state = r.stateFor('token-c')
+    game.state = sfor(r, 'token-c')
 
     const wrapper = mount(GameScreen)
     expect(wrapper.findAll('.tile-earlier')).toHaveLength(0)
 
     turn(r)
-    game.state = r.stateFor('token-c')
+    game.state = sfor(r, 'token-c')
     await nextTick()
     expect(wrapper.findAll('.tile-mark')).toHaveLength(1)
     expect(wrapper.findAll('.tile-earlier')).toHaveLength(1)
@@ -345,13 +349,13 @@ describe('what each seat has yet to see', () => {
     // The second play takes over the fresh mark; the first is still on the
     // board rather than being replaced by it.
     turn(r)
-    game.state = r.stateFor('token-c')
+    game.state = sfor(r, 'token-c')
     await nextTick()
     expect(wrapper.findAll('.tile-mark')).toHaveLength(1)
     expect(wrapper.findAll('.tile-earlier')).toHaveLength(2)
 
     // Seat 1 has just played, so they are caught up and nothing is left over.
-    game.state = r.stateFor('token-b')
+    game.state = sfor(r, 'token-b')
     await nextTick()
     expect(wrapper.findAll('.tile-earlier')).toHaveLength(0)
   })
@@ -364,7 +368,7 @@ describe('the capture notice', () => {
    */
   function turnEnded(r: Room, token: string, winner: number) {
     return {
-      ...r.stateFor(token),
+      ...sfor(r, token),
       current: 1,
       lastCaptures: [{ caste: 'buddha' as const, spaceId: r.game!.board.order[0], winner }],
     }
@@ -373,7 +377,7 @@ describe('the capture notice', () => {
   it('congratulates the player who took the piece, once', async () => {
     const r = room()
     const game = useGameStore()
-    game.state = r.stateFor('token-a')
+    game.state = sfor(r, 'token-a')
     await nextTick()
 
     game.state = turnEnded(r, 'token-a', 0)
@@ -394,7 +398,7 @@ describe('the capture notice', () => {
   it('says nothing to the player who did not take it', async () => {
     const r = room()
     const game = useGameStore()
-    game.state = r.stateFor('token-b')
+    game.state = sfor(r, 'token-b')
     await nextTick()
 
     game.state = turnEnded(r, 'token-b', 0) // seat 0 captured; this client is seat 1

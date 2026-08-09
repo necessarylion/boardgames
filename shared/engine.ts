@@ -19,6 +19,7 @@ import {
   MIN_PLAYERS,
   type BoardShape,
   type Caste,
+  type GameKind,
   type GameResult,
   type LogEntry,
   type PlacedTile,
@@ -28,6 +29,12 @@ import {
 export type Phase = 'lobby' | 'draft' | 'play' | 'over'
 
 export interface GameOptions {
+  /**
+   * Which game the room plays. Held on the options so it flows through create,
+   * the lobby, the snapshot and restore with no extra plumbing. Every field
+   * below it is Samurai's; a Halli Galli table simply leaves them at default.
+   */
+  kind: GameKind
   /** Deal starting hands at random instead of letting each player choose five. */
   randomHands: boolean
   /** Reveal every player's captured pieces instead of keeping them secret. */
@@ -49,6 +56,7 @@ export interface GameOptions {
 export const TURN_SECONDS_CHOICES = [0, 30, 45, 60, 120] as const
 
 export const DEFAULT_OPTIONS: GameOptions = {
+  kind: 'samurai',
   randomHands: false,
   openInformation: false,
   boardShape: DEFAULT_BOARD_SHAPE,

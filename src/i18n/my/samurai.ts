@@ -1,9 +1,9 @@
 /**
- * The Burmese catalogue, and the list of keys every other language has to fill.
- * Keys are grouped by the screen they appear on; `{name}` placeholders are
- * substituted by `t()`.
+ * The Burmese catalogue for Samurai and the shared shell. Halli Galli's keys
+ * live alongside in `../halli_galli`; `../index` merges the two. Keys are grouped
+ * by the screen they appear on; `{name}` placeholders are substituted by `t()`.
  */
-export const my = {
+export const mySamurai = {
   // --- app shell -----------------------------------------------------------
   'app.connecting': 'ဂိမ်းဆာဗာသို့ ချိတ်ဆက်နေသည်…',
   'app.connectionLost': 'ချိတ်ဆက်မှု ပြတ်တောက်သွားသည် — ပြန်လည်ချိတ်ဆက်နေသည်…',
@@ -278,5 +278,18 @@ export const my = {
   'menu.leaveConfirm': 'ဝိုင်းမှ ထွက်မလား။ ဤဂိမ်းရှိ သင့်နေရာ ဆုံးရှုံးပါမည်။',
   'menu.leaveTable': 'ဝိုင်းမှ ထွက်ရန်',
   'menu.leaveHint': 'စတင်သည့် မျက်နှာပြင်သို့ ပြန်သွားရန်',
-  'menu.cancel': 'ပယ်ဖျက်ရန်'
+  'menu.cancel': 'ပယ်ဖျက်ရန်',
+
+  // --- landing (choose a game) --------------------------------------------
+  'landing.title': 'ဂိမ်းဝိုင်း',
+  'landing.tagline': 'ဘုတ်ဂိမ်းနှစ်မျိုး၊ ဝိုင်းတစ်ခု။ တစ်ခုကိုရွေးပြီး သူငယ်ချင်းများနှင့် အခန်းဖွင့်ပါ သို့မဟုတ် ဝင်ပါ။',
+  'landing.play': 'ကစားရန်',
+  'landing.samurai.name': 'ဆာမူရိုင်း',
+  'landing.samurai.blurb': 'ရှေးဂျပန်တစ်ဝှမ်း သြဇာချထားပြီး အများဆုံး လူတန်းစားများကို ဦးဆောင်ပါ။',
+  'landing.samurai.meta': 'ကစားသမား ၂–၆ ဦး · ဗျူဟာ',
+  'landing.footnote':
+    'တရားဝင်မဟုတ်သော ပရိသတ်စီမံကိန်းတစ်ခုဖြစ်သည်။ စည်းမျဉ်းစာအုပ်များ သို့မဟုတ် ထုတ်ဝေသူ၏ ပန်းချီများ မပါဝင်ပါ — မည်သူမျှ ပိုင်ဆိုင်ခြင်းမရှိသော စည်းမျဉ်းများသာ ဖြစ်သည်။',
+
+  // --- home (per game) -----------------------------------------------------
+  'home.backToGames': '← အခြားဂိမ်းတစ်ခု ရွေးရန်',
 }

@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import mainBackground from '../../assets/mainbg.png'
-import BoardGlyph from './BoardGlyph.vue'
-import TurnClockOptions from './TurnClockOptions.vue'
+import { computed, ref } from 'vue'
+import mainBackground from '../../../assets/mainbg.png'
+import BoardGlyph from '../samurai/BoardGlyph.vue'
+import TurnClockOptions from '../samurai/TurnClockOptions.vue'
 import { DEFAULT_OPTIONS } from '@shared/engine'
 import { BOARD_SHAPES } from '@shared/types'
 import LanguageMenu from '@/i18n/LanguageMenu.vue'
@@ -10,6 +10,10 @@ import { t } from '@/i18n'
 import { useGameStore } from '@/stores/game'
 
 const game = useGameStore()
+
+/** Which game the landing screen sent us here to host or join. */
+const kind = computed(() => game.chosenGame ?? 'samurai')
+const isSamurai = computed(() => kind.value === 'samurai')
 
 const name = ref(game.myName)
 const code = ref((new URLSearchParams(location.search).get('room') ?? '').toUpperCase())
@@ -28,6 +32,7 @@ const turnSeconds = ref(DEFAULT_OPTIONS.turnSeconds)
 function create() {
   if (!name.value.trim()) return game.showError(t('home.error.name'))
   game.createRoom(name.value.trim(), {
+    kind: kind.value,
     randomHands: randomHands.value,
     openInformation: openInformation.value,
     boardShape: boardShape.value,
@@ -48,18 +53,22 @@ function join() {
   <div class="home">
     <LanguageMenu class="lang-corner" />
 
-    <aside class="art">
-      <img class="art-image" :src="mainBackground" alt="" />
+    <aside class="art" :class="{ halli: !isSamurai }">
+      <img v-if="isSamurai" class="art-image" :src="mainBackground" alt="" />
       <div class="art-wash"></div>
       <header class="masthead">
-        <span class="seal">侍</span>
-        <h1>Samurai</h1>
-        <p class="tagline">{{ t('home.tagline') }}</p>
+        <span class="seal" :class="{ fruits: !isSamurai }">{{ isSamurai ? '侍' : '🔔' }}</span>
+        <h1>{{ isSamurai ? t('landing.samurai.name') : t('landing.halli.name') }}</h1>
+        <p class="tagline">{{ isSamurai ? t('home.tagline') : t('home.halli.tagline') }}</p>
       </header>
     </aside>
 
     <main class="forms">
       <div class="forms-inner">
+        <button type="button" class="linkish back" @click="game.clearChosenGame()">
+          {{ t('home.backToGames') }}
+        </button>
+
         <section>
           <h2>{{ t('home.name.title') }}</h2>
           <input
@@ -93,39 +102,42 @@ function join() {
         <template v-else>
           <section>
             <h2>{{ t('home.host.title') }}</h2>
-            <label class="check">
-              <input v-model="randomHands" type="checkbox" />
-              <span>
-                {{ t('option.randomHands') }}
-                <em class="tiny muted">{{ t('option.randomHands.hint') }}</em>
-              </span>
-            </label>
-            <label class="check">
-              <input v-model="openInformation" type="checkbox" />
-              <span>
-                {{ t('option.openInfo') }}
-                <em class="tiny muted">{{ t('option.openInfo.hint') }}</em>
-              </span>
-            </label>
-            <div class="board-pick">
-              <span class="board-label tiny muted">{{ t('home.board.title') }}</span>
-              <div class="board-options">
-                <button
-                  v-for="shape in BOARD_SHAPES"
-                  :key="shape"
-                  type="button"
-                  class="board-option"
-                  :class="{ chosen: boardShape === shape }"
-                  :title="t(`board.${shape}.hint`)"
-                  @click="boardShape = shape"
-                >
-                  <BoardGlyph :shape="shape" />
-                  <span>{{ t(`board.${shape}`) }}</span>
-                </button>
+            <template v-if="isSamurai">
+              <label class="check">
+                <input v-model="randomHands" type="checkbox" />
+                <span>
+                  {{ t('option.randomHands') }}
+                  <em class="tiny muted">{{ t('option.randomHands.hint') }}</em>
+                </span>
+              </label>
+              <label class="check">
+                <input v-model="openInformation" type="checkbox" />
+                <span>
+                  {{ t('option.openInfo') }}
+                  <em class="tiny muted">{{ t('option.openInfo.hint') }}</em>
+                </span>
+              </label>
+              <div class="board-pick">
+                <span class="board-label tiny muted">{{ t('home.board.title') }}</span>
+                <div class="board-options">
+                  <button
+                    v-for="shape in BOARD_SHAPES"
+                    :key="shape"
+                    type="button"
+                    class="board-option"
+                    :class="{ chosen: boardShape === shape }"
+                    :title="t(`board.${shape}.hint`)"
+                    @click="boardShape = shape"
+                  >
+                    <BoardGlyph :shape="shape" />
+                    <span>{{ t(`board.${shape}`) }}</span>
+                  </button>
+                </div>
               </div>
-            </div>
 
-            <TurnClockOptions :seconds="turnSeconds" @pick="turnSeconds = $event" />
+              <TurnClockOptions :seconds="turnSeconds" @pick="turnSeconds = $event" />
+            </template>
+            <p v-else class="muted tiny host-hint">{{ t('home.halli.hostHint') }}</p>
 
             <button class="btn wide" @click="create">{{ t('home.create') }}</button>
           </section>
@@ -178,6 +190,20 @@ function join() {
   overflow: hidden;
   background: #0e0c0b;
   min-height: 22rem;
+}
+
+/* Halli Galli ships no artwork, so its column is a warm wash instead of a crop. */
+.art.halli {
+  background: linear-gradient(160deg, #b23a2c 0%, #d98a3d 60%, #e7c15c 100%);
+}
+
+.back {
+  margin: 0 0 1rem !important;
+}
+
+.host-hint {
+  margin: 0 0 0.4rem;
+  line-height: 1.5;
 }
 
 /* The painting is a wide landscape dropped into a tall column, so it has to be
