@@ -42,10 +42,24 @@ const winner = computed(() => {
 })
 
 // Keyboard: space flips your card, enter is the bell. F stays as an alias for flip.
+/**
+ * A control that owns the key itself — a button, link, menu item, or any input.
+ * The listener is on the window, so a key pressed while one of these has focus
+ * reaches here too; bailing lets Enter/Space activate the control (pause, the
+ * menu, the flip and bell buttons) instead of firing a stray flip or slap.
+ */
+function isInteractiveTarget(target: EventTarget | null): boolean {
+  const el = target as HTMLElement | null
+  if (!el) return false
+  if (el.isContentEditable) return true
+  return !!el.closest(
+    'button, a, input, textarea, select, [role="button"], [role="menuitem"]',
+  )
+}
+
 function onKey(e: KeyboardEvent) {
   if (e.repeat) return
-  const tag = (e.target as HTMLElement | null)?.tagName
-  if (tag === 'INPUT' || tag === 'TEXTAREA') return
+  if (isInteractiveTarget(e.target)) return
   if (e.code === 'Space' || e.key === 'f' || e.key === 'F') {
     e.preventDefault()
     game.flipCard()
