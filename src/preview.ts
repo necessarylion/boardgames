@@ -4,8 +4,8 @@ import { DEFAULT_OPTIONS } from '@shared/engine'
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 
-import DraftScreen from './components/DraftScreen.vue'
-import GameScreen from './components/GameScreen.vue'
+import DraftScreen from './components/samurai/DraftScreen.vue'
+import GameScreen from './components/samurai/GameScreen.vue'
 import { Game } from '@shared/engine'
 import { legalPlacements } from '@shared/rules'
 import { buildTiles, tileFromId } from '@shared/tiles'
@@ -48,6 +48,7 @@ for (let i = 0; i < turns; i++) {
 
 const s = game.state
 const state: ClientState = {
+  kind: 'samurai',
   code: 'KN26',
   phase: s.phase,
   options: s.options,

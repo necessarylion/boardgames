@@ -37,7 +37,7 @@ function leave() {
     <div v-if="open" class="backdrop" @click="close" />
 
     <div v-if="open" class="menu panel">
-      <p class="tiny muted head">{{ t('menu.room', { code: game.state?.code ?? '' }) }}</p>
+      <p class="tiny muted head">{{ t('menu.room', { code: game.room?.code ?? '' }) }}</p>
 
       <template v-if="game.isHost">
         <template v-if="confirming === 'end'">

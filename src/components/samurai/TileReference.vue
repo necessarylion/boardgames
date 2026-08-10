@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import GameIcon from './GameIcon.vue'
+import GameIcon from '../common/GameIcon.vue'
 import { TILE_SET } from '@shared/tiles'
 import { CASTES } from '@shared/types'
 import type { Caste, TileDef } from '@shared/types'

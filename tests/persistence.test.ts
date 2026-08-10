@@ -5,7 +5,11 @@ import { COLOUR_ORDER } from '../shared/colours'
 import { Game, type GameState } from '../shared/engine'
 import { legalPlacements } from '../shared/rules'
 import { tileFromId } from '../shared/tiles'
+import type { ClientState } from '../shared/protocol'
 import { Room, type RoomSnapshot } from '../server/rooms'
+
+/** These rooms all play Samurai, so read their state as a Samurai ClientState. */
+const sfor = (r: Room, token: string): ClientState => r['stateFor'](token) as ClientState
 
 /** Round-trip through JSON, the way the database column does. */
 function reload(room: Room): Room {
@@ -109,7 +113,7 @@ describe('rooms survive a restart', () => {
     // The view a returning player is sent is the same one they had, bar the
     // connection flags, which only a live socket can set.
     for (const seat of back.seats) seat.connected = true
-    expect(back.stateFor('token-a')).toEqual(room.stateFor('token-a'))
+    expect(sfor(back, 'token-a')).toEqual(sfor(room, 'token-a'))
   })
 
   it('gives every seat a bucket when an older snapshot carries none', () => {
@@ -127,7 +131,7 @@ describe('rooms survive a restart', () => {
     // starts everyone off with a clean board.
     const back = Room.fromSnapshot(snapshot)
     expect(back.game!.state.unseenPlaced).toEqual([[], []])
-    expect(back.stateFor('token-a').sinceYourTurn).toEqual([])
+    expect(sfor(back, 'token-a').sinceYourTurn).toEqual([])
   })
 
   it('keeps playing from where the restored game left off', () => {
@@ -160,6 +164,6 @@ describe('rooms survive a restart', () => {
     expect(back.game!.draftPool(1)).toEqual(room.game!.draftPool(1))
     expect(back.game!.state.players[0].hand).toEqual(picks)
     // Ada has confirmed, so she is offered nothing further to choose from.
-    expect(back.stateFor('token-a').draftPool).toEqual([])
+    expect(sfor(back, 'token-a').draftPool).toEqual([])
   })
 })

@@ -30,7 +30,8 @@ class TestClient {
     this.socket.on('message', (raw) => {
       const message = JSON.parse(String(raw)) as ServerMessage
       if (message.t === 'hello') this.token = message.token
-      if (message.t === 'state') this.state = message.state
+      // This harness only ever drives Samurai games, so the state is one.
+      if (message.t === 'state') this.state = message.state as ClientState
       if (message.t === 'error') this.errors.push(message.message)
       if (message.t === 'left') this.state = null
       this.waiters.splice(0).forEach((resolve) => resolve())

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import TableMenu from './TableMenu.vue'
+import TableMenu from '../common/TableMenu.vue'
 import TileGlyph from './TileGlyph.vue'
 import TileReference from './TileReference.vue'
 import { STARTING_HAND_SIZE } from '@shared/tiles'

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import GameIcon from './GameIcon.vue'
+import GameIcon from '../common/GameIcon.vue'
 import TileGlyph from './TileGlyph.vue'
 import { usePanZoom, type Bounds } from '@/composables/usePanZoom'
 import { CASTE_COLOURS, PLAYER_COLOURS } from '@shared/colours'

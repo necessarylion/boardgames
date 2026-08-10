@@ -1,4 +1,5 @@
 import type { GameOptions, Phase } from './engine'
+import type { Card, Fruit, HalliEvent, HalliResult } from './halligalli'
 import type { PieceRef } from './rules'
 import type { Caste, GameResult, LogEntry, PlacedTile, PlayerColour } from './types'
 
@@ -40,6 +41,8 @@ export interface PublicPlayer {
  * hands never leave the server.
  */
 export interface ClientState {
+  /** Discriminates the two games sharing this protocol; Samurai's is 'samurai'. */
+  kind: 'samurai'
   code: string
   phase: 'lobby' | Phase
   options: GameOptions
@@ -86,6 +89,50 @@ export interface ClientState {
   turnMsLeft: number | null
 }
 
+/** What every client knows about a Halli Galli seat. Stacks travel as a count. */
+export interface HalliPublicPlayer {
+  id: number
+  name: string
+  colour: PlayerColour
+  connected: boolean
+  /** Cards in the face-down draw pile — a count only; the cards stay hidden. */
+  stackCount: number
+  /** The face-up pile, public in full; its last card is the one that counts. */
+  faceUp: Card[]
+  /** Out of the game — no cards left anywhere. */
+  out: boolean
+}
+
+/**
+ * The Halli Galli state sent to one client. Almost nothing is secret here: only
+ * the order of a face-down stack is hidden, and it never leaves the server, so a
+ * seat's stack travels as a bare count and everything else is sent in full.
+ */
+export interface HalliClientState {
+  kind: 'halligalli'
+  code: string
+  phase: 'lobby' | 'play' | 'over'
+  options: GameOptions
+  hostId: number
+  you: number | null
+  players: HalliPublicPlayer[]
+  playerCount: number
+  /** Whose turn it is to flip; ringing is open to everyone. */
+  current: number
+  turnNumber: number
+  /** The visible total of each fruit, computed server-side to avoid drift. */
+  totals: Record<Fruit, number>
+  /** The fruit at exactly five right now, if any — a bell worth ringing. */
+  ring: Fruit | null
+  lastEvent: HalliEvent | null
+  log: LogEntry[]
+  result: HalliResult | null
+  paused: boolean
+}
+
+/** Either game's redacted state; `kind` says which, for the client to route on. */
+export type AnyClientState = ClientState | HalliClientState
+
 export type ClientMessage =
   /** `code` is the table this client believes it is at, so a server that has
    *  never heard of it can say so instead of leaving a dead board on screen. */
@@ -107,6 +154,10 @@ export type ClientMessage =
   | { t: 'endTurn' }
   /** Trade the whole hand for a fresh draw, at the cost of the turn (round 2+). */
   | { t: 'redraw' }
+  /** Halli Galli: turn your top card face up (only on your turn). */
+  | { t: 'flip' }
+  /** Halli Galli: ring the bell — open to any player at any moment. */
+  | { t: 'slap' }
   /** Suspend or resume the table. Open to any seated player. */
   | { t: 'pause' }
   | { t: 'resume' }
@@ -116,7 +167,7 @@ export type ClientMessage =
 
 export type ServerMessage =
   | { t: 'hello'; token: string; version: number }
-  | { t: 'state'; state: ClientState }
+  | { t: 'state'; state: AnyClientState }
   | { t: 'error'; message: string }
   | { t: 'left' }
   | { t: 'ping' }

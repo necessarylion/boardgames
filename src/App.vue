@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted } from 'vue'
-import DraftScreen from './components/DraftScreen.vue'
-import GameScreen from './components/GameScreen.vue'
-import HomeScreen from './components/HomeScreen.vue'
-import LobbyScreen from './components/LobbyScreen.vue'
+import DraftScreen from './components/samurai/DraftScreen.vue'
+import GameScreen from './components/samurai/GameScreen.vue'
+import HalliGameScreen from './components/halli_galli/HalliGameScreen.vue'
+import HalliLobby from './components/halli_galli/HalliLobby.vue'
+import HomeScreen from './components/common/HomeScreen.vue'
+import LandingScreen from './components/common/LandingScreen.vue'
+import LobbyScreen from './components/samurai/LobbyScreen.vue'
 import { t } from './i18n'
 import { useGameStore } from './stores/game'
 
@@ -33,7 +36,16 @@ onMounted(() => game.connect())
       {{ game.connection === 'connecting' ? t('app.connecting') : t('app.connectionLost') }}
     </p>
 
-    <HomeScreen v-if="!game.inRoom" />
+    <!-- Not at a table: land on the game chooser, then that game's home form. -->
+    <LandingScreen v-if="!game.inRoom && !game.chosenGame" />
+    <HomeScreen v-else-if="!game.inRoom" />
+
+    <!-- Halli Galli has its own lobby and table; Samurai keeps its three screens. -->
+    <template v-else-if="game.kind === 'halligalli'">
+      <HalliLobby v-if="game.phase === 'lobby'" />
+      <HalliGameScreen v-else />
+    </template>
+
     <LobbyScreen v-else-if="game.phase === 'lobby'" />
     <DraftScreen v-else-if="game.phase === 'draft'" />
     <GameScreen v-else />

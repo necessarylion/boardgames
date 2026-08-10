@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import GameIcon from './GameIcon.vue'
+import GameIcon from '../common/GameIcon.vue'
 import { PLAYER_COLOURS } from '@shared/colours'
 import { CASTES } from '@shared/types'
 import { casteName, castePiece, t, teamLabel } from '@/i18n'

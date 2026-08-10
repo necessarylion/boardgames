@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import GameIcon from './GameIcon.vue'
+import GameIcon from '../common/GameIcon.vue'
 import { CASTES, type Caste } from '@shared/types'
 import { castePiece, t } from '@/i18n'
 import { CAPTURE_NOTICE_MS, useGameStore } from '@/stores/game'
