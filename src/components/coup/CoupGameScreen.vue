@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onUnmounted, ref, watch } from 'vue'
 import CoupCard from './CoupCard.vue'
-import CoupDiceRoll from './CoupDiceRoll.vue'
+import CoupCorners from './CoupCorners.vue'
 import CoupRulesDialog from './CoupRulesDialog.vue'
 import GameIcon from '../common/GameIcon.vue'
 import TableMenu from '../common/TableMenu.vue'
@@ -14,6 +14,13 @@ import { useGameStore } from '@/stores/game'
 const game = useGameStore()
 const showRules = ref(false)
 const showLog = ref(true)
+/**
+ * The controls float over the table rather than reserving a strip of it, so on a
+ * crowded ring they can end up over a seat. Rather than move everyone's chairs
+ * to suit the buttons, the panel folds away to its header on request and comes
+ * straight back — the table stays where it is either way.
+ */
+const controlsOpen = ref(true)
 
 const players = computed(() => game.coupPlayers)
 const nameOf = (id: number | null) =>
@@ -136,27 +143,6 @@ const logLines = computed(() =>
   })),
 )
 
-/*
- * The opening roll-off is shown once per deal, and only while the game is still
- * untouched — a player who reloads two turns later must not be shown a ceremony
- * for something the table settled long ago. `seenOpening` is keyed on the deal
- * so a rematch rolls again.
- */
-const seenOpening = ref<string | null>(null)
-const openingKey = computed(() => {
-  const o = game.coup?.opening
-  return o ? `${game.coup?.code}:${o.winner}:${o.rounds.length}:${game.coup?.deckCount}` : null
-})
-const showDice = computed(
-  () =>
-    !!game.coup?.opening &&
-    game.coup.phase === 'play' &&
-    game.coup.turnNumber === 1 &&
-    !game.coup.lastEvent &&
-    !game.coup.pending &&
-    seenOpening.value !== openingKey.value,
-)
-
 /** Newest line last, so the log has to be kept scrolled to its foot. */
 const logEl = ref<HTMLElement | null>(null)
 watch(
@@ -197,12 +183,13 @@ const seatOrder = computed(() => {
  * to be true — and it lets the layout fall back to a plain stack the moment the
  * box is too small for a ring to fit in at all.
  */
-// Reserved seat box. Sized for the tallest seat — your own, which shows two
-// real cards where every other seat shows face-down ones — so the clearance
-// works out for every seat rather than only the short ones.
-const SEAT_W = 168
-const SEAT_H = 168
+// Reserved seat box. Sized for the largest seat — your own, which shows two real
+// cards at their full width where every other seat shows narrow face-down ones —
+// so the clearance works out for every seat rather than only the small ones.
+const SEAT_W = 236
+const SEAT_H = 206
 const EDGE = 8
+
 
 const ringEl = ref<HTMLElement | null>(null)
 const ringW = ref(0)
@@ -224,13 +211,18 @@ watch(ringEl, (el) => {
 })
 onUnmounted(() => observer?.disconnect())
 
+/** Whether the controls are on screen at all. */
+const showControls = computed(() => game.isSeated && !isOver.value)
+
 /**
- * Whether there is room to arrange seats in a ring at all. Below this the seats
- * would overlap each other and the court, so they stack instead — which is also
- * what happens before the first measurement lands.
+ * Whether there is room to arrange seats in a ring at all. Measured against the
+ * whole box: the seats own the table, and the panels floating over its corners
+ * give way to them rather than the other way round. Below this the seats would
+ * overlap each other and the court, so they stack instead — which is also what
+ * happens before the first measurement lands.
  */
 const isRing = computed(
-  () => ringW.value >= SEAT_W * 3 && ringH.value >= SEAT_H * 2.2 && seatOrder.value.length > 1,
+  () => ringW.value >= SEAT_W * 2.6 && ringH.value >= SEAT_H * 2.2 && seatOrder.value.length > 1,
 )
 
 /**
@@ -322,6 +314,7 @@ function chooseTarget(id: number) {
           :style="{ '--seat': PLAYER_COLOURS[p.colour].ink, ...seatStyle(i, seatOrder.length) }"
           @click="chooseTarget(p.id)"
         >
+          <CoupCorners />
           <div class="player-head">
             <span class="dot" :style="{ background: PLAYER_COLOURS[p.colour].ink }" />
             <span class="pname">{{ p.name }}</span>
@@ -348,13 +341,23 @@ function chooseTarget(id: number) {
               />
             </template>
             <template v-else>
-              <CoupCard v-for="n in p.influence" :key="`down${n}`" size="small" />
+              <CoupCard
+                v-for="n in p.influence"
+                :key="`down${n}`"
+                size="small"
+                :colour="p.colour"
+              />
             </template>
           </div>
         </component>
 
         <div class="court">
-          <p class="tiny muted court-title">{{ t('coup.court.title') }}</p>
+          <CoupCorners :size="17" />
+          <p class="court-title">
+            <GameIcon name="coup.flourish" :size="26" />
+            <span>{{ t('coup.court.title') }}</span>
+            <GameIcon class="mirror" name="coup.flourish" :size="26" />
+          </p>
           <div v-if="court.length" class="court-cards">
             <span
               v-for="(c, i) in court"
@@ -373,7 +376,11 @@ function chooseTarget(id: number) {
       <!-- Everything anyone has done, oldest first. Lifted out of the flow like
            the controls, so opening it never moves the table underneath. -->
       <aside v-if="showLog" class="log panel">
-        <p class="tiny muted log-head">{{ t('coup.log.title') }}</p>
+        <CoupCorners />
+        <p class="log-head">
+          <GameIcon name="coup.quill" :size="20" />
+          <span>{{ t('coup.log.title') }}</span>
+        </p>
         <ol ref="logEl" class="log-lines scroll">
           <li v-for="line in logLines" :key="line.key">
             <span
@@ -390,7 +397,19 @@ function chooseTarget(id: number) {
       <!-- The controls float in the corner rather than sitting across the foot
            of the table: in the flow they shortened the ring, which pushed the
            bottom seat up and away from the edge it belongs against. -->
-      <section v-if="game.isSeated && !isOver" class="controls panel">
+      <section v-if="showControls" class="controls panel" :class="{ folded: !controlsOpen }">
+        <CoupCorners />
+        <button
+          class="fold"
+          type="button"
+          :title="controlsOpen ? t('coup.controls.hide') : t('coup.controls.show')"
+          @click="controlsOpen = !controlsOpen"
+        >
+          <span class="tiny muted">{{ t('coup.controls.title') }}</span>
+          <span aria-hidden="true">{{ controlsOpen ? '▾' : '▴' }}</span>
+        </button>
+
+        <template v-if="controlsOpen">
         <Transition name="flash">
           <p v-if="eventText" :key="eventText" class="event tiny">{{ eventText }}</p>
         </Transition>
@@ -435,15 +454,9 @@ function chooseTarget(id: number) {
             {{ t('coup.cancel') }}
           </button>
         </p>
+        </template>
       </section>
     </main>
-
-    <CoupDiceRoll
-      v-if="showDice && game.coup?.opening"
-      :opening="game.coup.opening"
-      :players="players"
-      @done="seenOpening = openingKey"
-    />
 
     <CoupRulesDialog v-if="showRules" @close="showRules = false" />
 
@@ -518,11 +531,29 @@ function chooseTarget(id: number) {
 </template>
 
 <style scoped>
+/*
+ * Coup dresses itself as a gilded parchment table rather than borrowing the
+ * paper-and-ink chrome the other two games share. The palette is scoped to this
+ * component so nothing here leaks into Samurai's board or Halli Galli's.
+ */
 .game {
+  --coup-gilt: #c9a227;
+  --coup-gilt-soft: #e2c979;
+  --coup-parchment: #f6e7c1;
+  --coup-parchment-deep: #ecd7a8;
+  --coup-ink: #4a3413;
+
   display: flex;
   flex-direction: column;
   height: 100%;
   min-height: 0;
+  color: var(--coup-ink);
+  /* Two soft washes over a warm ground: enough grain that the parchment is not
+     a flat fill, without a texture file to ship. */
+  background:
+    radial-gradient(120% 90% at 50% 0%, rgba(255, 252, 240, 0.9), transparent 60%),
+    radial-gradient(90% 70% at 15% 100%, rgba(201, 162, 39, 0.14), transparent 65%),
+    linear-gradient(160deg, var(--coup-parchment), var(--coup-parchment-deep));
 }
 
 .topbar {
@@ -533,8 +564,13 @@ function chooseTarget(id: number) {
   gap: 1rem;
   flex-wrap: wrap;
   padding: 0.6rem 1rem;
-  border-bottom: 1px solid var(--gold-line);
-  background: var(--paper);
+  border-bottom: 2px solid var(--coup-gilt);
+  background: linear-gradient(180deg, rgba(255, 250, 236, 0.95), rgba(246, 231, 193, 0.9));
+  box-shadow: 0 1px 0 var(--coup-gilt-soft);
+}
+
+.topbar :deep(.btn) {
+  border-color: var(--coup-gilt-soft);
 }
 
 .turn {
@@ -587,6 +623,8 @@ function chooseTarget(id: number) {
 /* The table takes the whole window under the topbar: the ring grows into
    whatever the controls and the hand leave behind, so a bigger screen is a
    bigger table rather than the same table with margins either side. */
+/* The gilt rule that frames the whole table, drawn on the container so it sits
+   behind the seats rather than clipping them. */
 .table {
   position: relative;
   flex: 1 1 auto;
@@ -595,6 +633,17 @@ function chooseTarget(id: number) {
   flex-direction: column;
   padding: 0.75rem 1rem 1rem;
   width: 100%;
+}
+
+.table::before {
+  content: '';
+  position: absolute;
+  inset: 0.5rem;
+  border: 2px solid var(--coup-gilt);
+  border-radius: 6px;
+  box-shadow: inset 0 0 0 3px rgba(255, 250, 236, 0.6),
+    inset 0 0 0 4px var(--coup-gilt-soft);
+  pointer-events: none;
 }
 
 /* Your own seat carries real cards, so it stands a little taller than the rest
@@ -644,23 +693,27 @@ function chooseTarget(id: number) {
 .player {
   position: absolute;
   transform: translate(-50%, -50%);
-  width: 11rem;
+  /* Matches SEAT_W in the script: wide enough for two cards at their full width
+     side by side, which is what stops them wrapping into a column. */
+  width: 14.75rem;
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
-  padding: 0.6rem;
+  padding: 0.7rem 0.8rem;
   border-radius: 10px;
-  border: 1px solid rgba(150, 128, 94, 0.3);
-  border-left: 3px solid var(--seat);
-  background: var(--paper);
-  box-shadow: var(--shadow);
-  color: var(--ink);
+  /* The seat's own colour rules the frame, with gilt inside it. */
+  border: 2px solid var(--seat);
+  background: linear-gradient(170deg, rgba(255, 252, 242, 0.96), rgba(246, 231, 193, 0.92));
+  box-shadow: inset 0 0 0 1px var(--coup-gilt-soft), var(--shadow);
+  color: var(--coup-ink);
   font: inherit;
   text-align: left;
 }
 
 /* --- the middle: everything the table has lost ---------------------------- */
 
+/* Centred on the band the seats use, not on the box, so the panels either side
+   do not push it off the middle of the table. */
 .court {
   position: absolute;
   left: 50%;
@@ -670,18 +723,35 @@ function chooseTarget(id: number) {
   flex-direction: column;
   align-items: center;
   gap: 0.4rem;
-  width: min(30rem, 46%);
-  padding: 0.9rem;
+  width: min(32rem, 48%);
+  padding: 1rem 1.2rem;
   border-radius: 14px;
-  border: 1px dashed rgba(150, 128, 94, 0.5);
-  background: rgba(255, 253, 246, 0.55);
+  border: 2px solid var(--coup-gilt);
+  background: linear-gradient(170deg, rgba(255, 252, 242, 0.97), rgba(246, 231, 193, 0.94));
+  box-shadow: inset 0 0 0 1px var(--coup-gilt-soft), var(--shadow);
   text-align: center;
 }
 
+/* The heading is set between two gilt rules, the way a chapter head would be. */
 .court-title {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
   margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  color: var(--coup-ink);
+}
+
+.court-title :deep(.icon) {
+  color: var(--coup-gilt);
+}
+
+.court-title :deep(.mirror) {
+  transform: scaleX(-1);
 }
 
 .court-cards {
@@ -708,8 +778,7 @@ function chooseTarget(id: number) {
 }
 
 .player.active {
-  border-color: var(--vermillion);
-  box-shadow: 0 0 0 2px rgba(178, 58, 44, 0.22), var(--shadow);
+  box-shadow: inset 0 0 0 1px var(--coup-gilt), 0 0 0 3px rgba(201, 162, 39, 0.4), var(--shadow-lg);
 }
 
 .player.out {
@@ -781,10 +850,12 @@ function chooseTarget(id: number) {
   color: var(--gold-line);
 }
 
+/* A hand is read side by side, never stacked: the seat is sized to hold both. */
 .cards {
   display: flex;
-  gap: 0.3rem;
-  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.35rem;
+  flex-wrap: nowrap;
 }
 
 /* --- the corner controls --------------------------------------------------- */
@@ -797,12 +868,43 @@ function chooseTarget(id: number) {
   right: 1rem;
   bottom: 1rem;
   z-index: 20;
-  width: min(20rem, calc(100% - 2rem));
+  /* Sized to what it holds rather than to a fixed strip, so it takes no more of
+     the table than the buttons actually need. */
+  width: max-content;
+  max-width: min(22rem, calc(100% - 2rem));
   display: flex;
   flex-direction: column;
   gap: 0.45rem;
   padding: 0.7rem 0.8rem;
+  border: 2px solid var(--coup-gilt);
+  border-radius: 10px;
+  background: linear-gradient(170deg, rgba(255, 252, 242, 0.96), rgba(246, 231, 193, 0.92));
+  box-shadow: inset 0 0 0 1px var(--coup-gilt-soft), var(--shadow);
   text-align: left;
+}
+
+/* Folded away to its header, for when it sits over a seat. */
+.controls.folded {
+  padding: 0.3rem 0.5rem;
+}
+
+.fold {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink-soft);
+  font: inherit;
+  cursor: pointer;
+}
+
+.fold span:first-child {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
 }
 
 /* --- the play log ---------------------------------------------------------- */
@@ -815,15 +917,29 @@ function chooseTarget(id: number) {
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
-  width: min(17rem, calc(100% - 2rem));
+  width: min(18rem, calc(100% - 2rem));
   max-height: min(40%, 15rem);
-  padding: 0.55rem 0.65rem;
+  padding: 0.7rem 0.8rem;
+  border: 2px solid var(--coup-gilt);
+  border-radius: 10px;
+  background: linear-gradient(170deg, rgba(255, 252, 242, 0.96), rgba(246, 231, 193, 0.92));
+  box-shadow: inset 0 0 0 1px var(--coup-gilt-soft), var(--shadow);
 }
 
 .log-head {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
   margin: 0;
+  font-family: var(--font-display);
+  font-size: 1rem;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  color: var(--coup-ink);
+}
+
+.log-head :deep(.icon) {
+  color: var(--coup-gilt);
 }
 
 .log-lines {

@@ -4,6 +4,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
 
+import { PLAYER_COLOURS } from '../shared/colours'
 import CoupCard from '../src/components/coup/CoupCard.vue'
 import CoupGameScreen from '../src/components/coup/CoupGameScreen.vue'
 import { CHARACTERS } from '../shared/coup'
@@ -32,8 +33,8 @@ function room(): Room {
 const view = (r: Room, token: string) => r['stateFor'](token) as CoupClientState
 
 /** Seat box the ring reserves; kept in step with the component's constants. */
-const SEAT_W = 168
-const SEAT_H = 168
+const SEAT_W = 236
+const SEAT_H = 206
 
 /**
  * jsdom lays nothing out — every element measures zero and there is no
@@ -129,6 +130,39 @@ describe('an influence card', () => {
     expect(card.find('.tip').exists()).toBe(false)
   })
 
+  it('gives every character the same box, whatever shape its art is', () => {
+    // Duke and Contessa are cut wider than the other three, so sizing a card by
+    // its own artwork made that pair look half again as big in the reference.
+    // jsdom applies no stylesheet, so what is checked here is that nothing in
+    // the markup can size one character differently from another: the slot is
+    // chosen by `size` alone, and no card carries a width of its own.
+    for (const size of ['small', 'medium', 'normal'] as const) {
+      const shapes = CHARACTERS.map((character) => {
+        const card = mount(CoupCard, { props: { character, size } })
+        expect(card.attributes('style')).toBeUndefined()
+        // Everything but the character's own colour class must match.
+        return card.classes().filter((c) => c !== character).sort().join(' ')
+      })
+      expect(new Set(shapes).size).toBe(1)
+      expect(shapes[0]).toContain(size)
+    }
+  })
+
+  it('flies its owner’s colours on the back, and still hides the card', () => {
+    const card = mount(CoupCard, { props: { character: null, colour: 'teal', size: 'small' } })
+    const back = card.find('.back')
+    expect(back.exists()).toBe(true)
+    // The livery is the seat's own two tones, so a glance says whose these are.
+    const style = back.attributes('style') ?? ''
+    expect(style).toContain(PLAYER_COLOURS.teal.fill)
+    expect(style).toContain(PLAYER_COLOURS.teal.ink)
+    // A rose, not a character: nothing on a back names what it is hiding.
+    expect(back.find('svg').exists()).toBe(true)
+    for (const character of CHARACTERS) {
+      expect(card.html().toLowerCase()).not.toContain(character)
+    }
+  })
+
   it('is a button only when it can be picked', () => {
     const plain = mount(CoupCard, { props: { character: 'contessa' } })
     expect(plain.element.tagName).toBe('DIV')
@@ -153,7 +187,7 @@ describe('the table', () => {
   })
 
   it('lays the seats round a ring once the box is big enough', async () => {
-    stubResizeObserver(900, 520)
+    stubResizeObserver(1800, 640)
     const r = room()
     const game = useGameStore()
     game.coup = view(r, 'token-a')
@@ -162,36 +196,59 @@ describe('the table', () => {
 
     expect(wrapper.find('.ring').classes()).not.toContain('stacked')
     const at = wrapper.findAll('.player').map((s) => s.attributes('style') ?? '')
-    // Four seats, four distinct places, the viewer's at the bottom centre:
-    // half the width across, and half the height plus the vertical radius down.
-    // Half the height, plus a radius of (520/2 - 168/2 - 8) = 168.
+    // Four seats, four distinct places, the viewer's at the bottom centre of the
+    // whole box: half the width across, and half the height plus (320 - 103 - 8).
     expect(new Set(at).size).toBe(4)
-    expect(at[0]).toContain('left: 450px')
-    expect(at[0]).toContain('top: 428px')
+    expect(at[0]).toContain('left: 900px')
+    expect(at[0]).toContain('top: 529px')
     // The seat opposite is the same distance the other way.
-    expect(at[2]).toContain('top: 92px')
+    expect(at[2]).toContain('top: 111px')
   })
 
-  it('keeps every seat inside the box as it shrinks', async () => {
-    // The tightest box that still counts as a ring rather than a stack.
-    stubResizeObserver(560, 400)
+  it('keeps every seat inside the box, however many are sitting', async () => {
+    stubResizeObserver(1500, 620)
     const r = room()
+    // Six seats, so one lands in each corner region rather than only at the four
+    // compass points — the tightest the ring ever gets.
+    r.addSeat('token-e', 'Eve')
+    r.addSeat('token-f', 'Fay')
+    r.coup = null
+    r.start()
+    r.coup!.state.current = 0
+
     const game = useGameStore()
     game.coup = view(r, 'token-a')
-
     const wrapper = await mountTable()
+    expect(wrapper.find('.ring').classes()).not.toContain('stacked')
 
-    // The radius is half the box less half a seat, so no seat can hang outside
-    // it however tight the box gets — which is what used to overlap the buttons.
     for (const seat of wrapper.findAll('.player')) {
       const style = seat.attributes('style') ?? ''
       const left = Number(/left:\s*(-?[\d.]+)px/.exec(style)?.[1])
       const top = Number(/top:\s*(-?[\d.]+)px/.exec(style)?.[1])
       expect(left - SEAT_W / 2).toBeGreaterThanOrEqual(0)
-      expect(left + SEAT_W / 2).toBeLessThanOrEqual(560)
+      expect(left + SEAT_W / 2).toBeLessThanOrEqual(1500)
       expect(top - SEAT_H / 2).toBeGreaterThanOrEqual(0)
-      expect(top + SEAT_H / 2).toBeLessThanOrEqual(400)
+      expect(top + SEAT_H / 2).toBeLessThanOrEqual(620)
     }
+  })
+
+  it('folds the controls away without moving a single seat', async () => {
+    stubResizeObserver(1800, 640)
+    const r = room()
+    const game = useGameStore()
+    game.coup = view(r, 'token-a')
+    const wrapper = await mountTable()
+
+    const before = wrapper.findAll('.player').map((s) => s.attributes('style') ?? '')
+    expect(wrapper.findAll('.controls .buttons .btn').length).toBeGreaterThan(0)
+
+    await wrapper.find('.controls .fold').trigger('click')
+
+    // The buttons go, the seats stay exactly where they were: the panel gives
+    // way to the table rather than the table rearranging itself for the panel.
+    expect(wrapper.find('.controls').classes()).toContain('folded')
+    expect(wrapper.findAll('.controls .buttons .btn')).toHaveLength(0)
+    expect(wrapper.findAll('.player').map((s) => s.attributes('style') ?? '')).toEqual(before)
   })
 
   it('stacks instead of ringing when the box is too small to hold a ring', async () => {
@@ -277,7 +334,7 @@ describe('the table', () => {
   })
 
   it('keeps the log and the controls out of the ring’s flow', async () => {
-    stubResizeObserver(900, 520)
+    stubResizeObserver(1800, 640)
     const r = room()
     const game = useGameStore()
     game.coup = view(r, 'token-a')
@@ -290,7 +347,8 @@ describe('the table', () => {
     expect(table.find('.controls').exists()).toBe(true)
     // The bottom seat still reaches the foot of the full-height ring.
     const at = wrapper.findAll('.player').map((s) => s.attributes('style') ?? '')
-    expect(at[0]).toContain('top: 428px')
+    expect(at[0]).toContain('top: 529px')
+    expect(at[0]).toContain('left: 900px')
   })
 
   it('lays the controls out two buttons to a row, in the corner', async () => {

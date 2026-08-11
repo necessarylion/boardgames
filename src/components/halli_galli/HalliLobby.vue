@@ -8,6 +8,13 @@ import { useGameStore } from '@/stores/game'
 const game = useGameStore()
 const copied = ref(false)
 
+/** Host only, and only before the deal — the seat is drawn when cards are dealt. */
+function setDice(diceStart: boolean) {
+  const options = game.halli?.options
+  if (!options || !game.isHost) return
+  game.setOptions({ ...options, diceStart })
+}
+
 const seats = computed(() => game.hgPlayers)
 const emptySeats = computed(() => MAX_PLAYERS - seats.value.length)
 const canStart = computed(() => game.isHost && seats.value.length >= MIN_PLAYERS)
@@ -80,6 +87,19 @@ async function copyLink() {
         </ol>
 
         <hr class="rule" />
+
+        <label class="check">
+          <input
+            type="checkbox"
+            :checked="game.halli?.options.diceStart ?? true"
+            :disabled="!game.isHost"
+            @change="setDice(($event.target as HTMLInputElement).checked)"
+          />
+          <span>
+            {{ t('option.diceStart') }}
+            <em class="tiny muted">{{ t('option.diceStart.hint') }}</em>
+          </span>
+        </label>
 
         <button class="btn wide" :disabled="!canStart" @click="game.startGame()">
           {{ game.isHost ? t('lobby.start') : t('lobby.waitingHost') }}

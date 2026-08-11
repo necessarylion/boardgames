@@ -2,6 +2,7 @@
 import { computed, onMounted } from 'vue'
 import CoupGameScreen from './components/coup/CoupGameScreen.vue'
 import CoupLobby from './components/coup/CoupLobby.vue'
+import DiceRoll from './components/common/DiceRoll.vue'
 import DraftScreen from './components/samurai/DraftScreen.vue'
 import GameScreen from './components/samurai/GameScreen.vue'
 import HalliGameScreen from './components/halli_galli/HalliGameScreen.vue'
@@ -9,6 +10,7 @@ import HalliLobby from './components/halli_galli/HalliLobby.vue'
 import HomeScreen from './components/common/HomeScreen.vue'
 import LandingScreen from './components/common/LandingScreen.vue'
 import LobbyScreen from './components/samurai/LobbyScreen.vue'
+import { useOpeningRoll } from './composables/useOpeningRoll'
 import { t } from './i18n'
 import { useGameStore } from './stores/game'
 
@@ -19,7 +21,23 @@ const game = useGameStore()
  * the bar announced itself on every visit for something the player had not asked
  * for yet; an action attempted before the socket is up says so in a toast.
  */
-const showConnection = computed(() => game.inRoom && game.connection !== 'open')
+const showConnection = computed(() => game.inRoom && game.connection !== 'open' && !game.stale)
+
+const reload = () => location.reload()
+
+/*
+ * The opening roll belongs to no one game, so it is replayed here rather than in
+ * each of the three tables — which also means it shows over Samurai's draft, the
+ * one screen where knowing the turn order actually changes what you pick.
+ */
+const opening = useOpeningRoll(
+  () => game.room?.opening ?? null,
+  () => {
+    const room = game.room
+    if (!room || room.phase === 'lobby' || room.phase === 'over') return false
+    return room.turnNumber <= 1
+  },
+)
 
 onMounted(() => game.connect())
 </script>
@@ -28,7 +46,14 @@ onMounted(() => game.connect())
   <div class="app">
     <!-- Taken over by another tab: this one holds still rather than fighting for
          the seat, and offers to take it back. -->
-    <p v-if="game.replaced" class="connection">
+    <!-- Older than the server: retrying cannot help, only a reload can. -->
+    <p v-if="game.stale" class="connection">
+      {{ t('app.stale') }}
+      <button type="button" class="banner-btn" @click="reload()">
+        {{ t('app.stale.action') }}
+      </button>
+    </p>
+    <p v-else-if="game.replaced" class="connection">
       {{ t('app.replaced') }}
       <button type="button" class="banner-btn" @click="game.takeOverSeat()">
         {{ t('app.replaced.action') }}
@@ -56,6 +81,13 @@ onMounted(() => game.connect())
     <LobbyScreen v-else-if="game.phase === 'lobby'" />
     <DraftScreen v-else-if="game.phase === 'draft'" />
     <GameScreen v-else />
+
+    <DiceRoll
+      v-if="opening.show.value && game.room?.opening"
+      :opening="game.room.opening"
+      :players="game.room.players"
+      @done="opening.dismiss()"
+    />
 
     <Transition name="toast">
       <p v-if="game.error" class="toast">{{ game.error }}</p>

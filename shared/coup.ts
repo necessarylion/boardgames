@@ -1,3 +1,4 @@
+import { chooseFirst, type Opening } from './opening'
 import { Rng } from './rng'
 import type { LogEntry } from './types'
 
@@ -153,41 +154,6 @@ export type CoupEvent =
   | { kind: 'lose'; player: number; character: CoupCharacter; reason: CoupLossReason }
   | { kind: 'out'; player: number }
 
-/** One seat's throw in the opening roll-off. */
-export interface CoupRoll {
-  player: number
-  roll: number
-}
-
-/**
- * How the opening seat was decided, kept so the whole table can watch it rather
- * than being told the answer. Each entry is one round of throws; a round with a
- * tie at the top is followed by another between just those seats, so the last
- * round always has exactly one throw in it.
- */
-export interface CoupOpening {
-  rounds: CoupRoll[][]
-  winner: number
-}
-
-/** Faces on the die rolled for the opening seat. */
-export const DIE_FACES = 6
-
-/** Enough rounds to settle any realistic tie; the bound is only a stop. */
-const MAX_ROLL_OFFS = 12
-
-function rollForFirst(rng: Rng, playerCount: number): CoupOpening {
-  const rounds: CoupRoll[][] = []
-  let contenders = Array.from({ length: playerCount }, (_, id) => id)
-  while (contenders.length > 1 && rounds.length < MAX_ROLL_OFFS) {
-    const round = contenders.map((player) => ({ player, roll: rng.int(DIE_FACES) + 1 }))
-    rounds.push(round)
-    const best = Math.max(...round.map((r) => r.roll))
-    contenders = round.filter((r) => r.roll === best).map((r) => r.player)
-  }
-  return { rounds, winner: contenders[0] }
-}
-
 export interface CoupResult {
   /** The last player with influence, or null if the table emptied at once. */
   winner: number | null
@@ -211,9 +177,9 @@ export interface CoupGameState {
   /**
    * How the opening seat was chosen, or null when it was simply drawn. Either
    * way the seat is random: seat 0 has no claim on going first just for having
-   * opened the room.
+   * opened the room. Shared with the other two games; see `shared/opening.ts`.
    */
-  opening: CoupOpening | null
+  opening: Opening | null
   phase: CoupPhase
   paused: boolean
   turnNumber: number
@@ -342,8 +308,7 @@ export class CoupGame {
     }))
     // Opening the room is not an advantage: the first seat is drawn, either by
     // a roll-off the table can watch or quietly from the same generator.
-    const opening = diceStart ? rollForFirst(rng, playerCount) : null
-    const current = opening ? opening.winner : rng.int(playerCount)
+    const { first: current, opening } = chooseFirst(rng, playerCount, diceStart)
     return {
       playerCount,
       players,
@@ -715,11 +680,17 @@ export class CoupGame {
       )
       // Proven cards go back into the deck and are replaced, so a player who
       // shows a card is not marked as holding it for the rest of the game.
+      //
+      // The card goes under the stack and the replacement comes off the top, so
+      // a card just shown cannot be handed straight back, and the rest of the
+      // deck keeps the order it was already in.
       claimant.hand.splice(claimant.hand.indexOf(character), 1)
-      s.deck.push(character)
-      this.shuffleDeck()
+      s.deck.unshift(character)
       const replacement = s.deck.pop()
       if (replacement) claimant.hand.push(replacement)
+      // Said out loud: the swap is public, even though the new card is not, and
+      // a table that never hears about it cannot reason about who holds what.
+      this.log(claimantId, `shows ${character}, returns it under the deck and draws the top card.`)
       this.demandLoss(challengerId, 'challengeLost')
     } else {
       this.log(challengerId, `challenges ${this.name(claimantId)} on ${character} and is right.`)

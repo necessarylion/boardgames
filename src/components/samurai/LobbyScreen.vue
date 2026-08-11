@@ -63,7 +63,7 @@ async function copyLink() {
   }
 }
 
-function toggle(key: 'randomHands' | 'openInformation') {
+function toggle(key: 'randomHands' | 'openInformation' | 'diceStart') {
   const options = game.state?.options
   if (!options || !game.isHost) return
   game.setOptions({ ...options, [key]: !options[key] })
@@ -188,6 +188,19 @@ function setBoard(shape: BoardShape) {
             />
           </label>
         </div>
+        <label class="check">
+          <input
+            type="checkbox"
+            :checked="game.state?.options.diceStart ?? true"
+            :disabled="!game.isHost"
+            @change="toggle('diceStart')"
+          />
+          <span>
+            {{ t('option.diceStart') }}
+            <em class="tiny muted">{{ t('option.diceStart.hint') }}</em>
+          </span>
+        </label>
+
         <TurnClockOptions
           :seconds="game.state?.options.turnSeconds ?? 0"
           :locked="!game.isHost"

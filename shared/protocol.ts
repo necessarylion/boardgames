@@ -3,9 +3,9 @@ import type {
   CoupCharacter,
   CoupEvent,
   CoupLossReason,
-  CoupOpening,
   CoupResult,
 } from './coup'
+import type { Opening } from './opening'
 import type { GameOptions, Phase } from './engine'
 import type { Card, Fruit, HalliEvent, HalliResult } from './halligalli'
 import type { PieceRef } from './rules'
@@ -69,6 +69,8 @@ export interface ClientState {
   lastPlaced: string[]
   /** Every space another player has filled since your own turn last ended. */
   sinceYourTurn: string[]
+  /** How the opening seat was decided, or null when it was drawn quietly. */
+  opening: Opening | null
   /** Whether the viewer has anything to take back this turn. */
   canUndo: boolean
   playedNonFast: boolean
@@ -127,6 +129,8 @@ export interface HalliClientState {
   playerCount: number
   /** Whose turn it is to flip; ringing is open to everyone. */
   current: number
+  /** How the opening seat was decided, or null when it was drawn quietly. */
+  opening: Opening | null
   turnNumber: number
   /** The visible total of each fruit, computed server-side to avoid drift. */
   totals: Record<Fruit, number>
@@ -224,7 +228,7 @@ export interface CoupClientState {
    * The roll-off that decided who opens, or null when the seat was drawn
    * quietly. Public in full — the point of rolling is that the table sees it.
    */
-  opening: CoupOpening | null
+  opening: Opening | null
   /** What the table is waiting on, or null when it is simply someone's turn. */
   pending: CoupPendingView | null
   /** Your own face-down influence. Empty for a spectator. */

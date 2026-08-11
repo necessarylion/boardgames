@@ -14,6 +14,9 @@ function room(turnSeconds = 30): Room {
   r.addSeat('token-b', 'Bo')
   r.options = { ...DEFAULT_OPTIONS, randomHands: true, turnSeconds }
   r.start()
+  // The opening seat is drawn; these tests are about the clock, not the draw.
+  r.game!.state.first = 0
+  r.game!.state.current = 0
   return r
 }
 

@@ -12,7 +12,8 @@ export const enCoup = {
   // --- home ------------------------------------------------------------------
   'home.coup.tagline':
     'A game of bluff and deduction. Two hidden cards, five characters, and no obligation whatsoever to tell the truth about which you hold.',
-  'home.coup.hostHint': 'Coup has no settings — just create the room and deal.',
+  'home.coup.hostHint':
+    'Choose whether to roll for the opening seat and how long a turn may take. Both can still be changed in the lobby.',
 
   // --- lobby -----------------------------------------------------------------
   'coup.lobby.how': 'How to play',
@@ -63,16 +64,10 @@ export const enCoup = {
   'coup.hand.title': 'Your influence',
   'coup.hand.hidden': 'Only you can see these.',
   'coup.log.title': 'Log',
+  'coup.controls.title': 'Your move',
+  'coup.controls.hide': 'Fold the controls away',
+  'coup.controls.show': 'Bring the controls back',
 
-  // --- the opening roll ------------------------------------------------------
-  'option.diceStart': 'Roll for who starts',
-  'option.diceStart.hint':
-    'The opening seat is drawn at random either way; this shows the roll that decided it.',
-  'coup.dice.title': 'Rolling for the opening seat',
-  'coup.dice.tieRound': 'Tied — rolling again (round {n})',
-  'coup.dice.rolling': 'Rolling…',
-  'coup.dice.winner': '{name} starts',
-  'coup.dice.skip': 'Skip',
 
   'coup.court.title': 'Lost influence',
   'coup.court.empty': 'Nobody has lost an influence yet.',
@@ -103,7 +98,8 @@ export const enCoup = {
   'coup.event.action': '{name} declares {action}.',
   'coup.event.block': '{name} blocks with {character}.',
   'coup.event.challengeWon': '{name} called the bluff — {target} was not holding {character}.',
-  'coup.event.challengeLost': '{name} challenged and was wrong — {target} held {character}.',
+  'coup.event.challengeLost':
+    '{name} challenged and was wrong — {target} held {character}, and has returned it under the deck for a fresh card.',
   'coup.event.lose': '{name} gives up {character}.',
   'coup.event.out': '{name} is out of the game.',
   'coup.winner': '{name} wins!',
@@ -128,7 +124,7 @@ export const enCoup = {
   'coup.rules.challenge.right':
     'Right to challenge: the bluffer gives up an influence and the action does not happen.',
   'coup.rules.challenge.wrong':
-    'Wrong to challenge: you give up an influence, and the player shows the card, returns it to the deck and draws a replacement.',
+    'Wrong to challenge: you give up an influence, and the player shows the card, returns it under the deck and draws the top card.',
   'coup.rules.challenge.block':
     'A block is a claim too, so it can be challenged — but only by the player it thwarts.',
   'coup.rules.challenge.cost':

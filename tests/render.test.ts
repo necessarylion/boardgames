@@ -19,13 +19,21 @@ import { useGameStore } from '../src/stores/game'
 /** These rooms all play Samurai, so read their state as a Samurai ClientState. */
 const sfor = (r: Room, token: string): ClientState => r['stateFor'](token) as ClientState
 
-/** A real room, driven through the real server code, to render against. */
+/**
+ * A real room, driven through the real server code, to render against, with
+ * seat 0 put on turn — the opening seat is drawn now, and these tests are about
+ * what ends up on screen rather than who won the roll for it.
+ */
 function room(started = true) {
   const r = new Room('TEST')
   r.addSeat('token-a', 'Takeda')
   r.addSeat('token-b', 'Uesugi')
   r.options = { ...DEFAULT_OPTIONS, randomHands: true, openInformation: false }
-  if (started) r.start()
+  if (started) {
+    r.start()
+    r.game!.state.first = 0
+    r.game!.state.current = 0
+  }
   return r
 }
 
@@ -300,6 +308,9 @@ describe('what each seat has yet to see', () => {
     r.addSeat('token-c', 'Hojo')
     r.options = { ...DEFAULT_OPTIONS, randomHands: true, openInformation: false }
     r.start()
+    // Seat order is what this is about, so it starts from a known seat.
+    r.game!.state.first = 0
+    r.game!.state.current = 0
     return r
   }
 

@@ -41,6 +41,8 @@ describe('a Halli Galli room', () => {
 
   it('reports whose turn it is and reflects a flip', () => {
     const r = room()
+    // The opening seat is drawn now, so this pins it to make the flip readable.
+    r.hg!.state.current = 0
     expect(view(r, 'token-a').current).toBe(0)
     expect(r.hg!.flip(0).ok).toBe(true)
     const state = view(r, 'token-a')

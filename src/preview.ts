@@ -52,6 +52,9 @@ const state: ClientState = {
   code: 'KN26',
   phase: s.phase,
   options: s.options,
+  // The harness plays itself out before rendering, so the opening ceremony has
+  // nothing to show by the time this state exists.
+  opening: null,
   hostId: 0,
   you: 0,
   players: s.players.map((p, i) => ({

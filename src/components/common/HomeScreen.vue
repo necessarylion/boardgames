@@ -161,16 +161,19 @@ function join() {
                  clock, so it gets that one control and nothing else. -->
             <template v-else-if="kind === 'coup'">
               <p class="muted tiny host-hint">{{ t('home.coup.hostHint') }}</p>
-              <label class="check">
-                <input v-model="diceStart" type="checkbox" />
-                <span>
-                  {{ t('option.diceStart') }}
-                  <em class="tiny muted">{{ t('option.diceStart.hint') }}</em>
-                </span>
-              </label>
               <TurnClockOptions :seconds="turnSeconds" @pick="turnSeconds = $event" />
             </template>
             <p v-else-if="masthead.hint" class="muted tiny host-hint">{{ t(masthead.hint) }}</p>
+
+            <!-- Every game draws its opening seat, so the roll is offered to
+                 every game rather than sitting inside one of them. -->
+            <label class="check">
+              <input v-model="diceStart" type="checkbox" />
+              <span>
+                {{ t('option.diceStart') }}
+                <em class="tiny muted">{{ t('option.diceStart.hint') }}</em>
+              </span>
+            </label>
 
             <button class="btn wide" @click="create">{{ t('home.create') }}</button>
           </section>

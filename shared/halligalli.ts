@@ -1,3 +1,4 @@
+import { chooseFirst, type Opening } from './opening'
 import { Rng } from './rng'
 import type { LogEntry } from './types'
 
@@ -74,6 +75,8 @@ export interface HalliGameState {
   players: HalliPlayer[]
   /** Whose turn it is to flip. Ringing the bell is open to everyone, always. */
   current: number
+  /** How the opening seat was decided, or null when it was drawn quietly. */
+  opening: Opening | null
   phase: HalliPhase
   paused: boolean
   /** Flips so far, used as the log's turn column. */
@@ -111,8 +114,8 @@ const totalCards = (p: HalliPlayer): number => p.stack.length + p.faceUp.length
 export class HalliGame {
   state: HalliGameState
 
-  constructor(playerCount: number, seed: number) {
-    this.state = HalliGame.deal(playerCount, seed)
+  constructor(playerCount: number, seed: number, diceStart = true) {
+    this.state = HalliGame.deal(playerCount, seed, diceStart)
   }
 
   /** Rebuild an engine around state read back from the database. */
@@ -122,8 +125,11 @@ export class HalliGame {
     return game
   }
 
-  private static deal(playerCount: number, seed: number): HalliGameState {
-    const deck = new Rng(seed).shuffle(buildDeck())
+  private static deal(playerCount: number, seed: number, diceStart: boolean): HalliGameState {
+    const rng = new Rng(seed)
+    const deck = rng.shuffle(buildDeck())
+    // Whoever opened the room has no claim on the first flip; the seat is drawn.
+    const { first, opening } = chooseFirst(rng, playerCount, diceStart)
     const players: HalliPlayer[] = Array.from({ length: playerCount }, (_, id) => ({
       id,
       stack: [],
@@ -136,7 +142,8 @@ export class HalliGame {
     return {
       playerCount,
       players,
-      current: 0,
+      current: first,
+      opening,
       phase: 'play',
       paused: false,
       turnNumber: 1,

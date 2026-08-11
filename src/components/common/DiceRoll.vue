@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref } from 'vue'
 import { PLAYER_COLOURS } from '@shared/colours'
-import { DIE_FACES, type CoupOpening } from '@shared/coup'
-import type { CoupPublicPlayer } from '@shared/protocol'
+import { DIE_FACES, type Opening } from '@shared/opening'
+import type { PlayerColour } from '@shared/types'
 import { t } from '@/i18n'
 
 /**
@@ -13,8 +13,14 @@ import { t } from '@/i18n'
  * what lets a player who reloads mid-ceremony miss it entirely without the game
  * being any different, and what keeps a late-joining spectator from voting on
  * who starts.
+ *
+ * It takes only what it needs from a seat rather than any one game's player
+ * type, so all three tables can hand it their own.
  */
-const props = defineProps<{ opening: CoupOpening; players: CoupPublicPlayer[] }>()
+const props = defineProps<{
+  opening: Opening
+  players: readonly { id: number; name: string; colour: PlayerColour }[]
+}>()
 const emit = defineEmits<{ (e: 'done'): void }>()
 
 /** Pip positions on a 3×3 grid, per face. */
@@ -80,8 +86,8 @@ const faceOf = (roll: number) => (tumbling.value ? tumble.value : roll)
       <p class="tiny muted head">
         {{
           opening.rounds.length > 1
-            ? t('coup.dice.tieRound', { n: roundIndex + 1 })
-            : t('coup.dice.title')
+            ? t('dice.tieRound', { n: roundIndex + 1 })
+            : t('dice.title')
         }}
       </p>
 
@@ -103,11 +109,11 @@ const faceOf = (roll: number) => (tumbling.value ? tumble.value : roll)
       </ul>
 
       <p v-if="settled" class="winner">
-        {{ t('coup.dice.winner', { name: nameOf(opening.winner) }) }}
+        {{ t('dice.winner', { name: nameOf(opening.winner) }) }}
       </p>
-      <p v-else class="tiny muted">{{ t('coup.dice.rolling') }}</p>
+      <p v-else class="tiny muted">{{ t('dice.rolling') }}</p>
 
-      <button class="btn ghost small" @click.stop="emit('done')">{{ t('coup.dice.skip') }}</button>
+      <button class="btn ghost small" @click.stop="emit('done')">{{ t('dice.skip') }}</button>
     </div>
   </div>
 </template>

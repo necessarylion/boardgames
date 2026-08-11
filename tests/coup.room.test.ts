@@ -218,6 +218,32 @@ describe('a Coup room', () => {
     expect(r.turnMsLeft(start + 15_000)).toBe(30_000)
   })
 
+  it('gives a second forced loss in one turn its own period', () => {
+    const r = timedRoom(30)
+    const c = r.coup!
+    // Player 1 challenges an assassination and is wrong, so they pay for the
+    // challenge and then again for the strike it failed to stop — two losses
+    // for the same player inside one turn.
+    c.state.players[0].hand = ['assassin', 'duke']
+    c.state.players[0].coins = 3
+    c.state.players[1].hand = ['contessa', 'ambassador', 'captain']
+
+    const start = Date.now()
+    c.declare(0, 'assassinate', 1)
+    c.challenge(1)
+    r.syncTurnTimer(start)
+    const firstDeadline = r.turnDeadline
+
+    c.loseInfluence(1, 'captain')
+    expect(c.state.pending[0]).toEqual({ step: 'lose', player: 1, reason: 'assassinate' })
+
+    // Half a period later the second loss must be on a clock of its own, not
+    // still running down the one the first loss started.
+    r.syncTurnTimer(start + 15_000)
+    expect(r.turnDeadline).toBeGreaterThan(firstDeadline!)
+    expect(r.turnMsLeft(start + 15_000)).toBe(30_000)
+  })
+
   it('freezes the clock while the table is paused', () => {
     const r = timedRoom(30)
     const start = Date.now()

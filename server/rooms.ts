@@ -228,10 +228,10 @@ export class Room {
     this.game = null
     this.hg = null
     this.coup = null
-    if (this.options.kind === 'halligalli') this.hg = new HalliGame(this.seats.length, seed)
-    else if (this.options.kind === 'coup') {
-      this.coup = new CoupGame(this.seats.length, seed, this.options.diceStart)
-    }
+    const dice = this.options.diceStart
+    if (this.options.kind === 'halligalli') this.hg = new HalliGame(this.seats.length, seed, dice)
+    else if (this.options.kind === 'coup') this.coup = new CoupGame(this.seats.length, seed, dice)
+    // Samurai reads the option off `options`, which it already carries.
     else this.game = new Game(this.seats.length, this.options, seed)
   }
 
@@ -327,8 +327,12 @@ export class Room {
         return `t${s.turnNumber}:action:${p.actor}`
       case 'block':
         return `t${s.turnNumber}:block:${p.blocker}`
+      // The depth matters here and nowhere else: one turn can ask the same
+      // player for a second card — a lost challenge, then the assassination it
+      // failed to stop — and without it the second loss would inherit the first
+      // one's deadline, which by then has usually run out.
       case 'lose':
-        return `t${s.turnNumber}:lose:${p.player}`
+        return `t${s.turnNumber}:lose:${p.player}:${s.pending.length}`
       case 'exchange':
         return `t${s.turnNumber}:exchange:${p.player}`
       // A resolve step drains without anybody's input, so nobody is on the clock.
@@ -422,6 +426,7 @@ export class Room {
         placedThisTurn: [],
         lastPlaced: [],
         sinceYourTurn: [],
+        opening: null,
         canUndo: false,
         playedNonFast: false,
         setAside: [],
@@ -463,6 +468,7 @@ export class Room {
       sinceYourTurn: seat ? [...s.unseenPlaced[seat.id]] : [...new Set(s.unseenPlaced.flat())],
       // Only the player whose turn it is can take anything back, so the flag is
       // false for everyone else and the button never appears for them.
+      opening: s.opening,
       canUndo: seat?.id === s.current && s.phase === 'play' && s.undoStack.length > 0,
       playedNonFast: s.playedNonFast,
       setAside: s.setAside,
@@ -514,6 +520,7 @@ export class Room {
         ...base,
         phase: 'lobby',
         current: 0,
+        opening: null,
         turnNumber: 0,
         totals: { banana: 0, lime: 0, strawberry: 0, plum: 0 },
         ring: null,
@@ -529,6 +536,7 @@ export class Room {
       ...base,
       phase: s.phase,
       current: s.current,
+      opening: s.opening,
       turnNumber: s.turnNumber,
       totals: fruitTotals(s.players),
       ring: ringingFruit(s.players),

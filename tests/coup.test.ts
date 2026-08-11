@@ -138,10 +138,46 @@ describe('a challenge on an action', () => {
 
     const hand = game.state.players[0].hand
     expect(hand).toHaveLength(2)
+    // The card that was not challenged is untouched.
     expect(hand).toContain('captain')
     // The Duke went back in and something came out, so the deck is level again.
     expect(game.state.deck).toHaveLength(before)
     expect(game.state.deck.filter((c) => c === 'duke').length).toBeGreaterThan(0)
+    // And the table is told, so it can reason about who holds what afterwards.
+    expect(
+      game.state.log.some((l) => l.player === 0 && l.text.includes('returns it under the deck')),
+    ).toBe(true)
+  })
+
+  it('buries the proven card and deals the top one, leaving the rest in order', () => {
+    const game = scripted([['duke', 'captain'], ['contessa', 'ambassador']])
+    // Index 0 is the bottom of the stack and the last entry is the top.
+    game.state.deck = ['ambassador', 'assassin', 'contessa']
+
+    game.declare(0, 'tax', null)
+    game.challenge(1)
+
+    // The top card came off and went to the claimant.
+    expect(game.state.players[0].hand).toEqual(['captain', 'contessa'])
+    // The Duke went underneath, and nothing else moved.
+    expect(game.state.deck).toEqual(['duke', 'ambassador', 'assassin'])
+  })
+
+  it('never hands a proven card straight back', () => {
+    // Burying it is what guarantees this; a shuffle only made it unlikely.
+    for (let seed = 1; seed <= 40; seed++) {
+      const game = new CoupGame(2, seed, false)
+      const s = game.state
+      s.players[0].hand = ['duke', 'captain']
+      s.players[1].hand = ['contessa', 'ambassador']
+      s.deck = ['duke', 'assassin']
+      s.current = 0
+      s.pending = []
+
+      game.declare(0, 'tax', null)
+      game.challenge(1)
+      expect(s.players[0].hand.find((c) => c !== 'captain')).toBe('assassin')
+    }
   })
 
   it('costs the bluffer an influence and cancels the action', () => {
@@ -209,6 +245,26 @@ describe('a block', () => {
 
     expect(game.state.players[0].coins).toBe(STARTING_COINS)
     expect(game.state.current).toBe(1)
+  })
+
+  it('swaps a proven blocker’s card too, and costs the challenger an influence', () => {
+    // Foreign aid, blocked by a real Duke, and the challenge that follows: a
+    // block is a claim like any other, so proving it swaps the card the same way.
+    const game = scripted([['captain', 'assassin'], ['duke', 'contessa']])
+    game.state.deck = ['ambassador', 'assassin', 'captain']
+
+    game.declare(0, 'foreignAid', null)
+    expect(game.block(1, 'duke').ok).toBe(true)
+    expect(game.challenge(0).ok).toBe(true)
+
+    // The blocker shows the Duke, buries it and takes the top card.
+    expect(game.state.players[1].hand).toEqual(['contessa', 'captain'])
+    expect(game.state.deck).toEqual(['duke', 'ambassador', 'assassin'])
+    // The challenger pays, and the block still stands — no foreign aid.
+    expect(game.state.pending[0]).toEqual({ step: 'lose', player: 0, reason: 'challengeLost' })
+    game.loseInfluence(0, 'assassin')
+    expect(game.state.players[0].coins).toBe(STARTING_COINS)
+    expect(game.state.players[0].hand).toEqual(['captain'])
   })
 
   it('lets the action through when the blocker is caught bluffing', () => {
@@ -447,11 +503,16 @@ describe('persistence', () => {
   })
 
   it('carries the shuffler’s position, so a reshuffle is not replayed', () => {
-    const game = scripted([['duke', 'captain'], ['contessa', 'ambassador']])
+    const game = scripted([['ambassador', 'duke'], ['contessa', 'contessa']])
     const seedBefore = game.state.seed
-    game.declare(0, 'tax', null)
-    game.challenge(1)
-    // Proving the Duke reshuffled the deck, which has to move the generator on.
+
+    // An exchange is the one move that still shuffles: a proven card is buried
+    // rather than mixed in, so a challenge leaves the generator where it was.
+    game.declare(0, 'exchange', null)
+    game.pass(1)
+    expect(game.state.seed).toBe(seedBefore)
+
+    game.exchange(0, [0, 1])
     expect(game.state.seed).not.toBe(seedBefore)
   })
 })

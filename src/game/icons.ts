@@ -150,6 +150,46 @@ export const ICONS: Record<string, string> = {
     <path d="M12 6.6 13.5 10l3.7.3-2.8 2.4.86 3.6L12 14.4 8.74 16.3l.86-3.6L6.8 10.3 10.5 10z"/>
   `,
 
+  // The mark on the back of every influence card: a compass rose set in a ring,
+  // struck from two four-pointed stars so it still reads as an emblem rather
+  // than a blob at the size a face-down card sits at in a seat. The ring is a
+  // circle with a circle taken out of it, the same trick the coin uses.
+  'coup.rose': `
+    <path d="M12 .6a11.4 11.4 0 1 0 0 22.8 11.4 11.4 0 0 0 0-22.8zm0 1.2a10.2 10.2 0 1 1 0 20.4 10.2 10.2 0 0 1 0-20.4z"/>
+    <path d="M12 2.4 13.84 10.16 21.6 12 13.84 13.84 12 21.6 10.16 13.84 2.4 12 10.16 10.16z"/>
+    <path d="M16.81 7.19 14.2 12 16.81 16.81 12 14.2 7.19 16.81 9.8 12 7.19 7.19 12 9.8z"/>
+    <circle cx="12" cy="12" r="2.2"/>
+  `,
+
+  // Curling vine for the corners of a card back — two mirrored scrolls springing
+  // from a boss, which is what the gilt on the backs is made of.
+  'coup.filigree': `
+    <path d="M1.8 1.8c5.2.2 9 1.9 9.6 4.9.4 2-1 3.7-2.9 3.7-1.5 0-2.6-1-2.6-2.3 0-1.1.8-1.9 1.8-1.9.8 0 1.4.5 1.6 1.2.2-1.9-2.4-3.3-7.5-3.5z"/>
+    <path d="M1.8 1.8c.2 5.2 1.9 9 4.9 9.6 2 .4 3.7-1 3.7-2.9 0-1.5-1-2.6-2.3-2.6-1.1 0-1.9.8-1.9 1.8 0 .8.5 1.4 1.2 1.6-1.9.2-3.3-2.4-3.5-7.5z"/>
+    <circle cx="2.7" cy="2.7" r="1.6"/>
+  `,
+
+  // A corner piece for the gilded frames. Drawn for the top-left and rotated
+  // into the other three, so one shape gilds a whole panel.
+  'coup.corner': `
+    <path d="M1.6 1.6h10.2v2.4H4V11.8H1.6z"/>
+    <path d="M5.6 5.6h5.2v1.9H7.5v3.3H5.6z"/>
+    <circle cx="2.9" cy="2.9" r="1.3"/>
+  `,
+
+  // The rule either side of a heading: a line running into a lozenge.
+  'coup.flourish': `
+    <path d="M0.4 11.2h7.4v1.6H0.4z"/>
+    <path d="M16.2 11.2h7.4v1.6h-7.4z"/>
+    <path d="M12 7.4 16.6 12 12 16.6 7.4 12z"/>
+  `,
+
+  // The play log's mark: a quill, for a table that keeps its own minutes.
+  'coup.quill': `
+    <path d="M21.2 2.2c-6.4.5-11.4 3.5-14 8.2a12.4 12.4 0 0 0-1.5 5l-2.4 2.4a1.1 1.1 0 0 0 1.6 1.6l2.4-2.4a12.4 12.4 0 0 0 5-1.5c4.7-2.6 7.7-7.6 8.2-14a.3.3 0 0 0-.3-.3z"/>
+    <path d="M4.2 21.4h15.4v1.8H4.2z"/>
+  `,
+
   // A settlement's buildings. The rulebook distinguishes settlements by how many
   // buildings they show — one for a village, two for a city, three for Edo — so
   // this single mark is simply repeated rather than drawn differently per kind.
