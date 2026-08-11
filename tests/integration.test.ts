@@ -123,54 +123,61 @@ describe('two browsers playing over the wire', () => {
     expect(host.state!.players[1].captured).toBeNull()
     expect(JSON.stringify(host.state!)).not.toContain('"p1-t')
 
+    // Who opens is drawn by the server, so the two roles are worked out from the
+    // state rather than assumed to be host and guest. Assuming it made this a
+    // coin toss: half the time the "out of turn" player was the one on turn, and
+    // their play got past the turn check to fail on something else entirely.
+    const mover = host.state!.current === host.state!.you ? host : guest
+    const waiter = mover === host ? guest : host
+
     // A player cannot act out of turn.
-    const guestTile = guest.state!.hand[0]
-    guest.send({ t: 'play', tileId: guestTile, spaceId: buildBoard(2).order[0] })
-    await guest.settle()
-    expect(guest.errors.at(-1)).toMatch(/not your turn/i)
+    const waiterTile = waiter.state!.hand[0]
+    waiter.send({ t: 'play', tileId: waiterTile, spaceId: buildBoard(2).order[0] })
+    await waiter.settle()
+    expect(waiter.errors.at(-1)).toMatch(/not your turn/i)
 
     // Take-backs, over the wire: place, undo, and confirm the server really
     // rewound rather than the client merely hiding the tile.
     {
-      const handBefore = [...host.state!.hand]
-      const hostView = {
-        board: buildBoard(host.state!.playerCount),
-        pieces: host.state!.pieces,
-        placed: host.state!.placed,
-        tiles: Object.fromEntries(host.state!.hand.map((id) => [id, tileFromId(id)])),
-        playerCount: host.state!.playerCount,
+      const handBefore = [...mover.state!.hand]
+      const moverView = {
+        board: buildBoard(mover.state!.playerCount),
+        pieces: mover.state!.pieces,
+        placed: mover.state!.placed,
+        tiles: Object.fromEntries(mover.state!.hand.map((id) => [id, tileFromId(id)])),
+        playerCount: mover.state!.playerCount,
       }
-      const tile = host.state!.hand.map(tileFromId).find(
-        (t) => t.kind !== 'switch' && t.kind !== 'move' && legalPlacements(hostView, t).length > 0,
+      const tile = mover.state!.hand.map(tileFromId).find(
+        (t) => t.kind !== 'switch' && t.kind !== 'move' && legalPlacements(moverView, t).length > 0,
       )!
-      const space = legalPlacements(hostView, tile)[0]
+      const space = legalPlacements(moverView, tile)[0]
 
-      expect(host.state!.canUndo).toBe(false)
-      host.send({ t: 'play', tileId: tile.id, spaceId: space })
-      await host.settle()
-      await guest.settle()
-      expect(host.state!.placed[space]).toBeDefined()
-      expect(host.state!.canUndo).toBe(true)
+      expect(mover.state!.canUndo).toBe(false)
+      mover.send({ t: 'play', tileId: tile.id, spaceId: space })
+      await mover.settle()
+      await waiter.settle()
+      expect(mover.state!.placed[space]).toBeDefined()
+      expect(mover.state!.canUndo).toBe(true)
       // Only the player whose turn it is may take anything back.
-      expect(guest.state!.canUndo).toBe(false)
+      expect(waiter.state!.canUndo).toBe(false)
 
-      guest.send({ t: 'undo' })
-      await guest.settle()
-      expect(guest.errors.at(-1)).toMatch(/not your turn/i)
-      expect(host.state!.placed[space]).toBeDefined()
+      waiter.send({ t: 'undo' })
+      await waiter.settle()
+      expect(waiter.errors.at(-1)).toMatch(/not your turn/i)
+      expect(mover.state!.placed[space]).toBeDefined()
 
-      host.send({ t: 'undo' })
-      await host.settle()
-      await guest.settle()
-      expect(host.state!.placed[space]).toBeUndefined()
-      expect(host.state!.hand.slice().sort()).toEqual(handBefore.slice().sort())
-      expect(host.state!.canUndo).toBe(false)
+      mover.send({ t: 'undo' })
+      await mover.settle()
+      await waiter.settle()
+      expect(mover.state!.placed[space]).toBeUndefined()
+      expect(mover.state!.hand.slice().sort()).toEqual(handBefore.slice().sort())
+      expect(mover.state!.canUndo).toBe(false)
       // The other player's board really rewound too, not just the mover's.
-      expect(guest.state!.placed[space]).toBeUndefined()
+      expect(waiter.state!.placed[space]).toBeUndefined()
 
-      host.send({ t: 'undo' })
-      await host.settle()
-      expect(host.errors.at(-1)).toMatch(/nothing to take back/i)
+      mover.send({ t: 'undo' })
+      await mover.settle()
+      expect(mover.errors.at(-1)).toMatch(/nothing to take back/i)
     }
 
     // Play the game out with legal moves until the server declares it over.
