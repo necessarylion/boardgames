@@ -276,6 +276,38 @@ wss.on('connection', (socket) => {
       return
     }
 
+    // Coup likewise: its own engine, routed before the Samurai game below.
+    if (room.coup) {
+      if (!seat) return fail(socket, 'You are watching this game, not playing it.')
+      const coup = room.coup
+      const outcome = (() => {
+        switch (msg.t) {
+          case 'coupAct':
+            return coup.declare(seat.id, msg.action, msg.target ?? null)
+          case 'coupChallenge':
+            return coup.challenge(seat.id)
+          case 'coupBlock':
+            return coup.block(seat.id, msg.character)
+          case 'coupPass':
+            return coup.pass(seat.id)
+          case 'coupLose':
+            return coup.loseInfluence(seat.id, msg.character)
+          case 'coupExchange':
+            return coup.exchange(seat.id, msg.keep ?? [])
+          case 'pause':
+            return coup.pause(seat.id)
+          case 'resume':
+            return coup.resume(seat.id)
+          default:
+            return { ok: false as const, error: 'Unknown action.' }
+        }
+      })()
+      if (!outcome.ok) return fail(socket, outcome.error)
+      room.touch()
+      commit(room)
+      return
+    }
+
     // Everything below is a game action and needs a seat and a running game.
     if (!seat) return fail(socket, 'You are watching this game, not playing it.')
     const game = room.game
@@ -345,6 +377,9 @@ function sanitiseOptions(options: unknown) {
     boardShape: shape,
     turnSeconds: seconds,
     teams,
+    // Absent on a client that predates the option, which should still get the
+    // roll rather than silently losing it, so this defaults on rather than off.
+    diceStart: o.diceStart === undefined ? true : Boolean(o.diceStart),
   }
 }
 
@@ -362,6 +397,10 @@ setInterval(() => {
     if (game) {
       const outcome = game.timeOut(game.state.current)
       if (outcome.ok) room.touch()
+    } else if (room.coup) {
+      // Coup settles whatever the pending stack is asking, which is often a
+      // response owed by someone other than the player whose turn it is.
+      if (room.coup.timeOut().ok) room.touch()
     }
     room.rearmTurnTimer()
     commit(room)

@@ -3,21 +3,23 @@ import { computed, ref, watch } from 'vue'
 import type { Caste, TileDef } from '@shared/types'
 import { enSamurai } from './en/samurai'
 import { enHalli } from './en/halli_galli'
+import { enCoup } from './en/coup'
 import { mySamurai } from './my/samurai'
 import { myHalli } from './my/halli_galli'
+import { myCoup } from './my/coup'
 
 export const LOCALES = ['en', 'my'] as const
 export type Locale = (typeof LOCALES)[number]
 
 /**
- * Each locale is assembled from a Samurai partial and a Halli Galli partial, so
- * a game owns its own strings. English is the catalogue of record; `my` has to
- * match it — the `Record<MessageKey, string>` typing below is what enforces it.
+ * Each locale is assembled from one partial per game, so a game owns its own
+ * strings. English is the catalogue of record; `my` has to match it — the
+ * `Record<MessageKey, string>` typing below is what enforces it.
  */
-const en = { ...enSamurai, ...enHalli }
-const my = { ...mySamurai, ...myHalli }
+const en = { ...enSamurai, ...enHalli, ...enCoup }
+const my = { ...mySamurai, ...myHalli, ...myCoup }
 
-/** Every message key, across both games. */
+/** Every message key, across every game. */
 export type MessageKey = keyof typeof en
 
 /** Endonyms, so the picker reads the same whichever language is active. */

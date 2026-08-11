@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import BoardGlyph from './BoardGlyph.vue'
-import TurnClockOptions from './TurnClockOptions.vue'
+import TurnClockOptions from '../common/TurnClockOptions.vue'
 import { PLAYER_COLOURS } from '@shared/colours'
 import { DEFAULT_BOARD_SHAPE } from '@shared/board'
 import { supplyPerCaste } from '@shared/setup'

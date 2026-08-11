@@ -50,6 +50,12 @@ export interface GameOptions {
    * holds a table to a valid split at the start.
    */
   teams: number
+  /**
+   * Coup's: roll dice for the opening seat instead of drawing it silently.
+   * Either way the seat is random — this only decides whether the table gets to
+   * watch it being decided.
+   */
+  diceStart: boolean
 }
 
 /** Shot-clock lengths a table can be set up with. 0 is no clock at all. */
@@ -62,6 +68,7 @@ export const DEFAULT_OPTIONS: GameOptions = {
   boardShape: DEFAULT_BOARD_SHAPE,
   turnSeconds: 0,
   teams: 0,
+  diceStart: true,
 }
 
 export interface EnginePlayer {

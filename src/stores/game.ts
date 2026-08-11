@@ -8,11 +8,13 @@ import {
   type AnyClientState,
   type ClientMessage,
   type ClientState,
+  type CoupClientState,
   type HalliClientState,
   type ServerMessage,
 } from '@shared/protocol'
 import { MAX_PLAYERS, type GameKind } from '@shared/types'
 import { t } from '@/i18n'
+import { createCoup } from './coup/useCoup'
 import { createHalliGalli } from './halli_galli/useHalliGalli'
 import { createSamurai } from './samurai/useSamurai'
 
@@ -65,10 +67,12 @@ export const useGameStore = defineStore('game', () => {
   const connection = ref<Connection>('connecting')
   /** Samurai's redacted state; null while a Halli Galli table is on screen. */
   const state = ref<ClientState | null>(null)
-  /** Halli Galli's redacted state; null while a Samurai table is on screen. */
+  /** Halli Galli's redacted state; null while another game's table is on screen. */
   const halli = ref<HalliClientState | null>(null)
-  /** Whichever game's state is current, for the fields the two share. */
-  const room = computed<AnyClientState | null>(() => state.value ?? halli.value)
+  /** Coup's redacted state; null while another game's table is on screen. */
+  const coup = ref<CoupClientState | null>(null)
+  /** Whichever game's state is current, for the fields they all share. */
+  const room = computed<AnyClientState | null>(() => state.value ?? halli.value ?? coup.value)
   /**
    * Which game the player picked on the landing screen, before any room exists.
    * An invite link points straight at a table, so it skips the landing entirely.
@@ -261,12 +265,18 @@ export const useGameStore = defineStore('game', () => {
         if (incoming.kind === 'halligalli') {
           halli.value = incoming
           state.value = null
+          coup.value = null
+        } else if (incoming.kind === 'coup') {
+          coup.value = incoming
+          state.value = null
+          halli.value = null
         } else {
           // Any state the local player did not expect invalidates a half-finished
           // interaction (for example a piece someone else just captured).
           if (incoming.you !== incoming.current) samurai.resetInteraction()
           state.value = incoming
           halli.value = null
+          coup.value = null
         }
         reclaimSeat(incoming)
         break
@@ -319,6 +329,7 @@ export const useGameStore = defineStore('game', () => {
   // hands them the shared fields (`state`/`halli`, `you`, `isPaused`, `send`).
   const samurai = createSamurai({ state, you, phase, isPaused, send })
   const halliGalli = createHalliGalli({ halli, you, isPaused, send })
+  const coupGame = createCoup({ coup, you, send })
 
   // --- room actions --------------------------------------------------------
   /** Bring the seat back to this tab after another one took it over. */
@@ -386,6 +397,7 @@ export const useGameStore = defineStore('game', () => {
     // shared shell
     state,
     halli,
+    coup,
     room,
     kind,
     chosenGame,
@@ -412,5 +424,7 @@ export const useGameStore = defineStore('game', () => {
     ...samurai,
     // Halli Galli
     ...halliGalli,
+    // Coup
+    ...coupGame,
   }
 })

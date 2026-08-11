@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted } from 'vue'
+import CoupGameScreen from './components/coup/CoupGameScreen.vue'
+import CoupLobby from './components/coup/CoupLobby.vue'
 import DraftScreen from './components/samurai/DraftScreen.vue'
 import GameScreen from './components/samurai/GameScreen.vue'
 import HalliGameScreen from './components/halli_galli/HalliGameScreen.vue'
@@ -40,10 +42,15 @@ onMounted(() => game.connect())
     <LandingScreen v-if="!game.inRoom && !game.chosenGame" />
     <HomeScreen v-else-if="!game.inRoom" />
 
-    <!-- Halli Galli has its own lobby and table; Samurai keeps its three screens. -->
+    <!-- The card games have a lobby and a table each; Samurai keeps its three. -->
     <template v-else-if="game.kind === 'halligalli'">
       <HalliLobby v-if="game.phase === 'lobby'" />
       <HalliGameScreen v-else />
+    </template>
+
+    <template v-else-if="game.kind === 'coup'">
+      <CoupLobby v-if="game.phase === 'lobby'" />
+      <CoupGameScreen v-else />
     </template>
 
     <LobbyScreen v-else-if="game.phase === 'lobby'" />
