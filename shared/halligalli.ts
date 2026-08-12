@@ -186,6 +186,10 @@ export class HalliGame {
     if (s.paused) return fail('The table is paused.')
     const player = s.players[playerId]
     if (!player || player.out) return fail('You are out of the game.')
+    // Nothing is face up, so there is nothing to ring for. An empty stack is no
+    // bar, though: a stackless player may still ring — correctly to win the
+    // piles, or to settle a table where nobody can flip.
+    if (!s.players.some((p) => p.faceUp.length > 0)) return fail('There is nothing to ring for.')
 
     const fruit = ringingFruit(s.players)
     if (fruit) this.resolveCorrectRing(playerId, fruit)

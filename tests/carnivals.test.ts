@@ -299,7 +299,7 @@ describe('going all in', () => {
     expect(affordances(game.state, 1).allIn).toBe(true)
     expect(game.allIn(1).ok).toBe(true)
     expect(game.state.players[1].carnivals).toBe(0)
-    expect(game.state.players[1].committed).toBe(25) // 10 ante + 15 all in
+    expect(game.state.players[1].committed).toBe(25) // 10 opening bet + 15 all in
     expect(game.state.step).toBe('showdown')
   })
 

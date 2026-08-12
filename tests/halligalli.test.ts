@@ -197,6 +197,21 @@ describe('winning', () => {
   })
 })
 
+describe('ringing an empty board', () => {
+  it('is refused when no card is face up, but allowed once one is', () => {
+    const game = scripted([
+      { stack: [card('lime', 1)], faceUp: [] },
+      { stack: [card('plum', 1)], faceUp: [] },
+    ])
+    // Nothing is showing, so there is nothing to ring for.
+    expect(game.slap(0).ok).toBe(false)
+    // A stackless ringer is still allowed once a card is face up.
+    game.state.players[1].stack = []
+    game.state.players[1].faceUp = [card('plum', 2)]
+    expect(game.slap(1).ok).toBe(true)
+  })
+})
+
 describe('pause', () => {
   it('blocks flips and rings until resumed', () => {
     const game = scripted([{ stack: [card('lime', 1)] }, { stack: [card('lime', 1)] }])

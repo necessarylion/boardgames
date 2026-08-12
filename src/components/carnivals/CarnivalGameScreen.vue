@@ -92,6 +92,12 @@ const winner = computed(() => {
   return w === null || w === undefined ? null : nameOf(w)
 })
 
+/** Why the game ended, resolved from the translation key the engine stored. */
+const resultReason = computed(() => {
+  const reason = game.carnival?.result?.reason
+  return reason ? t(reason as Parameters<typeof t>[0]) : ''
+})
+
 /**
  * The two cards for one seat, as the server has redacted them. A null value is a
  * card this viewer may not see; whether it is the seat's own blind blue or an
@@ -465,7 +471,7 @@ watch(
     <div v-if="isOver" class="over-veil">
       <div class="over-card panel">
         <h2>{{ winner ? t('carnival.winner', { name: winner }) : t('carnival.draw') }}</h2>
-        <p class="tiny muted">{{ game.carnival?.result?.reason }}</p>
+        <p class="tiny muted">{{ resultReason }}</p>
         <div class="over-actions">
           <button v-if="game.isHost" class="btn" @click="game.rematch()">
             {{ t('over.playAgain') }}

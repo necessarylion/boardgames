@@ -92,6 +92,8 @@ export const enCarnivals = {
   'carnival.event.out': '{name} is out of the game.',
   'carnival.winner': '{name} wins!',
   'carnival.draw': 'Nobody is left standing',
+  'carnival.result.lastStanding': 'The last player with Carnivals.',
+  'carnival.result.brokeAtOnce': 'The table went broke at once.',
 
   // --- the quick reference ---------------------------------------------------
   'carnival.rules.open': 'Rules',

@@ -92,6 +92,8 @@ export const myCarnivals = {
   'carnival.event.out': '{name} ဂိမ်းမှ ထွက်သွားသည်။',
   'carnival.winner': '{name} အနိုင်ရသည်!',
   'carnival.draw': 'ကျန်ရစ်သူ မရှိပါ',
+  'carnival.result.lastStanding': 'ကာနီဗယ် ကျန်သည့် နောက်ဆုံးကစားသမား။',
+  'carnival.result.brokeAtOnce': 'စားပွဲတစ်ခုလုံး တစ်ပြိုင်နက် ငွေကုန်သွားသည်။',
 
   // --- the quick reference ---------------------------------------------------
   'carnival.rules.open': 'စည်းမျဉ်း',

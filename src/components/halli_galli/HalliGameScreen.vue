@@ -266,7 +266,14 @@ onUnmounted(() => {
       <div ref="ringEl" class="ring" :class="{ stacked: !isRing }">
         <!-- The ring announcement, floated over the middle of the table. -->
         <Transition name="flash">
-          <p v-if="toastVisible" :key="eventText" class="event" :class="{ good: event?.correct }">
+          <p
+            v-if="toastVisible"
+            :key="eventText"
+            class="event"
+            :class="{ good: event?.correct }"
+            role="status"
+            aria-live="polite"
+          >
             {{ eventText }}
           </p>
         </Transition>
@@ -277,6 +284,7 @@ onUnmounted(() => {
             class="bell"
             :disabled="!game.canSlap"
             :title="t('halli.bell.hint')"
+            :aria-label="t('halli.bell.hint')"
             @click="game.slapBell()"
           >
             🔔
@@ -313,7 +321,7 @@ onUnmounted(() => {
       <!-- The play log, floated in the bottom-left corner and folded away to its
            header on request, so it never sits on top of a seat for long. -->
       <aside class="log panel" :class="{ folded: !logOpen }">
-        <button class="log-head" type="button" @click="logOpen = !logOpen">
+        <button class="log-head" type="button" :aria-expanded="logOpen" @click="logOpen = !logOpen">
           <span>{{ t('halli.log.title') }}</span>
           <span aria-hidden="true">{{ logOpen ? '▾' : '▴' }}</span>
         </button>
@@ -637,13 +645,16 @@ onUnmounted(() => {
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%);
-  z-index: 1;
+  /* Above the seats (z-index 2): the bell is the primary action and must stay
+     clickable even if a tall seat box happens to overlap the middle. */
+  z-index: 3;
   display: flex;
   flex-direction: column;
   align-items: center;
 }
 
-/* Floated near the top of the ring so it never lands on the bell or a seat. */
+/* Floated near the top of the ring so it never lands on the bell or a seat. A
+   long, user-supplied name is allowed to wrap rather than overflow the ring. */
 .event {
   position: absolute;
   top: 0.4rem;
@@ -652,9 +663,10 @@ onUnmounted(() => {
   z-index: 6;
   margin: 0;
   padding: 0.4rem 1rem;
-  border-radius: 999px;
+  max-width: min(22rem, calc(100% - 1.5rem));
+  border-radius: 12px;
   font-weight: 600;
-  white-space: nowrap;
+  text-align: center;
   background: rgba(120, 120, 120, 0.16);
   color: var(--ink-soft);
   box-shadow: var(--shadow);

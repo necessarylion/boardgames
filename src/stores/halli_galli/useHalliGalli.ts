@@ -37,9 +37,11 @@ export function createHalliGalli(ctx: HalliContext) {
   )
   /**
    * A player may ring the bell whenever they like, so long as there is anything
-   * to ring for: at least one card must be face up on the table (with none
-   * showing, every ring is a guaranteed mistake), and the player must still hold
-   * a card in their own stack. Otherwise the bell goes dead for them.
+   * to ring for: at least one card must be face up on the table, since with none
+   * showing every ring is a guaranteed mistake. This mirrors the engine's own
+   * guard exactly. An empty stack is deliberately no bar — a stackless player can
+   * still ring correctly to sweep the piles back into the game, and when every
+   * stack is empty a ring is the only move that can settle the frozen table.
    */
   const canSlap = computed(
     () =>
@@ -47,7 +49,6 @@ export function createHalliGalli(ctx: HalliContext) {
       !isPaused.value &&
       !!hgYou.value &&
       !hgYou.value.out &&
-      hgYou.value.stackCount > 0 &&
       hgPlayers.value.some((p) => p.faceUp.length > 0),
   )
 

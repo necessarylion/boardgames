@@ -1,21 +1,68 @@
 <script setup lang="ts">
+import { onMounted, onUnmounted, ref } from 'vue'
 import CarnivalCard from './CarnivalCard.vue'
 import { CARD_HIGH, CARD_LOW, MIN_RAISE, STARTING_CARNIVALS } from '@shared/carnivals'
 import { t } from '@/i18n'
 
 /**
  * The quick reference. The figures come straight from the engine constants, so
- * the sheet cannot drift from the ante, the raise minimum or the card range the
- * rules actually use.
+ * the sheet cannot drift from the raise minimum or the card range the rules
+ * actually use.
  */
-defineEmits<{ (e: 'close'): void }>()
+const emit = defineEmits<{ (e: 'close'): void }>()
+
+const sheet = ref<HTMLElement | null>(null)
+
+/** The elements a Tab can land on, so focus can be kept inside the dialog. */
+function focusables(): HTMLElement[] {
+  if (!sheet.value) return []
+  return Array.from(
+    sheet.value.querySelectorAll<HTMLElement>(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+    ),
+  ).filter((el) => !el.hasAttribute('disabled'))
+}
+
+/** Escape closes; Tab wraps at the ends so focus never leaves the open dialog. */
+function onKey(e: KeyboardEvent) {
+  if (e.key === 'Escape') {
+    e.preventDefault()
+    emit('close')
+    return
+  }
+  if (e.key !== 'Tab') return
+  const els = focusables()
+  if (els.length === 0) return
+  const first = els[0]
+  const last = els[els.length - 1]
+  const active = document.activeElement
+  if (e.shiftKey && active === first) {
+    e.preventDefault()
+    last.focus()
+  } else if (!e.shiftKey && active === last) {
+    e.preventDefault()
+    first.focus()
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', onKey)
+  focusables()[0]?.focus()
+})
+onUnmounted(() => window.removeEventListener('keydown', onKey))
 </script>
 
 <template>
   <div class="veil" @click.self="$emit('close')">
-    <div class="sheet panel" role="dialog" aria-modal="true">
+    <div
+      ref="sheet"
+      class="sheet panel"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="carnival-rules-title"
+    >
       <header class="head">
-        <h2>{{ t('carnival.rules.title') }}</h2>
+        <h2 id="carnival-rules-title">{{ t('carnival.rules.title') }}</h2>
         <button class="btn ghost small" @click="$emit('close')">{{ t('carnival.rules.close') }}</button>
       </header>
 

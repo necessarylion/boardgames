@@ -122,6 +122,7 @@ export type CarnivalEvent =
 export interface CarnivalResult {
   /** The last player left with Carnivals, or null if the table emptied at once. */
   winner: number | null
+  /** A translation key for why the game ended; the client resolves it. */
   reason: string
 }
 
@@ -789,8 +790,9 @@ export class CarnivalGame {
       s.phase = 'over'
       const winner = remaining[0] ?? null
       s.result = {
+        // A translation key, resolved by the client — the engine ships no prose.
         winner: winner?.id ?? null,
-        reason: winner ? 'the last player with Carnivals' : 'the table went broke at once',
+        reason: winner ? 'carnival.result.lastStanding' : 'carnival.result.brokeAtOnce',
       }
       if (winner) this.log(winner.id, 'wins the game.')
       return
