@@ -3,7 +3,7 @@ import { describe, expect, it, beforeEach, afterEach } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 
 import { Room } from '../server/rooms'
-import { CLOSE_REPLACED, type ClientMessage } from '../shared/protocol'
+import { CLOSE_REPLACED, PROTOCOL_VERSION, type ClientMessage } from '../shared/protocol'
 import { useGameStore } from '../src/stores/game'
 
 /**
@@ -110,7 +110,7 @@ describe('one identity per table', () => {
 
   it('writes the table into the URL and keeps its seat once it has one', async () => {
     const { game, socket } = await openTab('/')
-    socket.receive({ t: 'hello', token: TOKEN_A, version: 2 })
+    socket.receive({ t: 'hello', token: TOKEN_A, version: PROTOCOL_VERSION })
     socket.receive({ t: 'state', state: new Room('ABCD').stateFor('nobody') })
 
     expect(game.state?.code).toBe('ABCD')
@@ -121,7 +121,7 @@ describe('one identity per table', () => {
   it('reclaims the seat it already holds when joining that table again', async () => {
     localStorage.setItem('samurai.token.ABCD', TOKEN_A)
     const { game, socket } = await openTab('/')
-    socket.receive({ t: 'hello', token: TOKEN_B, version: 2 })
+    socket.receive({ t: 'hello', token: TOKEN_B, version: PROTOCOL_VERSION })
 
     game.joinRoom('abcd', 'Takeda')
 
@@ -136,7 +136,7 @@ describe('one identity per table', () => {
   it('forgets the seat and the link when the table lets it go', async () => {
     localStorage.setItem('samurai.token.ABCD', TOKEN_A)
     const { game, socket } = await openTab('/?room=ABCD')
-    socket.receive({ t: 'hello', token: TOKEN_A, version: 2 })
+    socket.receive({ t: 'hello', token: TOKEN_A, version: PROTOCOL_VERSION })
     socket.receive({ t: 'state', state: new Room('ABCD').stateFor('nobody') })
 
     socket.receive({ t: 'left' })
@@ -152,6 +152,38 @@ describe('one identity per table', () => {
     socket.receive({ t: 'left' })
 
     expect(location.search).toBe('?room=ABCD')
+  })
+})
+
+describe('a tab older than the server', () => {
+  it('stops rather than half-working when the protocol versions differ', async () => {
+    const { game, socket } = await openTab('/?room=ABCD')
+    socket.receive({ t: 'hello', token: TOKEN_A, version: PROTOCOL_VERSION + 1 })
+    await Promise.resolve()
+
+    expect(game.stale).toBe(true)
+    // A state it cannot be sure it understands is not acted on.
+    socket.receive({ t: 'state', state: new Room('ABCD').stateFor('nobody') })
+    expect(game.state).toBeNull()
+  })
+
+  it('does not dial again, since only a reload can close a version gap', async () => {
+    const { game, socket } = await openTab('/?room=ABCD')
+    socket.receive({ t: 'hello', token: TOKEN_A, version: PROTOCOL_VERSION + 1 })
+    socket.close(1006)
+    await new Promise((resolve) => setTimeout(resolve, 1200))
+
+    expect(game.stale).toBe(true)
+    expect(FakeSocket.instances).toHaveLength(1)
+  })
+
+  it('carries on as normal when the versions match', async () => {
+    const { game, socket } = await openTab('/?room=ABCD')
+    socket.receive({ t: 'hello', token: TOKEN_A, version: PROTOCOL_VERSION })
+    socket.receive({ t: 'state', state: new Room('ABCD').stateFor('nobody') })
+
+    expect(game.stale).toBe(false)
+    expect(game.state?.code).toBe('ABCD')
   })
 })
 

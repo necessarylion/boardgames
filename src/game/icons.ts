@@ -4,6 +4,32 @@ import riceImage from '../../assets/rice.png'
 import roninImage from '../../assets/ronin.png'
 import samuraiImage from '../../assets/samurai.png'
 import shipImage from '../../assets/ship.png'
+import ambassadorCard from '../../assets/image/Ambassador.jpg'
+import assassinCard from '../../assets/image/Assassin.jpg'
+import captainCard from '../../assets/image/Captain.jpg'
+import contessaCard from '../../assets/image/Contessa.jpg'
+import dukeCard from '../../assets/image/Duke.jpg'
+
+/**
+ * Whole card faces for Coup's five characters, keyed by character id.
+ *
+ * Deliberately not part of `ICON_IMAGES`: that map feeds `GameIcon`, which draws
+ * a 24×24 mark, and these are full portrait cards — routed through it they would
+ * become unreadable thumbnails on the landing seal and the home masthead. Those
+ * two keep the drawn `coup.*` silhouettes below.
+ *
+ * `CoupCard` prefers an entry here and falls back to the emblem-and-banner
+ * layout for any character missing one, so removing a line is all it takes to go
+ * back to the drawn card. Note the filenames are capitalised and the Docker
+ * image builds on Linux, so these imports must match the files exactly.
+ */
+export const COUP_PORTRAITS: Record<string, string> = {
+  duke: dukeCard,
+  assassin: assassinCard,
+  captain: captainCard,
+  ambassador: ambassadorCard,
+  contessa: contessaCard,
+}
 
 /**
  * Artwork for the three castes and the three wild tiles. GameIcon prefers an
@@ -85,6 +111,83 @@ export const ICONS: Record<string, string> = {
     <path d="M5.3 5.3 9.2 7.65v4.7L5.3 14.7 1.4 12.35v-4.7z"/>
     <rect x="10.6" y="8.8" width="7.4" height="2.4" rx="1.2"/>
     <path d="M16.4 5.9 22.7 10l-6.3 4.1z"/>
+  `,
+
+  // Coup's five characters. Namespaced, because these belong to a different game
+  // and share nothing with the tiles above. They are emblems of each character's
+  // power rather than portraits — original marks drawn to the same 24×24 grid,
+  // with no relation to any published artwork.
+  'coup.duke': `
+    <path d="M2.6 8.2 7 11.6l5-6.6 5 6.6 4.4-3.4-1.6 8.6H4.2z"/>
+    <rect x="4" y="18.4" width="16" height="2.6" rx="1.1"/>
+  `,
+  'coup.assassin': `
+    <path d="M12 1.8 14 7.4v6.2h-4V7.4z"/>
+    <rect x="7.4" y="13.8" width="9.2" height="2.2" rx="1.1"/>
+    <rect x="10.9" y="16.4" width="2.2" height="3.6" rx="1.1"/>
+    <circle cx="12" cy="21" r="1.5"/>
+  `,
+  'coup.captain': `
+    <circle cx="12" cy="3.6" r="2.1"/>
+    <rect x="10.9" y="5.6" width="2.2" height="14" rx="1.1"/>
+    <rect x="6.6" y="7.4" width="10.8" height="2.1" rx="1.05"/>
+    <path d="M4.2 12.6c0 4.6 3.5 8.2 7.8 8.2s7.8-3.6 7.8-8.2h-2.9c0 3.1-2.2 5.4-4.9 5.4s-4.9-2.3-4.9-5.4z"/>
+  `,
+  'coup.ambassador': `
+    <rect x="5" y="3.2" width="14" height="13.2" rx="1.6"/>
+    <rect x="3.2" y="16.8" width="17.6" height="2.4" rx="1.2"/>
+    <circle cx="12" cy="21" r="2"/>
+  `,
+  'coup.contessa': `
+    <path d="M12 19.8 4.6 8.9A9.6 9.6 0 0 1 19.4 8.9z"/>
+    <rect x="10.8" y="18.4" width="2.4" height="3.4" rx="1.2"/>
+  `,
+
+  // A coin from the treasury. Drawn as a ring with a struck mark so it still
+  // reads as money at the 14px it sits at beside a seat's coin count.
+  'coup.coin': `
+    <path d="M12 2.2a9.8 9.8 0 1 0 0 19.6 9.8 9.8 0 0 0 0-19.6zm0 2.6a7.2 7.2 0 1 1 0 14.4 7.2 7.2 0 0 1 0-14.4z"/>
+    <path d="M12 6.6 13.5 10l3.7.3-2.8 2.4.86 3.6L12 14.4 8.74 16.3l.86-3.6L6.8 10.3 10.5 10z"/>
+  `,
+
+  // The mark on the back of every influence card: a compass rose set in a ring,
+  // struck from two four-pointed stars so it still reads as an emblem rather
+  // than a blob at the size a face-down card sits at in a seat. The ring is a
+  // circle with a circle taken out of it, the same trick the coin uses.
+  'coup.rose': `
+    <path d="M12 .6a11.4 11.4 0 1 0 0 22.8 11.4 11.4 0 0 0 0-22.8zm0 1.2a10.2 10.2 0 1 1 0 20.4 10.2 10.2 0 0 1 0-20.4z"/>
+    <path d="M12 2.4 13.84 10.16 21.6 12 13.84 13.84 12 21.6 10.16 13.84 2.4 12 10.16 10.16z"/>
+    <path d="M16.81 7.19 14.2 12 16.81 16.81 12 14.2 7.19 16.81 9.8 12 7.19 7.19 12 9.8z"/>
+    <circle cx="12" cy="12" r="2.2"/>
+  `,
+
+  // Curling vine for the corners of a card back — two mirrored scrolls springing
+  // from a boss, which is what the gilt on the backs is made of.
+  'coup.filigree': `
+    <path d="M1.8 1.8c5.2.2 9 1.9 9.6 4.9.4 2-1 3.7-2.9 3.7-1.5 0-2.6-1-2.6-2.3 0-1.1.8-1.9 1.8-1.9.8 0 1.4.5 1.6 1.2.2-1.9-2.4-3.3-7.5-3.5z"/>
+    <path d="M1.8 1.8c.2 5.2 1.9 9 4.9 9.6 2 .4 3.7-1 3.7-2.9 0-1.5-1-2.6-2.3-2.6-1.1 0-1.9.8-1.9 1.8 0 .8.5 1.4 1.2 1.6-1.9.2-3.3-2.4-3.5-7.5z"/>
+    <circle cx="2.7" cy="2.7" r="1.6"/>
+  `,
+
+  // A corner piece for the gilded frames. Drawn for the top-left and rotated
+  // into the other three, so one shape gilds a whole panel.
+  'coup.corner': `
+    <path d="M1.6 1.6h10.2v2.4H4V11.8H1.6z"/>
+    <path d="M5.6 5.6h5.2v1.9H7.5v3.3H5.6z"/>
+    <circle cx="2.9" cy="2.9" r="1.3"/>
+  `,
+
+  // The rule either side of a heading: a line running into a lozenge.
+  'coup.flourish': `
+    <path d="M0.4 11.2h7.4v1.6H0.4z"/>
+    <path d="M16.2 11.2h7.4v1.6h-7.4z"/>
+    <path d="M12 7.4 16.6 12 12 16.6 7.4 12z"/>
+  `,
+
+  // The play log's mark: a quill, for a table that keeps its own minutes.
+  'coup.quill': `
+    <path d="M21.2 2.2c-6.4.5-11.4 3.5-14 8.2a12.4 12.4 0 0 0-1.5 5l-2.4 2.4a1.1 1.1 0 0 0 1.6 1.6l2.4-2.4a12.4 12.4 0 0 0 5-1.5c4.7-2.6 7.7-7.6 8.2-14a.3.3 0 0 0-.3-.3z"/>
+    <path d="M4.2 21.4h15.4v1.8H4.2z"/>
   `,
 
   // A settlement's buildings. The rulebook distinguishes settlements by how many

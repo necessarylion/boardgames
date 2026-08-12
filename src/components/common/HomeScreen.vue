@@ -2,7 +2,8 @@
 import { computed, ref } from 'vue'
 import mainBackground from '../../../assets/mainbg.png'
 import BoardGlyph from '../samurai/BoardGlyph.vue'
-import TurnClockOptions from '../samurai/TurnClockOptions.vue'
+import GameIcon from './GameIcon.vue'
+import TurnClockOptions from './TurnClockOptions.vue'
 import { DEFAULT_OPTIONS } from '@shared/engine'
 import { BOARD_SHAPES } from '@shared/types'
 import LanguageMenu from '@/i18n/LanguageMenu.vue'
@@ -14,6 +15,20 @@ const game = useGameStore()
 /** Which game the landing screen sent us here to host or join. */
 const kind = computed(() => game.chosenGame ?? 'samurai')
 const isSamurai = computed(() => kind.value === 'samurai')
+
+/**
+ * The masthead and the host panel are the only things on this screen that differ
+ * by game. Samurai is the one with artwork and with settings to choose; the card
+ * games each bring a title, a tagline and a line explaining there is nothing to
+ * set up, so they are looked up rather than branched on one at a time.
+ */
+const MASTHEAD = {
+  samurai: { title: 'landing.samurai.name', tagline: 'home.tagline', hint: '' },
+  halligalli: { title: 'landing.halli.name', tagline: 'home.halli.tagline', hint: 'home.halli.hostHint' },
+  coup: { title: 'landing.coup.name', tagline: 'home.coup.tagline', hint: 'home.coup.hostHint' },
+} as const
+
+const masthead = computed(() => MASTHEAD[kind.value])
 
 const name = ref(game.myName)
 const code = ref((new URLSearchParams(location.search).get('room') ?? '').toUpperCase())
@@ -28,6 +43,7 @@ const randomHands = ref(DEFAULT_OPTIONS.randomHands)
 const openInformation = ref(DEFAULT_OPTIONS.openInformation)
 const boardShape = ref(DEFAULT_OPTIONS.boardShape)
 const turnSeconds = ref(DEFAULT_OPTIONS.turnSeconds)
+const diceStart = ref(DEFAULT_OPTIONS.diceStart)
 
 function create() {
   if (!name.value.trim()) return game.showError(t('home.error.name'))
@@ -39,6 +55,7 @@ function create() {
     turnSeconds: turnSeconds.value,
     // Team play needs four or six seats, so it is chosen in the lobby, not here.
     teams: 0,
+    diceStart: diceStart.value,
   })
 }
 
@@ -53,13 +70,16 @@ function join() {
   <div class="home">
     <LanguageMenu class="lang-corner" />
 
-    <aside class="art" :class="{ halli: !isSamurai }">
+    <aside class="art" :class="{ halli: kind === 'halligalli', coup: kind === 'coup' }">
       <img v-if="isSamurai" class="art-image" :src="mainBackground" alt="" />
       <div class="art-wash"></div>
       <header class="masthead">
-        <span class="seal" :class="{ fruits: !isSamurai }">{{ isSamurai ? '侍' : '🔔' }}</span>
-        <h1>{{ isSamurai ? t('landing.samurai.name') : t('landing.halli.name') }}</h1>
-        <p class="tagline">{{ isSamurai ? t('home.tagline') : t('home.halli.tagline') }}</p>
+        <span class="seal" :class="{ fruits: kind === 'halligalli', crown: kind === 'coup' }">
+          <GameIcon v-if="kind === 'coup'" name="coup.duke" :size="22" />
+          <template v-else>{{ isSamurai ? '侍' : '🔔' }}</template>
+        </span>
+        <h1>{{ t(masthead.title) }}</h1>
+        <p class="tagline">{{ t(masthead.tagline) }}</p>
       </header>
     </aside>
 
@@ -137,7 +157,23 @@ function join() {
 
               <TurnClockOptions :seconds="turnSeconds" @pick="turnSeconds = $event" />
             </template>
-            <p v-else class="muted tiny host-hint">{{ t('home.halli.hostHint') }}</p>
+            <!-- Coup has no board or hand settings, but it does run a shot
+                 clock, so it gets that one control and nothing else. -->
+            <template v-else-if="kind === 'coup'">
+              <p class="muted tiny host-hint">{{ t('home.coup.hostHint') }}</p>
+              <TurnClockOptions :seconds="turnSeconds" @pick="turnSeconds = $event" />
+            </template>
+            <p v-else-if="masthead.hint" class="muted tiny host-hint">{{ t(masthead.hint) }}</p>
+
+            <!-- Every game draws its opening seat, so the roll is offered to
+                 every game rather than sitting inside one of them. -->
+            <label class="check">
+              <input v-model="diceStart" type="checkbox" />
+              <span>
+                {{ t('option.diceStart') }}
+                <em class="tiny muted">{{ t('option.diceStart.hint') }}</em>
+              </span>
+            </label>
 
             <button class="btn wide" @click="create">{{ t('home.create') }}</button>
           </section>
@@ -192,9 +228,13 @@ function join() {
   min-height: 22rem;
 }
 
-/* Halli Galli ships no artwork, so its column is a warm wash instead of a crop. */
+/* The card games ship no artwork, so their column is a wash instead of a crop. */
 .art.halli {
   background: linear-gradient(160deg, #b23a2c 0%, #d98a3d 60%, #e7c15c 100%);
+}
+
+.art.coup {
+  background: linear-gradient(160deg, #2e2340 0%, #6b4b9c 55%, #b23a2c 100%);
 }
 
 .back {
@@ -241,6 +281,10 @@ function join() {
 .masthead .seal {
   margin-bottom: 0.9rem;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25), 0 4px 14px rgba(0, 0, 0, 0.45);
+}
+
+.seal.crown {
+  background: #4a3a6b;
 }
 
 h1 {

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import BoardGlyph from './BoardGlyph.vue'
-import TurnClockOptions from './TurnClockOptions.vue'
+import TurnClockOptions from '../common/TurnClockOptions.vue'
 import { PLAYER_COLOURS } from '@shared/colours'
 import { DEFAULT_BOARD_SHAPE } from '@shared/board'
 import { supplyPerCaste } from '@shared/setup'
@@ -63,7 +63,7 @@ async function copyLink() {
   }
 }
 
-function toggle(key: 'randomHands' | 'openInformation') {
+function toggle(key: 'randomHands' | 'openInformation' | 'diceStart') {
   const options = game.state?.options
   if (!options || !game.isHost) return
   game.setOptions({ ...options, [key]: !options[key] })
@@ -188,6 +188,19 @@ function setBoard(shape: BoardShape) {
             />
           </label>
         </div>
+        <label class="check">
+          <input
+            type="checkbox"
+            :checked="game.state?.options.diceStart ?? true"
+            :disabled="!game.isHost"
+            @change="toggle('diceStart')"
+          />
+          <span>
+            {{ t('option.diceStart') }}
+            <em class="tiny muted">{{ t('option.diceStart.hint') }}</em>
+          </span>
+        </label>
+
         <TurnClockOptions
           :seconds="game.state?.options.turnSeconds ?? 0"
           :locked="!game.isHost"

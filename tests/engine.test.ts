@@ -7,8 +7,20 @@ import { legalPlacements } from '../shared/rules'
 import { STARTING_HAND_SIZE, tileFromId } from '../shared/tiles'
 import type { Tile } from '../shared/types'
 
+/**
+ * A game with seat 0 on turn. The opening seat is drawn now, so every test that
+ * walks the turn order would otherwise be a coin toss; `the opening seat` covers
+ * the draw itself, and `openAt` below covers rounds counted from elsewhere.
+ */
 function newGame(playerCount = 2, boardShape: BoardShape = DEFAULT_BOARD_SHAPE) {
-  return new Game(playerCount, { ...DEFAULT_OPTIONS, randomHands: true, boardShape }, 12345)
+  return openAt(new Game(playerCount, { ...DEFAULT_OPTIONS, randomHands: true, boardShape }, 12345), 0)
+}
+
+/** Force a game to open on a given seat, rounds counted from there. */
+function openAt(game: Game, seat: number): Game {
+  game.state.first = seat
+  game.state.current = seat
+  return game
 }
 
 /**
@@ -62,6 +74,56 @@ function stack(game: Game, playerId: number, tile: Tile) {
     player.hand.push(tile.id)
   }
 }
+
+describe('the opening seat', () => {
+  it('is drawn rather than handed to the seat that opened the room', () => {
+    const counts = [0, 0, 0, 0]
+    for (let seed = 1; seed <= 240; seed++) {
+      const game = new Game(4, { ...DEFAULT_OPTIONS, randomHands: true }, seed)
+      counts[game.state.current]++
+      // Rounds are counted from wherever it landed.
+      expect(game.state.first).toBe(game.state.current)
+    }
+    for (const seat of counts) expect(seat).toBeGreaterThan(20)
+  })
+
+  it('keeps the roll-off when the dice are on, and drops it when they are off', () => {
+    const rolled = new Game(3, { ...DEFAULT_OPTIONS, randomHands: true, diceStart: true }, 7)
+    expect(rolled.state.opening).not.toBeNull()
+    expect(rolled.state.opening!.winner).toBe(rolled.state.first)
+
+    const quiet = new Game(3, { ...DEFAULT_OPTIONS, randomHands: true, diceStart: false }, 7)
+    expect(quiet.state.opening).toBeNull()
+    expect([0, 1, 2]).toContain(quiet.state.first)
+  })
+
+  it('counts a round from the opening seat, not from seat zero', () => {
+    // A table that opens on seat 2 finishes its first round when play returns to
+    // seat 2 — counting on a wrap to zero would end it after a single turn.
+    const game = openAt(newGame(3), 2)
+    expect(game.state.turnNumber).toBe(1)
+
+    const step = () => {
+      const seat = game.state.current
+      const tile = game.state.players[seat].hand
+        .map(tileFromId)
+        .find(
+          (t) => t.kind !== 'switch' && t.kind !== 'move' && legalPlacements(game.view, t).length > 0,
+        )!
+      expect(game.playTile(seat, tile.id, legalPlacements(game.view, tile)[0]).ok).toBe(true)
+      expect(game.endTurn(seat).ok).toBe(true)
+    }
+
+    step() // seat 2 -> 0
+    expect(game.state.current).toBe(0)
+    expect(game.state.turnNumber).toBe(1)
+    step() // 0 -> 1
+    expect(game.state.turnNumber).toBe(1)
+    step() // 1 -> 2, back to the opener: the round closes
+    expect(game.state.current).toBe(2)
+    expect(game.state.turnNumber).toBe(2)
+  })
+})
 
 describe('turn structure', () => {
   it('deals five tiles to each player with random hands', () => {

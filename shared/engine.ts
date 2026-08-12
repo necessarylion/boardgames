@@ -1,4 +1,5 @@
 import { buildBoard, DEFAULT_BOARD_SHAPE, type Board } from './board'
+import { chooseFirst, type Opening } from './opening'
 import { Rng } from './rng'
 import {
   canSwitch,
@@ -50,6 +51,12 @@ export interface GameOptions {
    * holds a table to a valid split at the start.
    */
   teams: number
+  /**
+   * Coup's: roll dice for the opening seat instead of drawing it silently.
+   * Either way the seat is random — this only decides whether the table gets to
+   * watch it being decided.
+   */
+  diceStart: boolean
 }
 
 /** Shot-clock lengths a table can be set up with. 0 is no clock at all. */
@@ -62,6 +69,7 @@ export const DEFAULT_OPTIONS: GameOptions = {
   boardShape: DEFAULT_BOARD_SHAPE,
   turnSeconds: 0,
   teams: 0,
+  diceStart: true,
 }
 
 export interface EnginePlayer {
@@ -94,6 +102,15 @@ export interface GameState {
   placed: Record<string, PlacedTile>
   players: EnginePlayer[]
   current: number
+  /**
+   * The seat that opened the game. Rounds are counted from it rather than from
+   * seat 0, because the opening seat is drawn rather than given to whoever made
+   * the room. Older snapshots predate it; `fromState` falls back to 0, which is
+   * exactly what those games started on.
+   */
+  first: number
+  /** How the opening seat was decided, or null when it was drawn quietly. */
+  opening: Opening | null
   turnNumber: number
   placedThisTurn: string[]
   /**
@@ -164,15 +181,30 @@ export class Game {
       }
     })
 
+    const pieces = distributePieces(this.board, playerCount, rng)
+
+    /*
+     * The opening seat is drawn last, once the board and the stacks have taken
+     * everything they need from the generator. Two reasons, both learnt the hard
+     * way. Drawing it first meant near-neighbour seeds opened on the same player
+     * far too often, because this is a plain linear congruential generator and
+     * its first output tracks its seed closely. Drawing it in the middle shifted
+     * every draw after it, which silently dealt a different board for the same
+     * seed — so it goes at the end, where nothing is downstream of it.
+     */
+    const { first, opening } = chooseFirst(rng, playerCount, options.diceStart)
+
     this.state = {
       phase: options.randomHands ? 'play' : 'draft',
       options,
       seed,
       playerCount,
-      pieces: distributePieces(this.board, playerCount, rng),
+      pieces,
       placed: {},
       players,
-      current: 0,
+      first,
+      opening,
+      current: first,
       turnNumber: 1,
       placedThisTurn: [],
       lastPlaced: [],
@@ -227,6 +259,10 @@ export class Game {
       paused: state.paused ?? false,
       // Nor could it have redrawn under a rule it predates.
       redrewThisTurn: state.redrewThisTurn ?? false,
+      // A snapshot from before the opening seat was drawn started on seat 0,
+      // which is exactly what rounds were counted from at the time.
+      first: state.first ?? 0,
+      opening: state.opening ?? null,
     }
     return game
   }
@@ -491,7 +527,11 @@ export class Game {
     }
 
     this.state.current = (this.state.current + 1) % this.state.playerCount
-    if (this.state.current === 0) this.state.turnNumber += 1
+    // A round closes when play comes back to whoever opened the game, which is
+    // no longer always seat 0 — the opening seat is drawn. Counting on a wrap to
+    // zero instead would end the first round early at every table that did not
+    // happen to start there.
+    if (this.state.current === this.state.first) this.state.turnNumber += 1
     this.state.placedThisTurn = []
     this.state.playedNonFast = false
     this.state.redrewThisTurn = false

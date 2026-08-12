@@ -25,6 +25,21 @@ function scripted(piles: { stack?: Card[]; faceUp?: Card[]; out?: boolean }[]): 
 
 const card = (fruit: Card['fruit'], n: number): Card => ({ fruit, n })
 
+describe('the opening seat', () => {
+  it('is drawn rather than always falling to seat zero', () => {
+    const counts = [0, 0, 0]
+    for (let seed = 1; seed <= 180; seed++) counts[new HalliGame(3, seed).state.current]++
+    for (const seat of counts) expect(seat).toBeGreaterThan(20)
+  })
+
+  it('keeps the roll-off only when the dice are on', () => {
+    expect(new HalliGame(3, 7, true).state.opening).not.toBeNull()
+    expect(new HalliGame(3, 7, false).state.opening).toBeNull()
+    // Either way somebody real is on the clock.
+    expect([0, 1, 2]).toContain(new HalliGame(3, 7, false).state.current)
+  })
+})
+
 describe('the deck', () => {
   it('holds fifty-six cards, fourteen of each fruit', () => {
     const deck = buildDeck()

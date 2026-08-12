@@ -1,9 +1,23 @@
 import { randomUUID } from 'node:crypto'
 
+import {
+  CoupGame,
+  blockOptions,
+  blockSeats,
+  canChallenge,
+  legalActions,
+  legalTargets,
+  responders,
+  type CoupGameState,
+} from '../shared/coup'
 import { DEFAULT_OPTIONS, Game, type GameOptions, type GameState } from '../shared/engine'
 import { HalliGame, fruitTotals, ringingFruit, type HalliGameState } from '../shared/halligalli'
 import type {
   AnyClientState,
+  CoupAffordances,
+  CoupClientState,
+  CoupPendingView,
+  CoupPublicPlayer,
   HalliClientState,
   HalliPublicPlayer,
   PublicPlayer,
@@ -51,6 +65,8 @@ export interface RoomSnapshot {
   game: GameState | null
   /** The Halli Galli engine's state, when this is a Halli Galli table. */
   hg?: HalliGameState | null
+  /** The Coup engine's state, when this is a Coup table. */
+  coup?: CoupGameState | null
 }
 
 export class Room {
@@ -66,6 +82,8 @@ export class Room {
   game: Game | null = null
   /** The running Halli Galli game, when this room's kind is halligalli. */
   hg: HalliGame | null = null
+  /** The running Coup game, when this room's kind is coup. */
+  coup: CoupGame | null = null
   hostToken = ''
   lastActivity = Date.now()
   /**
@@ -107,6 +125,7 @@ export class Room {
       lastActivity: this.lastActivity,
       game: this.game?.state ?? null,
       hg: this.hg?.state ?? null,
+      coup: this.coup?.state ?? null,
     }
   }
 
@@ -126,16 +145,18 @@ export class Room {
     room.lastActivity = snapshot.lastActivity
     room.game = snapshot.game ? Game.fromState(snapshot.game) : null
     room.hg = snapshot.hg ? HalliGame.fromState(snapshot.hg) : null
+    room.coup = snapshot.coup ? CoupGame.fromState(snapshot.coup) : null
     return room
   }
 
   get started(): boolean {
-    return this.game !== null || this.hg !== null
+    return this.game !== null || this.hg !== null || this.coup !== null
   }
 
   /** Whether whichever game is running has finished. */
   private get gameOver(): boolean {
     if (this.hg) return this.hg.state.phase === 'over'
+    if (this.coup) return this.coup.state.phase === 'over'
     return this.game?.state.phase === 'over'
   }
 
@@ -204,13 +225,14 @@ export class Room {
   /** Deal whichever game the room's options ask for. */
   private deal(): void {
     const seed = (Math.random() * 0xffffffff) >>> 0
-    if (this.options.kind === 'halligalli') {
-      this.hg = new HalliGame(this.seats.length, seed)
-      this.game = null
-    } else {
-      this.game = new Game(this.seats.length, this.options, seed)
-      this.hg = null
-    }
+    this.game = null
+    this.hg = null
+    this.coup = null
+    const dice = this.options.diceStart
+    if (this.options.kind === 'halligalli') this.hg = new HalliGame(this.seats.length, seed, dice)
+    else if (this.options.kind === 'coup') this.coup = new CoupGame(this.seats.length, seed, dice)
+    // Samurai reads the option off `options`, which it already carries.
+    else this.game = new Game(this.seats.length, this.options, seed)
   }
 
   start(): string | null {
@@ -245,6 +267,7 @@ export class Room {
     if (!this.started) return 'No game is in progress.'
     this.game = null
     this.hg = null
+    this.coup = null
     this.dropAbsentPlayers()
     this.touch()
     return null
@@ -271,11 +294,51 @@ export class Room {
     this.hostToken = this.seats.find((seat) => seat.connected)?.token ?? this.seats[0]?.token ?? ''
   }
 
+  /** Whether whichever game is running is suspended. */
+  get paused(): boolean {
+    if (this.hg) return this.hg.state.paused
+    if (this.coup) return this.coup.state.paused
+    return this.game?.state.paused ?? false
+  }
+
   /** Null whenever nobody is on the clock — untimed table, lobby, draft, over. */
   private currentTurnKey(): string | null {
+    if (!this.options.turnSeconds) return null
+    if (this.coup) return this.coupTurnKey()
     const s = this.game?.state
-    if (!s || s.phase !== 'play' || !this.options.turnSeconds) return null
+    if (!s || s.phase !== 'play') return null
     return `${s.turnNumber}:${s.current}`
+  }
+
+  /**
+   * Coup's clock runs on the decision in front of the table, not on whose turn
+   * it is: for most of a turn the game is waiting on a challenge or a block from
+   * someone else entirely. Keying on the pending step means each of those gets
+   * its own period, and that a window does not quietly re-arm every time one
+   * more player waves it through.
+   */
+  private coupTurnKey(): string | null {
+    const s = this.coup?.state
+    if (!s || s.phase !== 'play') return null
+    const p = s.pending[0]
+    if (!p) return `t${s.turnNumber}:act:${s.current}`
+    switch (p.step) {
+      case 'action':
+        return `t${s.turnNumber}:action:${p.actor}`
+      case 'block':
+        return `t${s.turnNumber}:block:${p.blocker}`
+      // The depth matters here and nowhere else: one turn can ask the same
+      // player for a second card — a lost challenge, then the assassination it
+      // failed to stop — and without it the second loss would inherit the first
+      // one's deadline, which by then has usually run out.
+      case 'lose':
+        return `t${s.turnNumber}:lose:${p.player}:${s.pending.length}`
+      case 'exchange':
+        return `t${s.turnNumber}:exchange:${p.player}`
+      // A resolve step drains without anybody's input, so nobody is on the clock.
+      default:
+        return null
+    }
   }
 
   /** Give whoever is on the clock a full period, whatever was left before. */
@@ -293,7 +356,7 @@ export class Room {
    * exactly the time they had left rather than a whole fresh period.
    */
   syncTurnTimer(now = Date.now()) {
-    if (this.game?.state.paused) {
+    if (this.paused) {
       if (this.pausedAt === null) this.pausedAt = now
       return
     }
@@ -322,6 +385,7 @@ export class Room {
   /** Build the redacted state for one viewer. `token` may belong to a spectator. */
   stateFor(token: string): AnyClientState {
     if (this.options.kind === 'halligalli') return this.halliStateFor(token)
+    if (this.options.kind === 'coup') return this.coupStateFor(token)
     const seat = this.seatByToken(token)
     const game = this.game
     const open = this.options.openInformation || game?.state.phase === 'over'
@@ -362,6 +426,7 @@ export class Room {
         placedThisTurn: [],
         lastPlaced: [],
         sinceYourTurn: [],
+        opening: null,
         canUndo: false,
         playedNonFast: false,
         setAside: [],
@@ -403,6 +468,7 @@ export class Room {
       sinceYourTurn: seat ? [...s.unseenPlaced[seat.id]] : [...new Set(s.unseenPlaced.flat())],
       // Only the player whose turn it is can take anything back, so the flag is
       // false for everyone else and the button never appears for them.
+      opening: s.opening,
       canUndo: seat?.id === s.current && s.phase === 'play' && s.undoStack.length > 0,
       playedNonFast: s.playedNonFast,
       setAside: s.setAside,
@@ -454,6 +520,7 @@ export class Room {
         ...base,
         phase: 'lobby',
         current: 0,
+        opening: null,
         turnNumber: 0,
         totals: { banana: 0, lime: 0, strawberry: 0, plum: 0 },
         ring: null,
@@ -469,6 +536,7 @@ export class Room {
       ...base,
       phase: s.phase,
       current: s.current,
+      opening: s.opening,
       turnNumber: s.turnNumber,
       totals: fruitTotals(s.players),
       ring: ringingFruit(s.players),
@@ -476,6 +544,138 @@ export class Room {
       log: s.log,
       result: s.result,
       paused: s.paused,
+    }
+  }
+
+  /**
+   * The redacted Coup state for one viewer. Coup hides more than the other two
+   * games put together: a hand is the whole of a player's position, so it goes
+   * out as a count to everyone but its holder, the court deck never leaves at
+   * all, and the pair drawn for an exchange reaches only the player who drew it.
+   */
+  private coupStateFor(token: string): CoupClientState {
+    const seat = this.seatByToken(token)
+    const coup = this.coup
+    const hostId = this.seats.find((s) => s.token === this.hostToken)?.id ?? 0
+
+    const players: CoupPublicPlayer[] = this.seats.map((s) => {
+      const p = coup?.state.players[s.id]
+      return {
+        id: s.id,
+        name: s.name,
+        colour: s.colour,
+        connected: s.connected,
+        coins: p?.coins ?? 0,
+        influence: p?.hand.length ?? 0,
+        revealed: p ? [...p.revealed] : [],
+        out: p?.out ?? false,
+      }
+    })
+
+    const idle: CoupAffordances = {
+      actions: [],
+      targets: [],
+      challenge: false,
+      blocks: [],
+      pass: false,
+      lose: false,
+      exchange: null,
+    }
+
+    const base = {
+      kind: 'coup' as const,
+      code: this.code,
+      options: this.options,
+      hostId,
+      you: seat?.id ?? null,
+      players,
+      playerCount: this.seats.length,
+    }
+
+    if (!coup) {
+      return {
+        ...base,
+        phase: 'lobby',
+        current: 0,
+        turnNumber: 0,
+        opening: null,
+        pending: null,
+        hand: [],
+        drawn: [],
+        deckCount: 0,
+        can: idle,
+        lastEvent: null,
+        log: [],
+        result: null,
+        paused: false,
+        turnMsLeft: null,
+      }
+    }
+
+    const s = coup.state
+    const you = seat?.id ?? null
+    const mine = you !== null ? s.players[you] : null
+    const head = s.pending[0] ?? null
+
+    // Only the head of the stack is anyone's business, and an exchange's drawn
+    // cards are stripped out of it — they travel to their holder in `drawn`.
+    let pending: CoupPendingView | null = null
+    if (head) {
+      if (head.step === 'exchange') pending = { step: 'exchange', player: head.player, count: head.drawn.length }
+      else if (head.step === 'lose') pending = { step: 'lose', player: head.player, reason: head.reason }
+      else if (head.step === 'action') {
+        pending = {
+          step: 'action',
+          actor: head.actor,
+          action: head.action,
+          target: head.target,
+          passed: [...head.passed],
+          challengeable: head.challengeable,
+          blockers: blockSeats(s, head.action, head.actor, head.target),
+        }
+      } else if (head.step === 'block') {
+        pending = {
+          step: 'block',
+          actor: head.actor,
+          action: head.action,
+          target: head.target,
+          blocker: head.blocker,
+          character: head.character,
+          passed: [...head.passed],
+        }
+      }
+      // A `resolve` step is never waited on — it drains without anyone's input.
+    }
+
+    const can: CoupAffordances =
+      you === null || !mine
+        ? idle
+        : {
+            actions: legalActions(s, you),
+            targets: legalTargets(s, you),
+            challenge: canChallenge(s, you),
+            blocks: blockOptions(s, you),
+            pass: !s.paused && responders(s).includes(you),
+            lose: !s.paused && head?.step === 'lose' && head.player === you,
+            exchange: head?.step === 'exchange' && head.player === you ? mine.hand.length : null,
+          }
+
+    return {
+      ...base,
+      phase: s.phase,
+      current: s.current,
+      turnNumber: s.turnNumber,
+      opening: s.opening,
+      pending,
+      hand: mine ? [...mine.hand] : [],
+      drawn: head?.step === 'exchange' && head.player === you ? [...head.drawn] : [],
+      deckCount: s.deck.length,
+      can,
+      lastEvent: s.lastEvent,
+      log: s.log,
+      result: s.result,
+      paused: s.paused,
+      turnMsLeft: this.turnMsLeft(),
     }
   }
 }
@@ -609,7 +809,7 @@ export class RoomManager {
       room.syncTurnTimer(now)
       // A paused table keeps its deadline in the past while frozen; it must not
       // time anyone out until it is resumed.
-      if (room.game?.state.paused) continue
+      if (room.paused) continue
       if (room.turnDeadline !== null && now >= room.turnDeadline) due.push(room)
     }
     return due

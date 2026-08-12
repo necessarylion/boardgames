@@ -1,9 +1,17 @@
+import type {
+  CoupActionKind,
+  CoupCharacter,
+  CoupEvent,
+  CoupLossReason,
+  CoupResult,
+} from './coup'
+import type { Opening } from './opening'
 import type { GameOptions, Phase } from './engine'
 import type { Card, Fruit, HalliEvent, HalliResult } from './halligalli'
 import type { PieceRef } from './rules'
 import type { Caste, GameResult, LogEntry, PlacedTile, PlayerColour } from './types'
 
-export const PROTOCOL_VERSION = 2
+export const PROTOCOL_VERSION = 3
 
 /**
  * How often the server pings each client. A client that hears nothing for a few
@@ -61,6 +69,8 @@ export interface ClientState {
   lastPlaced: string[]
   /** Every space another player has filled since your own turn last ended. */
   sinceYourTurn: string[]
+  /** How the opening seat was decided, or null when it was drawn quietly. */
+  opening: Opening | null
   /** Whether the viewer has anything to take back this turn. */
   canUndo: boolean
   playedNonFast: boolean
@@ -119,6 +129,8 @@ export interface HalliClientState {
   playerCount: number
   /** Whose turn it is to flip; ringing is open to everyone. */
   current: number
+  /** How the opening seat was decided, or null when it was drawn quietly. */
+  opening: Opening | null
   turnNumber: number
   /** The visible total of each fruit, computed server-side to avoid drift. */
   totals: Record<Fruit, number>
@@ -130,8 +142,117 @@ export interface HalliClientState {
   paused: boolean
 }
 
-/** Either game's redacted state; `kind` says which, for the client to route on. */
-export type AnyClientState = ClientState | HalliClientState
+/** What every client knows about a Coup seat. Held influence travels as a count. */
+export interface CoupPublicPlayer {
+  id: number
+  name: string
+  colour: PlayerColour
+  connected: boolean
+  coins: number
+  /** Face-down influence still held — a count only; the cards stay hidden. */
+  influence: number
+  /** Influence already given up, face up and public for the rest of the game. */
+  revealed: CoupCharacter[]
+  /** Out of the game — no influence left. */
+  out: boolean
+}
+
+/**
+ * The head of the server's pending stack, redacted for one viewer. Everything
+ * here is public knowledge except an exchange's drawn cards, which travel as a
+ * count and reach only the player holding them, through `drawn` below.
+ */
+export type CoupPendingView =
+  | {
+      step: 'action'
+      actor: number
+      action: CoupActionKind
+      target: number | null
+      passed: number[]
+      challengeable: boolean
+      /** Seats entitled to block, so the table can see who is being waited on. */
+      blockers: number[]
+    }
+  | {
+      step: 'block'
+      actor: number
+      action: CoupActionKind
+      target: number | null
+      blocker: number
+      character: CoupCharacter
+      passed: number[]
+    }
+  | { step: 'lose'; player: number; reason: CoupLossReason }
+  | { step: 'exchange'; player: number; count: number }
+
+/**
+ * What this viewer may do right now. Decided on the server from the unredacted
+ * state and sent ready-made, the way Halli Galli sends its fruit totals: the
+ * client cannot work out a challenge window from a redacted hand without
+ * guessing, and a button that disagrees with the engine is worse than no button.
+ */
+export interface CoupAffordances {
+  /** Actions the viewer may declare; empty unless it is their turn. */
+  actions: CoupActionKind[]
+  /** Seats a targeted action may be aimed at. */
+  targets: number[]
+  challenge: boolean
+  /** Characters the viewer may block the pending action with. */
+  blocks: CoupCharacter[]
+  /** The viewer still owes the pending window an answer. */
+  pass: boolean
+  /** The viewer owes an influence and must say which. */
+  lose: boolean
+  /** How many cards to keep from `hand` + `drawn`, or null when not exchanging. */
+  exchange: number | null
+}
+
+/**
+ * The Coup state sent to one client. A player's own influence is the whole of
+ * the secret here: hands never leave the server except to their holder, the
+ * court deck travels as a count and nothing else, and the two cards drawn for an
+ * exchange reach only the player who drew them.
+ */
+export interface CoupClientState {
+  kind: 'coup'
+  code: string
+  phase: 'lobby' | 'play' | 'over'
+  options: GameOptions
+  hostId: number
+  you: number | null
+  players: CoupPublicPlayer[]
+  playerCount: number
+  current: number
+  turnNumber: number
+  /**
+   * The roll-off that decided who opens, or null when the seat was drawn
+   * quietly. Public in full — the point of rolling is that the table sees it.
+   */
+  opening: Opening | null
+  /** What the table is waiting on, or null when it is simply someone's turn. */
+  pending: CoupPendingView | null
+  /** Your own face-down influence. Empty for a spectator. */
+  hand: CoupCharacter[]
+  /** The cards you drew for an exchange; only ever your own. */
+  drawn: CoupCharacter[]
+  /** Cards left in the court deck — a count only. */
+  deckCount: number
+  can: CoupAffordances
+  lastEvent: CoupEvent | null
+  log: LogEntry[]
+  result: CoupResult | null
+  paused: boolean
+  /**
+   * Milliseconds left on the clock for the decision in front of the table, or
+   * null when it is untimed. Sent as a remainder rather than a deadline for the
+   * same reason Samurai's is: a client whose own clock is minutes out still
+   * counts down the right number. Frozen while the table is paused.
+   */
+  turnMsLeft: number | null
+}
+
+/** Any game's redacted state; `kind` says which, for the client to route on. */
+export type AnyClientState = ClientState | HalliClientState | CoupClientState
 
 export type ClientMessage =
   /** `code` is the table this client believes it is at, so a server that has
@@ -158,6 +279,18 @@ export type ClientMessage =
   | { t: 'flip' }
   /** Halli Galli: ring the bell — open to any player at any moment. */
   | { t: 'slap' }
+  /** Coup: declare this turn's action, with a seat to aim it at if it needs one. */
+  | { t: 'coupAct'; action: CoupActionKind; target?: number | null }
+  /** Coup: call the pending claim a bluff. */
+  | { t: 'coupChallenge' }
+  /** Coup: stop the pending action by claiming a character that blocks it. */
+  | { t: 'coupBlock'; character: CoupCharacter }
+  /** Coup: wave the pending window through. */
+  | { t: 'coupPass' }
+  /** Coup: give up one of your influence cards, face up. */
+  | { t: 'coupLose'; character: CoupCharacter }
+  /** Coup: finish an exchange, indexing into your hand followed by the drawn cards. */
+  | { t: 'coupExchange'; keep: number[] }
   /** Suspend or resume the table. Open to any seated player. */
   | { t: 'pause' }
   | { t: 'resume' }

@@ -12,6 +12,18 @@ export const enSamurai = {
   'app.notConnected': 'Not connected to the server yet.',
   'app.replaced': 'This table is open in another tab.',
   'app.replaced.action': 'Play here instead',
+  'app.stale': 'This page is out of date with the server.',
+  'app.stale.action': 'Reload',
+
+  // --- the opening roll, shared by every game --------------------------------
+  'option.diceStart': 'Roll for who starts',
+  'option.diceStart.hint':
+    'The opening seat is drawn at random either way; this shows the roll that decided it.',
+  'dice.title': 'Rolling for the opening seat',
+  'dice.tieRound': 'Tied — rolling again (round {n})',
+  'dice.rolling': 'Rolling…',
+  'dice.winner': '{name} starts',
+  'dice.skip': 'Skip',
 
   'lang.label': 'Language',
 

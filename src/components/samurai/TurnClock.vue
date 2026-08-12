@@ -1,49 +1,15 @@
 <script setup lang="ts">
-import { computed, onUnmounted, ref, watch } from 'vue'
+import { useCountdown } from '@/composables/useCountdown'
 import { t } from '@/i18n'
 import { useGameStore } from '@/stores/game'
 
 const game = useGameStore()
 
-/*
- * The server sends what is left of the period with every broadcast, and it only
- * broadcasts when something changes — so the seconds in between are counted
- * here, from the moment the last remainder arrived. Sending a remainder rather
- * than a deadline is what lets this read correctly on a device whose own clock
- * is wrong, and every broadcast quietly corrects any drift.
- */
-const deadlineAt = ref<number | null>(null)
-const now = ref(Date.now())
-
-watch(
+// The counting itself is shared with Coup's clock; see the composable for why
+// the server sends a remainder rather than a deadline.
+const { label, urgent } = useCountdown(
   () => game.state?.turnMsLeft ?? null,
-  (left) => {
-    now.value = Date.now()
-    deadlineAt.value = left === null ? null : now.value + left
-  },
-  { immediate: true },
-)
-
-const ticker = setInterval(() => (now.value = Date.now()), 250)
-onUnmounted(() => clearInterval(ticker))
-
-const remaining = computed(() => {
-  // Paused: the server freezes the remainder, so show that rather than letting
-  // the local ticker keep draining it between broadcasts.
-  if (game.isPaused) return game.state?.turnMsLeft ?? null
-  return deadlineAt.value === null ? null : Math.max(0, deadlineAt.value - now.value)
-})
-
-/** Rounded up, so the clock only shows 0 when the time really is gone. */
-const label = computed(() => {
-  if (remaining.value === null) return null
-  const seconds = Math.ceil(remaining.value / 1000)
-  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`
-})
-
-// A frozen clock should not beat or flash red, however little time is left on it.
-const urgent = computed(
-  () => !game.isPaused && remaining.value !== null && remaining.value <= 10_000,
+  () => game.isPaused,
 )
 </script>
 

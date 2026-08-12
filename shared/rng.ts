@@ -6,6 +6,16 @@ export class Rng {
     this.state = seed >>> 0 || 1
   }
 
+  /**
+   * Where the generator has got to. Samurai and Halli Galli shuffle once, at the
+   * deal, so their seed is enough to replay them; Coup reshuffles its court deck
+   * every time a challenge is won, so it stores this back into its state and
+   * resumes from here rather than replaying from the original seed.
+   */
+  get position(): number {
+    return this.state
+  }
+
   next(): number {
     this.state = (this.state * 1664525 + 1013904223) >>> 0
     return this.state / 0x100000000

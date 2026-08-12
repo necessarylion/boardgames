@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { GameKind } from '@shared/types'
+import GameIcon from '@/components/common/GameIcon.vue'
 import LanguageMenu from '@/i18n/LanguageMenu.vue'
 import { t } from '@/i18n'
 import { useGameStore } from '@/stores/game'
@@ -34,6 +35,16 @@ function pick(kind: GameKind) {
         <span class="game-name">{{ t('landing.halli.name') }}</span>
         <span class="game-blurb">{{ t('landing.halli.blurb') }}</span>
         <span class="meta tiny">{{ t('landing.halli.meta') }}</span>
+        <span class="go">{{ t('landing.play') }}</span>
+      </button>
+
+      <button class="game-card coup" type="button" @click="pick('coup')">
+        <span class="seal crown">
+          <GameIcon name="coup.duke" :size="30" />
+        </span>
+        <span class="game-name">{{ t('landing.coup.name') }}</span>
+        <span class="game-blurb">{{ t('landing.coup.blurb') }}</span>
+        <span class="meta tiny">{{ t('landing.coup.meta') }}</span>
         <span class="go">{{ t('landing.play') }}</span>
       </button>
     </div>
@@ -119,6 +130,10 @@ function pick(kind: GameKind) {
 .seal.fruits {
   font-size: 1.5rem;
   background: linear-gradient(140deg, #b23a2c, #d98a3d);
+}
+
+.seal.crown {
+  background: linear-gradient(140deg, #4a3a6b, #6b4b9c);
 }
 
 .game-name {
