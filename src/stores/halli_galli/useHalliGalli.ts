@@ -35,9 +35,20 @@ export function createHalliGalli(ctx: HalliContext) {
       !hgYou.value.out &&
       hgYou.value.stackCount > 0,
   )
-  /** Any player still in the game may ring the bell whenever they like. */
+  /**
+   * A player may ring the bell whenever they like, so long as there is anything
+   * to ring for: at least one card must be face up on the table (with none
+   * showing, every ring is a guaranteed mistake), and the player must still hold
+   * a card in their own stack. Otherwise the bell goes dead for them.
+   */
   const canSlap = computed(
-    () => halli.value?.phase === 'play' && !isPaused.value && !!hgYou.value && !hgYou.value.out,
+    () =>
+      halli.value?.phase === 'play' &&
+      !isPaused.value &&
+      !!hgYou.value &&
+      !hgYou.value.out &&
+      hgYou.value.stackCount > 0 &&
+      hgPlayers.value.some((p) => p.faceUp.length > 0),
   )
 
   function flipCard() {
