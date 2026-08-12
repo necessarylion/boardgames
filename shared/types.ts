@@ -2,12 +2,13 @@ import type { HexId } from './hex'
 
 /**
  * Which game a room is playing. `samurai` is the original Knizia implementation;
- * `halligalli` and `coup` are further, unrelated card games that share only this
- * app's room, seat and reconnection machinery, never its rules layer.
+ * `halligalli`, `coup` and `carnivals` are further, unrelated card games that
+ * share only this app's room, seat and reconnection machinery, never its rules
+ * layer.
  */
-export type GameKind = 'samurai' | 'halligalli' | 'coup'
+export type GameKind = 'samurai' | 'halligalli' | 'coup' | 'carnivals'
 
-export const GAME_KINDS: readonly GameKind[] = ['samurai', 'halligalli', 'coup']
+export const GAME_KINDS: readonly GameKind[] = ['samurai', 'halligalli', 'coup', 'carnivals']
 
 /** The three societal castes competed over in the game. */
 export type Caste = 'buddha' | 'rice' | 'castle'

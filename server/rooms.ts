@@ -1,6 +1,12 @@
 import { randomUUID } from 'node:crypto'
 
 import {
+  CarnivalGame,
+  HAND_CARDS,
+  affordances as carnivalAffordances,
+  type CarnivalGameState,
+} from '../shared/carnivals'
+import {
   CoupGame,
   blockOptions,
   blockSeats,
@@ -14,6 +20,8 @@ import { DEFAULT_OPTIONS, Game, type GameOptions, type GameState } from '../shar
 import { HalliGame, fruitTotals, ringingFruit, type HalliGameState } from '../shared/halligalli'
 import type {
   AnyClientState,
+  CarnivalClientState,
+  CarnivalPublicPlayer,
   CoupAffordances,
   CoupClientState,
   CoupPendingView,
@@ -67,6 +75,8 @@ export interface RoomSnapshot {
   hg?: HalliGameState | null
   /** The Coup engine's state, when this is a Coup table. */
   coup?: CoupGameState | null
+  /** The Carnivals engine's state, when this is a Carnivals table. */
+  carn?: CarnivalGameState | null
 }
 
 export class Room {
@@ -84,6 +94,8 @@ export class Room {
   hg: HalliGame | null = null
   /** The running Coup game, when this room's kind is coup. */
   coup: CoupGame | null = null
+  /** The running Carnivals game, when this room's kind is carnivals. */
+  carn: CarnivalGame | null = null
   hostToken = ''
   lastActivity = Date.now()
   /**
@@ -126,6 +138,7 @@ export class Room {
       game: this.game?.state ?? null,
       hg: this.hg?.state ?? null,
       coup: this.coup?.state ?? null,
+      carn: this.carn?.state ?? null,
     }
   }
 
@@ -146,17 +159,19 @@ export class Room {
     room.game = snapshot.game ? Game.fromState(snapshot.game) : null
     room.hg = snapshot.hg ? HalliGame.fromState(snapshot.hg) : null
     room.coup = snapshot.coup ? CoupGame.fromState(snapshot.coup) : null
+    room.carn = snapshot.carn ? CarnivalGame.fromState(snapshot.carn) : null
     return room
   }
 
   get started(): boolean {
-    return this.game !== null || this.hg !== null || this.coup !== null
+    return this.game !== null || this.hg !== null || this.coup !== null || this.carn !== null
   }
 
   /** Whether whichever game is running has finished. */
   private get gameOver(): boolean {
     if (this.hg) return this.hg.state.phase === 'over'
     if (this.coup) return this.coup.state.phase === 'over'
+    if (this.carn) return this.carn.state.phase === 'over'
     return this.game?.state.phase === 'over'
   }
 
@@ -228,9 +243,11 @@ export class Room {
     this.game = null
     this.hg = null
     this.coup = null
+    this.carn = null
     const dice = this.options.diceStart
     if (this.options.kind === 'halligalli') this.hg = new HalliGame(this.seats.length, seed, dice)
     else if (this.options.kind === 'coup') this.coup = new CoupGame(this.seats.length, seed, dice)
+    else if (this.options.kind === 'carnivals') this.carn = new CarnivalGame(this.seats.length, seed, dice)
     // Samurai reads the option off `options`, which it already carries.
     else this.game = new Game(this.seats.length, this.options, seed)
   }
@@ -268,6 +285,7 @@ export class Room {
     this.game = null
     this.hg = null
     this.coup = null
+    this.carn = null
     this.dropAbsentPlayers()
     this.touch()
     return null
@@ -298,6 +316,7 @@ export class Room {
   get paused(): boolean {
     if (this.hg) return this.hg.state.paused
     if (this.coup) return this.coup.state.paused
+    if (this.carn) return this.carn.state.paused
     return this.game?.state.paused ?? false
   }
 
@@ -305,9 +324,27 @@ export class Room {
   private currentTurnKey(): string | null {
     if (!this.options.turnSeconds) return null
     if (this.coup) return this.coupTurnKey()
+    if (this.carn) return this.carnivalTurnKey()
     const s = this.game?.state
     if (!s || s.phase !== 'play') return null
     return `${s.turnNumber}:${s.current}`
+  }
+
+  /**
+   * Carnivals runs the clock on the betting seat, and on the showdown as a whole
+   * — where the table is waiting on nobody in particular, so a period is armed
+   * and the timeout simply deals the next hand when it lapses. Keyed on the hand
+   * so a fresh betting seat gets a fresh period rather than inheriting the last.
+   */
+  private carnivalTurnKey(): string | null {
+    const s = this.carn?.state
+    if (!s || s.phase !== 'play') return null
+    // The picking and reveal windows wait on several seats at once, so each gets
+    // one period; betting keys on the seat, and a resolved hand keys on nobody
+    // in particular so the timeout simply deals the next one when it lapses.
+    if (s.step === 'selecting') return `h${s.handNumber}:select`
+    if (s.step === 'showdown') return s.roundResult ? `h${s.handNumber}:done` : `h${s.handNumber}:reveal`
+    return `h${s.handNumber}:bet:${s.current}`
   }
 
   /**
@@ -386,6 +423,7 @@ export class Room {
   stateFor(token: string): AnyClientState {
     if (this.options.kind === 'halligalli') return this.halliStateFor(token)
     if (this.options.kind === 'coup') return this.coupStateFor(token)
+    if (this.options.kind === 'carnivals') return this.carnivalStateFor(token)
     const seat = this.seatByToken(token)
     const game = this.game
     const open = this.options.openInformation || game?.state.phase === 'over'
@@ -671,6 +709,115 @@ export class Room {
       drawn: head?.step === 'exchange' && head.player === you ? [...head.drawn] : [],
       deckCount: s.deck.length,
       can,
+      lastEvent: s.lastEvent,
+      log: s.log,
+      result: s.result,
+      paused: s.paused,
+      turnMsLeft: this.turnMsLeft(),
+    }
+  }
+
+  /**
+   * The redacted Carnivals state for one viewer. The cards are the whole secret,
+   * and the redaction is Carnivals' upside-down one: a viewer sees their own red
+   * and never their own blue, and every opponent's blue and never their red.
+   * The showdown lifts both restrictions, so once a hand is down every card is
+   * public. Everything else — the pot, the bets, who has folded — is already
+   * public and travels in full.
+   */
+  private carnivalStateFor(token: string): CarnivalClientState {
+    const seat = this.seatByToken(token)
+    const carn = this.carn
+    const hostId = this.seats.find((s) => s.token === this.hostToken)?.id ?? 0
+    const you = seat?.id ?? null
+
+    const players: CarnivalPublicPlayer[] = this.seats.map((s) => {
+      const p = carn?.state.players[s.id]
+      const isYou = you === s.id
+      // A card goes public to the whole table only once its owner turns their
+      // hand over at the showdown; a folded or conceded hand is never shown.
+      const shown = p?.revealed ?? false
+      return {
+        id: s.id,
+        name: s.name,
+        colour: s.colour,
+        connected: s.connected,
+        carnivals: p?.carnivals ?? 0,
+        committed: p?.committed ?? 0,
+        folded: p?.folded ?? false,
+        out: p?.out ?? false,
+        selected: p?.selected ?? false,
+        revealed: p?.revealed ?? false,
+        // Your own red is yours to see; everyone else's stays hidden until they
+        // reveal it.
+        red: isYou || shown ? (p?.red ?? null) : null,
+        // Your own blue is the one card you may never see until you turn your
+        // hand over; everyone else's is public the moment it is picked.
+        blue: !isYou || shown ? (p?.blue ?? null) : null,
+      }
+    })
+
+    const idle = {
+      select: false,
+      check: false,
+      call: false,
+      callAmount: 0,
+      raise: false,
+      minRaiseTo: 0,
+      maxRaiseTo: 0,
+      allIn: false,
+      allInAmount: 0,
+      fold: false,
+      reveal: false,
+      nextHand: false,
+    }
+
+    const base = {
+      kind: 'carnivals' as const,
+      code: this.code,
+      options: this.options,
+      hostId,
+      you,
+      players,
+      playerCount: this.seats.length,
+    }
+
+    if (!carn) {
+      return {
+        ...base,
+        phase: 'lobby',
+        current: 0,
+        turnNumber: 0,
+        opening: null,
+        step: 'selecting',
+        handCards: HAND_CARDS,
+        pot: 0,
+        currentBet: 0,
+        minRaise: 0,
+        can: idle,
+        roundResult: null,
+        lastEvent: null,
+        log: [],
+        result: null,
+        paused: false,
+        turnMsLeft: null,
+      }
+    }
+
+    const s = carn.state
+    return {
+      ...base,
+      phase: s.phase,
+      current: s.current,
+      turnNumber: s.turnNumber,
+      opening: s.opening,
+      step: s.step,
+      handCards: HAND_CARDS,
+      pot: s.pot,
+      currentBet: s.currentBet,
+      minRaise: s.minRaise,
+      can: you === null ? idle : carnivalAffordances(s, you),
+      roundResult: s.roundResult,
       lastEvent: s.lastEvent,
       log: s.log,
       result: s.result,

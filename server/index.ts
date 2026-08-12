@@ -308,6 +308,47 @@ wss.on('connection', (socket) => {
       return
     }
 
+    // Carnivals likewise: its own engine, routed before the Samurai game below.
+    if (room.carn) {
+      if (!seat) return fail(socket, 'You are watching this game, not playing it.')
+      const carn = room.carn
+      const outcome = (() => {
+        switch (msg.t) {
+          case 'carnivalAct':
+            switch (msg.move) {
+              case 'select':
+                return carn.select(seat.id, msg.red ?? 0, msg.blue ?? 0)
+              case 'check':
+                return carn.check(seat.id)
+              case 'call':
+                return carn.call(seat.id)
+              case 'raise':
+                return carn.raise(seat.id, msg.to ?? 0)
+              case 'allIn':
+                return carn.allIn(seat.id)
+              case 'fold':
+                return carn.fold(seat.id)
+              case 'reveal':
+                return carn.reveal(seat.id)
+              case 'next':
+                return carn.nextHand(seat.id)
+              default:
+                return { ok: false as const, error: 'Unknown move.' }
+            }
+          case 'pause':
+            return carn.pause(seat.id)
+          case 'resume':
+            return carn.resume(seat.id)
+          default:
+            return { ok: false as const, error: 'Unknown action.' }
+        }
+      })()
+      if (!outcome.ok) return fail(socket, outcome.error)
+      room.touch()
+      commit(room)
+      return
+    }
+
     // Everything below is a game action and needs a seat and a running game.
     if (!seat) return fail(socket, 'You are watching this game, not playing it.')
     const game = room.game
@@ -401,6 +442,10 @@ setInterval(() => {
       // Coup settles whatever the pending stack is asking, which is often a
       // response owed by someone other than the player whose turn it is.
       if (room.coup.timeOut().ok) room.touch()
+    } else if (room.carn) {
+      // Carnivals folds (or checks) for an absent bettor, and deals the next
+      // hand when the table is idle on a showdown nobody has moved past.
+      if (room.carn.timeOut().ok) room.touch()
     }
     room.rearmTurnTimer()
     commit(room)

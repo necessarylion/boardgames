@@ -26,6 +26,7 @@ const MASTHEAD = {
   samurai: { title: 'landing.samurai.name', tagline: 'home.tagline', hint: '' },
   halligalli: { title: 'landing.halli.name', tagline: 'home.halli.tagline', hint: 'home.halli.hostHint' },
   coup: { title: 'landing.coup.name', tagline: 'home.coup.tagline', hint: 'home.coup.hostHint' },
+  carnivals: { title: 'landing.carnivals.name', tagline: 'home.carnivals.tagline', hint: 'home.carnivals.hostHint' },
 } as const
 
 const masthead = computed(() => MASTHEAD[kind.value])
@@ -47,15 +48,17 @@ const diceStart = ref(DEFAULT_OPTIONS.diceStart)
 
 function create() {
   if (!name.value.trim()) return game.showError(t('home.error.name'))
+  const carnivals = kind.value === 'carnivals'
   game.createRoom(name.value.trim(), {
     kind: kind.value,
     randomHands: randomHands.value,
     openInformation: openInformation.value,
     boardShape: boardShape.value,
-    turnSeconds: turnSeconds.value,
+    // Carnivals runs no shot clock and draws its dealer quietly.
+    turnSeconds: carnivals ? 0 : turnSeconds.value,
     // Team play needs four or six seats, so it is chosen in the lobby, not here.
     teams: 0,
-    diceStart: diceStart.value,
+    diceStart: carnivals ? false : diceStart.value,
   })
 }
 
@@ -70,12 +73,19 @@ function join() {
   <div class="home">
     <LanguageMenu class="lang-corner" />
 
-    <aside class="art" :class="{ halli: kind === 'halligalli', coup: kind === 'coup' }">
+    <aside
+      class="art"
+      :class="{ halli: kind === 'halligalli', coup: kind === 'coup', carnivals: kind === 'carnivals' }"
+    >
       <img v-if="isSamurai" class="art-image" :src="mainBackground" alt="" />
       <div class="art-wash"></div>
       <header class="masthead">
-        <span class="seal" :class="{ fruits: kind === 'halligalli', crown: kind === 'coup' }">
+        <span
+          class="seal"
+          :class="{ fruits: kind === 'halligalli', crown: kind === 'coup', tent: kind === 'carnivals' }"
+        >
           <GameIcon v-if="kind === 'coup'" name="coup.duke" :size="22" />
+          <template v-else-if="kind === 'carnivals'">🎪</template>
           <template v-else>{{ isSamurai ? '侍' : '🔔' }}</template>
         </span>
         <h1>{{ t(masthead.title) }}</h1>
@@ -157,17 +167,17 @@ function join() {
 
               <TurnClockOptions :seconds="turnSeconds" @pick="turnSeconds = $event" />
             </template>
-            <!-- Coup has no board or hand settings, but it does run a shot
-                 clock, so it gets that one control and nothing else. -->
+            <!-- Coup has no board or hand settings, but it does run a shot clock,
+                 so it gets that one control and nothing else. -->
             <template v-else-if="kind === 'coup'">
-              <p class="muted tiny host-hint">{{ t('home.coup.hostHint') }}</p>
+              <p v-if="masthead.hint" class="muted tiny host-hint">{{ t(masthead.hint) }}</p>
               <TurnClockOptions :seconds="turnSeconds" @pick="turnSeconds = $event" />
             </template>
             <p v-else-if="masthead.hint" class="muted tiny host-hint">{{ t(masthead.hint) }}</p>
 
-            <!-- Every game draws its opening seat, so the roll is offered to
-                 every game rather than sitting inside one of them. -->
-            <label class="check">
+            <!-- The opening roll is offered to every game but Carnivals, which
+                 draws its dealer quietly and runs no clock. -->
+            <label v-if="kind !== 'carnivals'" class="check">
               <input v-model="diceStart" type="checkbox" />
               <span>
                 {{ t('option.diceStart') }}
@@ -237,6 +247,10 @@ function join() {
   background: linear-gradient(160deg, #2e2340 0%, #6b4b9c 55%, #b23a2c 100%);
 }
 
+.art.carnivals {
+  background: linear-gradient(160deg, #a63a30 0%, #7a4a5e 50%, #2f5a86 100%);
+}
+
 .back {
   margin: 0 0 1rem !important;
 }
@@ -285,6 +299,11 @@ function join() {
 
 .seal.crown {
   background: #4a3a6b;
+}
+
+.seal.tent {
+  background: linear-gradient(140deg, #a63a30, #2f5a86);
+  font-size: 1.5rem;
 }
 
 h1 {
