@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onUnmounted, ref, watch } from 'vue'
 import CarnivalCard from './CarnivalCard.vue'
+import CarnivalCoin from './CarnivalCoin.vue'
 import CarnivalRulesDialog from './CarnivalRulesDialog.vue'
 import TableMenu from '../common/TableMenu.vue'
 import { HAND_CARDS } from '@shared/carnivals'
@@ -113,6 +114,106 @@ function cardsFor(p: (typeof players.value)[number]) {
 
 const winnerIds = computed(() => new Set(result.value?.winners ?? []))
 
+/** The one-line result, shown on the table rather than in a box over it. */
+const showdownText = computed(() => {
+  const r = result.value
+  if (!r) return ''
+  if (r.winners.length === 0) return t('carnival.showdown.checked')
+  if (r.byFold) return t('carnival.showdown.fold', { name: nameOf(r.winners[0]), pot: r.pot })
+  if (r.winners.length > 1) {
+    return t('carnival.showdown.split', {
+      names: r.winners.map((id) => nameOf(id)).join(', '),
+      pot: r.pot,
+    })
+  }
+  return t('carnival.showdown.won', { name: nameOf(r.winners[0]), pot: r.pot })
+})
+
+// --- the coins flying from the pot to the winners ----------------------------
+type Coin = { key: number; sx: number; sy: number; tx: number; ty: number; delay: number }
+const coins = ref<Coin[]>([])
+const coinsArmed = ref(false)
+const potEl = ref<HTMLElement | null>(null)
+const seatEls = new Map<number, HTMLElement>()
+let coinTimer: ReturnType<typeof setTimeout> | null = null
+
+function setSeatRef(id: number, el: Element | null) {
+  if (el) seatEls.set(id, el as HTMLElement)
+  else seatEls.delete(id)
+}
+
+/** A handful of coins per winner, more for a bigger pot, kept within reason. */
+function coinCount(share: number): number {
+  return Math.max(3, Math.min(14, Math.round(share / 40)))
+}
+
+function coinStyle(c: Coin) {
+  const [x, y] = coinsArmed.value ? [c.tx, c.ty] : [c.sx, c.sy]
+  return {
+    transform: `translate(${x}px, ${y}px) translate(-50%, -50%)`,
+    transitionDelay: `${c.delay}ms`,
+  }
+}
+
+/**
+ * When a hand settles, sweep the pot into the winners' seats — a coin at a time,
+ * from the middle of the table out to each seat that took a share. Purely a
+ * flourish, so it bows out to reduced-motion and simply does nothing if the
+ * table has stacked (no ring) and a seat cannot be measured.
+ */
+async function flyCoins() {
+  if (typeof window === 'undefined') return
+  if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return
+  const r = result.value
+  if (!r || r.winners.length === 0 || r.pot <= 0) return
+
+  await nextTick()
+  const pot = potEl.value?.getBoundingClientRect()
+  if (!pot) return
+  const cx = pot.left + pot.width / 2
+  const cy = pot.top + pot.height / 2
+
+  const list: Coin[] = []
+  let key = 0
+  let maxDelay = 0
+  for (const id of r.winners) {
+    const seat = seatEls.get(id)?.getBoundingClientRect()
+    if (!seat) continue
+    const tx = seat.left + seat.width / 2
+    const ty = seat.top + seat.height / 2
+    const n = coinCount(r.shares[id] ?? 0)
+    for (let i = 0; i < n; i++) {
+      const delay = i * 60
+      maxDelay = Math.max(maxDelay, delay)
+      list.push({
+        key: key++,
+        sx: cx + (Math.random() - 0.5) * 40,
+        sy: cy + (Math.random() - 0.5) * 40,
+        tx: tx + (Math.random() - 0.5) * 60,
+        ty: ty + (Math.random() - 0.5) * 40,
+        delay,
+      })
+    }
+  }
+  if (list.length === 0) return
+
+  coins.value = list
+  coinsArmed.value = false
+  await nextTick()
+  requestAnimationFrame(() => requestAnimationFrame(() => (coinsArmed.value = true)))
+
+  if (coinTimer) clearTimeout(coinTimer)
+  coinTimer = setTimeout(() => {
+    coins.value = []
+    coinsArmed.value = false
+    coinTimer = null
+  }, maxDelay + 700)
+}
+
+watch(resolved, (now, was) => {
+  if (now && !was) flyCoins()
+})
+
 // --- the ring ----------------------------------------------------------------
 /**
  * Seats in play order, rotated so the local player sits at the bottom of the
@@ -148,7 +249,10 @@ watch(ringEl, (el) => {
   })
   observer.observe(el)
 })
-onUnmounted(() => observer?.disconnect())
+onUnmounted(() => {
+  observer?.disconnect()
+  if (coinTimer) clearTimeout(coinTimer)
+})
 
 /** Whether there is room to lay the seats round a ring at all, else they stack. */
 const isRing = computed(
@@ -228,15 +332,16 @@ watch(
     <main class="table">
       <div ref="ringEl" class="ring" :class="{ stacked: !isRing }">
         <!-- The pot, in the middle of the table. -->
-        <div class="pot">
+        <div ref="potEl" class="pot" :class="{ swept: resolved }">
           <span class="pot-label tiny">{{ t('carnival.pot') }}</span>
-          <span class="pot-amount">{{ money(pot) }}</span>
+          <span class="pot-amount"><CarnivalCoin :size="20" />{{ money(pot) }}</span>
           <span v-if="currentBet > 0" class="tiny muted">{{ t('carnival.currentBet', { n: currentBet }) }}</span>
         </div>
 
         <div
           v-for="(p, i) in seatOrder"
           :key="p.id"
+          :ref="(el) => setSeatRef(p.id, el as Element | null)"
           class="seat"
           :class="{
             active: p.id === game.carnival?.current && step === 'betting' && !isOver,
@@ -294,6 +399,13 @@ watch(
             <span class="bank">{{ money(p.carnivals) }}</span>
             <span v-if="p.committed > 0 && step === 'betting'" class="bet tiny">
               {{ t('carnival.inPot', { n: p.committed }) }}
+            </span>
+            <span
+              v-else-if="resolved && result?.shares[p.id]"
+              class="won-badge"
+              aria-hidden="true"
+            >
+              <CarnivalCoin :size="14" />+{{ result?.shares[p.id] }}
             </span>
           </div>
         </div>
@@ -362,7 +474,7 @@ watch(
       </div>
 
       <div v-else-if="step === 'showdown' && resolved" class="between">
-        <p class="tiny muted">{{ t('carnival.showdown.done') }}</p>
+        <p class="showdown-line">{{ showdownText }}</p>
         <button v-if="can?.nextHand" class="btn" @click="game.carnivalNext()">
           {{ t('carnival.nextHand') }}
         </button>
@@ -423,48 +535,11 @@ watch(
       </div>
     </div>
 
-    <!-- The showdown result, over the table. -->
-    <div v-if="resolved && result" class="over-veil soft">
-      <div class="over-card panel">
-        <h2>{{ t('carnival.showdown.title') }}</h2>
-        <p class="tiny muted">
-          {{
-            result.winners.length === 0
-              ? t('carnival.showdown.checked')
-              : result.byFold
-                ? t('carnival.showdown.fold', { name: nameOf(result.winners[0]), pot: result.pot })
-                : result.winners.length > 1
-                  ? t('carnival.showdown.split', {
-                      names: result.winners.map((id) => nameOf(id)).join(', '),
-                      pot: result.pot,
-                    })
-                  : t('carnival.showdown.won', { name: nameOf(result.winners[0]), pot: result.pot })
-          }}
-        </p>
-        <ul v-if="result.reveals.length" class="reveals">
-          <li
-            v-for="r in result.reveals"
-            :key="r.player"
-            class="reveal"
-            :class="{ win: winnerIds.has(r.player) }"
-          >
-            <span class="rname">{{ nameOf(r.player) }}</span>
-            <span class="rcards">
-              <CarnivalCard colour="red" :value="r.red" size="small" />
-              <CarnivalCard colour="blue" :value="r.blue" size="small" />
-            </span>
-            <span class="rtotal">
-              {{ r.total }}
-              <span v-if="result.shares[r.player]" class="won tiny">
-                +{{ result.shares[r.player] }}
-              </span>
-            </span>
-          </li>
-        </ul>
-        <button v-if="can?.nextHand" class="btn" @click="game.carnivalNext()">
-          {{ t('carnival.nextHand') }}
-        </button>
-      </div>
+    <!-- The pot sweeping out to the winners, coin by coin, over the whole table. -->
+    <div v-if="coins.length" class="coin-layer" aria-hidden="true">
+      <span v-for="c in coins" :key="c.key" class="fly-coin" :style="coinStyle(c)">
+        <CarnivalCoin :size="24" />
+      </span>
     </div>
 
     <!-- Game over -->
@@ -636,11 +711,20 @@ watch(
 }
 
 .pot-amount {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
   font-family: var(--font-display);
   font-size: 1.9rem;
   line-height: 1;
   color: var(--vermillion-dark);
   font-variant-numeric: tabular-nums;
+}
+
+/* When the hand settles the pot has been paid out, so it reads as emptied. */
+.pot.swept {
+  opacity: 0.7;
+  transition: opacity 0.4s ease 0.5s;
 }
 
 .seat {
@@ -749,6 +833,29 @@ watch(
 
 .bet {
   color: var(--vermillion-dark);
+}
+
+/* The winnings a seat took, badged on as the coins land there. */
+.won-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  font-family: var(--font-display);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  color: #7d5309;
+  animation: won-pop 0.35s ease 0.5s both;
+}
+
+@keyframes won-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 /* --- log ------------------------------------------------------------------ */
@@ -870,6 +977,14 @@ watch(
   gap: 0.8rem;
 }
 
+/* The settled-hand result, read off the table itself rather than a box over it. */
+.showdown-line {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  color: var(--vermillion-dark);
+}
+
 .waiting {
   margin: 0;
 }
@@ -899,11 +1014,6 @@ watch(
   background: rgba(28, 22, 19, 0.45);
   z-index: 50;
   padding: 1rem;
-}
-
-/* The showdown is a reveal, not a wall — let the table show through behind it. */
-.over-veil.soft {
-  background: rgba(28, 22, 19, 0.28);
 }
 
 .over-card {
@@ -959,61 +1069,27 @@ watch(
   transform: translateY(-4px);
 }
 
-.reveals {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  width: 100%;
-}
-
-.reveal {
-  display: grid;
-  grid-template-columns: 1fr auto 2.5rem;
-  align-items: center;
-  gap: 0.6rem;
-  padding: 0.35rem 0.6rem;
-  border-radius: 8px;
-  background: rgba(150, 128, 94, 0.1);
-}
-
-.reveal.win {
-  background: rgba(212, 160, 23, 0.18);
-}
-
-.reveal.folded {
-  opacity: 0.65;
-}
-
-.rname {
-  text-align: left;
-  font-weight: 600;
-}
-
-.rcards {
-  display: flex;
-  gap: 0.3rem;
-}
-
-.rtotal {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  font-family: var(--font-display);
-  font-size: 1.1rem;
-  font-variant-numeric: tabular-nums;
-}
-
-.won {
-  color: var(--vermillion-dark);
-  font-family: var(--font-body, inherit);
-}
-
 .over-actions {
   display: flex;
   gap: 0.5rem;
+}
+
+/* --- the flying coins ----------------------------------------------------- */
+/* A fixed layer over everything, so a coin can travel from the pot in the middle
+   of the table out to a seat wherever it sits on the ring. */
+.coin-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  pointer-events: none;
+}
+
+.fly-coin {
+  position: fixed;
+  top: 0;
+  left: 0;
+  will-change: transform;
+  transition: transform 0.6s cubic-bezier(0.35, 0.8, 0.35, 1);
 }
 
 .flash-enter-active {
