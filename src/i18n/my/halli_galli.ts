@@ -27,7 +27,7 @@ export const myHalli = {
   'halli.stack': 'ပုံတွင် {n}',
   'halli.faceUp': 'လှန် {n}',
   'halli.bell.hint': 'သစ်သီးတစ်မျိုး ငါးလုံးဖြစ်လျှင် ခေါင်းလောင်းရိုက်ပါ',
-  'halli.keys': 'Space ကတ်လှန် · Enter ခေါင်းလောင်းရိုက်',
+  'halli.log.title': 'မှတ်တမ်း',
   'halli.winner': '{name} အနိုင်ရသည်!',
   'halli.draw': 'သရေဖြစ်သည်',
   'halli.event.correct': '{name} သည် {fruit} တွင် ရိုက်ကာ ကတ် {n} ခု ရယူသည်!',

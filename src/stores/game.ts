@@ -7,6 +7,7 @@ import {
   HEARTBEAT_MS,
   PROTOCOL_VERSION,
   type AnyClientState,
+  type CarnivalClientState,
   type ClientMessage,
   type ClientState,
   type CoupClientState,
@@ -15,6 +16,7 @@ import {
 } from '@shared/protocol'
 import { MAX_PLAYERS, type GameKind } from '@shared/types'
 import { t } from '@/i18n'
+import { createCarnival } from './carnivals/useCarnival'
 import { createCoup } from './coup/useCoup'
 import { createHalliGalli } from './halli_galli/useHalliGalli'
 import { createSamurai } from './samurai/useSamurai'
@@ -72,8 +74,12 @@ export const useGameStore = defineStore('game', () => {
   const halli = ref<HalliClientState | null>(null)
   /** Coup's redacted state; null while another game's table is on screen. */
   const coup = ref<CoupClientState | null>(null)
+  /** Carnivals' redacted state; null while another game's table is on screen. */
+  const carnival = ref<CarnivalClientState | null>(null)
   /** Whichever game's state is current, for the fields they all share. */
-  const room = computed<AnyClientState | null>(() => state.value ?? halli.value ?? coup.value)
+  const room = computed<AnyClientState | null>(
+    () => state.value ?? halli.value ?? coup.value ?? carnival.value,
+  )
   /**
    * Which game the player picked on the landing screen, before any room exists.
    * An invite link points straight at a table, so it skips the landing entirely.
@@ -290,10 +296,17 @@ export const useGameStore = defineStore('game', () => {
           halli.value = incoming
           state.value = null
           coup.value = null
+          carnival.value = null
         } else if (incoming.kind === 'coup') {
           coup.value = incoming
           state.value = null
           halli.value = null
+          carnival.value = null
+        } else if (incoming.kind === 'carnivals') {
+          carnival.value = incoming
+          state.value = null
+          halli.value = null
+          coup.value = null
         } else {
           // Any state the local player did not expect invalidates a half-finished
           // interaction (for example a piece someone else just captured).
@@ -301,6 +314,7 @@ export const useGameStore = defineStore('game', () => {
           state.value = incoming
           halli.value = null
           coup.value = null
+          carnival.value = null
         }
         reclaimSeat(incoming)
         break
@@ -318,6 +332,7 @@ export const useGameStore = defineStore('game', () => {
         state.value = null
         halli.value = null
         coup.value = null
+        carnival.value = null
         samurai.resetInteraction()
         reclaimedFor = null
         break
@@ -358,6 +373,7 @@ export const useGameStore = defineStore('game', () => {
   const samurai = createSamurai({ state, you, phase, isPaused, send })
   const halliGalli = createHalliGalli({ halli, you, isPaused, send })
   const coupGame = createCoup({ coup, you, send })
+  const carnivalGame = createCarnival({ carnival, you, send })
 
   // --- room actions --------------------------------------------------------
   /** Bring the seat back to this tab after another one took it over. */
@@ -427,6 +443,7 @@ export const useGameStore = defineStore('game', () => {
     state,
     halli,
     coup,
+    carnival,
     room,
     kind,
     chosenGame,
@@ -455,5 +472,7 @@ export const useGameStore = defineStore('game', () => {
     ...halliGalli,
     // Coup
     ...coupGame,
+    // Carnivals
+    ...carnivalGame,
   }
 })

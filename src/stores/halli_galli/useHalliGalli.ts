@@ -35,9 +35,18 @@ export function createHalliGalli(ctx: HalliContext) {
       !hgYou.value.out &&
       hgYou.value.stackCount > 0,
   )
-  /** Any player still in the game may ring the bell whenever they like. */
+  /**
+   * Any player still in the game may ring the bell whenever they like — a false
+   * alarm is a legal move that simply pays a penalty. This mirrors the engine's
+   * `slap()` guard exactly: the client adds no rule of its own, so the bell is
+   * live precisely when the server would accept the ring.
+   */
   const canSlap = computed(
-    () => halli.value?.phase === 'play' && !isPaused.value && !!hgYou.value && !hgYou.value.out,
+    () =>
+      halli.value?.phase === 'play' &&
+      !isPaused.value &&
+      !!hgYou.value &&
+      !hgYou.value.out,
   )
 
   function flipCard() {

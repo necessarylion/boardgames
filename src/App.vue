@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted } from 'vue'
+import CarnivalGameScreen from './components/carnivals/CarnivalGameScreen.vue'
+import CarnivalLobby from './components/carnivals/CarnivalLobby.vue'
 import CoupGameScreen from './components/coup/CoupGameScreen.vue'
 import CoupLobby from './components/coup/CoupLobby.vue'
 import DiceRoll from './components/common/DiceRoll.vue'
@@ -76,6 +78,11 @@ onMounted(() => game.connect())
     <template v-else-if="game.kind === 'coup'">
       <CoupLobby v-if="game.phase === 'lobby'" />
       <CoupGameScreen v-else />
+    </template>
+
+    <template v-else-if="game.kind === 'carnivals'">
+      <CarnivalLobby v-if="game.phase === 'lobby'" />
+      <CarnivalGameScreen v-else />
     </template>
 
     <LobbyScreen v-else-if="game.phase === 'lobby'" />

@@ -1,4 +1,11 @@
 import type {
+  CarnivalAffordances,
+  CarnivalEvent,
+  CarnivalResult,
+  CarnivalRoundResult,
+  CarnivalStep,
+} from './carnivals'
+import type {
   CoupActionKind,
   CoupCharacter,
   CoupEvent,
@@ -11,7 +18,7 @@ import type { Card, Fruit, HalliEvent, HalliResult } from './halligalli'
 import type { PieceRef } from './rules'
 import type { Caste, GameResult, LogEntry, PlacedTile, PlayerColour } from './types'
 
-export const PROTOCOL_VERSION = 3
+export const PROTOCOL_VERSION = 4
 
 /**
  * How often the server pings each client. A client that hears nothing for a few
@@ -251,8 +258,80 @@ export interface CoupClientState {
   turnMsLeft: number | null
 }
 
+/**
+ * What every client knows about a Carnivals seat. The two cards are the whole
+ * secret: `red` and `blue` are filled per viewer by the server, following
+ * Carnivals' upside-down visibility — you see your own red and never your own
+ * blue, and everyone else's blue and never their red.
+ */
+export interface CarnivalPublicPlayer {
+  id: number
+  name: string
+  colour: PlayerColour
+  connected: boolean
+  /** The seat's bankroll. */
+  carnivals: number
+  /** Carnivals it has put into this hand's pot. */
+  committed: number
+  folded: boolean
+  out: boolean
+  /** Has picked its two cards this hand. */
+  selected: boolean
+  /** Has turned its hand face up at the showdown. */
+  revealed: boolean
+  /** Its private card, sent only to its owner (and to everyone once shown). */
+  red: number | null
+  /** Its public card, hidden from its owner until it turns the hand over. */
+  blue: number | null
+}
+
+/**
+ * The Carnivals state sent to one client. A player's two cards are the only
+ * secret; every bet figure, the pot and the current bet are public, and the
+ * showdown reveal — once it exists — is sent to the whole table in full.
+ */
+export interface CarnivalClientState {
+  kind: 'carnivals'
+  code: string
+  phase: 'lobby' | 'play' | 'over'
+  options: GameOptions
+  hostId: number
+  you: number | null
+  players: CarnivalPublicPlayer[]
+  playerCount: number
+  /** Whose turn it is to act in the betting round. */
+  current: number
+  turnNumber: number
+  /** The roll-off that decided the first dealer, or null when drawn quietly. */
+  opening: Opening | null
+  /** Whether the table is picking cards, betting, or showing hands down. */
+  step: CarnivalStep
+  /** How many face-down cards of each colour a seat picks from, for the layout. */
+  handCards: number
+  pot: number
+  currentBet: number
+  minRaise: number
+  can: CarnivalAffordances
+  /** The finished hand, laid face up — present only during the showdown step. */
+  roundResult: CarnivalRoundResult | null
+  lastEvent: CarnivalEvent | null
+  log: LogEntry[]
+  result: CarnivalResult | null
+  paused: boolean
+  /**
+   * Milliseconds left on the clock for the decision in front of the table, or
+   * null when it is untimed. Sent as a remainder rather than a deadline for the
+   * same reason the others are; frozen while the table is paused.
+   */
+  turnMsLeft: number | null
+}
+
 /** Any game's redacted state; `kind` says which, for the client to route on. */
-export type AnyClientState = ClientState | HalliClientState | CoupClientState
+export type AnyClientState =
+  | ClientState
+  | HalliClientState
+  | CoupClientState
+  | CarnivalClientState
 
 export type ClientMessage =
   /** `code` is the table this client believes it is at, so a server that has
@@ -291,6 +370,17 @@ export type ClientMessage =
   | { t: 'coupLose'; character: CoupCharacter }
   /** Coup: finish an exchange, indexing into your hand followed by the drawn cards. */
   | { t: 'coupExchange'; keep: number[] }
+  /**
+   * Carnivals: a move. `to` carries the total for a raise; `red` and `blue` are
+   * the face-down positions picked for a select.
+   */
+  | {
+      t: 'carnivalAct'
+      move: 'select' | 'check' | 'call' | 'raise' | 'allIn' | 'fold' | 'reveal' | 'next'
+      to?: number
+      red?: number
+      blue?: number
+    }
   /** Suspend or resume the table. Open to any seated player. */
   | { t: 'pause' }
   | { t: 'resume' }

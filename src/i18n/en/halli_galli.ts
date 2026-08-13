@@ -28,7 +28,7 @@ export const enHalli = {
   'halli.stack': '{n} in stack',
   'halli.faceUp': '{n} up',
   'halli.bell.hint': 'Ring the bell when a fruit totals five',
-  'halli.keys': 'Space flips your card · Enter rings the bell',
+  'halli.log.title': 'Log',
   'halli.winner': '{name} wins!',
   'halli.draw': "It's a draw",
   'halli.event.correct': '{name} rang on {fruit} — took {n} cards!',
