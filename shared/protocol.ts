@@ -6,6 +6,14 @@ import type {
   CarnivalStep,
 } from './carnivals'
 import type {
+  CopAffordances,
+  CopEvent,
+  CopResult,
+  CopRoundResult,
+  CopStep,
+  Loot,
+} from './cop'
+import type {
   CoupActionKind,
   CoupCharacter,
   CoupEvent,
@@ -18,7 +26,7 @@ import type { Card, Fruit, HalliEvent, HalliResult } from './halligalli'
 import type { PieceRef } from './rules'
 import type { Caste, GameResult, LogEntry, PlacedTile, PlayerColour } from './types'
 
-export const PROTOCOL_VERSION = 4
+export const PROTOCOL_VERSION = 6
 
 /**
  * How often the server pings each client. A client that hears nothing for a few
@@ -326,12 +334,85 @@ export interface CarnivalClientState {
   turnMsLeft: number | null
 }
 
+/**
+ * What every client knows about a COP seat. A seat's loot is the whole secret,
+ * so it travels as `loot`/`total` only where the viewer is entitled to see it —
+ * their own always, a caught thief's to the Cop during the arrest, and every
+ * seat's once the game is over. Elsewhere both are null.
+ */
+export interface CopPublicPlayer {
+  id: number
+  name: string
+  colour: PlayerColour
+  connected: boolean
+  /** Wearing the badge this round. */
+  cop: boolean
+  /** Times caught over the game — public, and the final tie-break. */
+  caught: number
+  /** Choosing step: whether this seat has slipped into a room yet. */
+  selected: boolean
+  /** This seat's holdings, or null when the viewer may not see them. */
+  loot: Loot | null
+  /** Its total, sent alongside `loot` and null on the same terms. */
+  total: number | null
+}
+
+/**
+ * The COP state sent to one client. A seat's loot is the only secret and is
+ * redacted per viewer above; the eight rooms, the badge, the round and — once a
+ * round resolves — the whole outcome are public and travel in full. Room choices
+ * stay hidden while they are being made: a viewer learns only their own, through
+ * `yourRoom`, until the round is resolved and `roundResult` opens every door.
+ */
+export interface CopClientState {
+  kind: 'cop'
+  code: string
+  phase: 'lobby' | 'play' | 'over'
+  options: GameOptions
+  hostId: number
+  you: number | null
+  players: CopPublicPlayer[]
+  playerCount: number
+  /** Mirrors the Cop seat, for the generic shell that reads `current`. */
+  current: number
+  turnNumber: number
+  opening: Opening | null
+  /** The eight rooms and their contents, public from the start. */
+  rooms: Loot[]
+  cop: number
+  round: number
+  totalRounds: number
+  step: CopStep
+  /** The room you slipped into this round, or null; only ever your own. */
+  yourRoom: number | null
+  /**
+   * The other thieves hiding in your room — revealed the moment you enter it, the
+   * way the rulebook lets you see who is already inside once you are through the
+   * door. Empty until you have chosen, and for anyone but a thief in a room.
+   */
+  roommates: number[]
+  /** The resolved round — every door opened for the table; null until then. */
+  roundResult: CopRoundResult | null
+  can: CopAffordances
+  lastEvent: CopEvent | null
+  log: LogEntry[]
+  result: CopResult | null
+  paused: boolean
+  /**
+   * Milliseconds left on the clock for the decision in front of the table, or
+   * null when it is untimed. Sent as a remainder rather than a deadline for the
+   * same reason the others are; frozen while the table is paused.
+   */
+  turnMsLeft: number | null
+}
+
 /** Any game's redacted state; `kind` says which, for the client to route on. */
 export type AnyClientState =
   | ClientState
   | HalliClientState
   | CoupClientState
   | CarnivalClientState
+  | CopClientState
 
 export type ClientMessage =
   /** `code` is the table this client believes it is at, so a server that has
@@ -381,6 +462,14 @@ export type ClientMessage =
       red?: number
       blue?: number
     }
+  /** COP: slip into a room, in secret (thieves only). */
+  | { t: 'copSelect'; room: number }
+  /** COP: open two doors and catch whoever is behind them (the Cop). */
+  | { t: 'copSearch'; doorA: number; doorB: number }
+  /** COP: confiscate loot from the caught thieves, by seat id (the Cop). */
+  | { t: 'copConfiscate'; takings: Record<number, Loot> }
+  /** COP: deal the next round on once this one is resolved. */
+  | { t: 'copNext' }
   /** Suspend or resume the table. Open to any seated player. */
   | { t: 'pause' }
   | { t: 'resume' }

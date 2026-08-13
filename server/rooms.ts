@@ -7,6 +7,13 @@ import {
   type CarnivalGameState,
 } from '../shared/carnivals'
 import {
+  CopGame,
+  affordances as copAffordances,
+  lootTotal,
+  type CopAffordances,
+  type CopGameState,
+} from '../shared/cop'
+import {
   CoupGame,
   blockOptions,
   blockSeats,
@@ -22,6 +29,8 @@ import type {
   AnyClientState,
   CarnivalClientState,
   CarnivalPublicPlayer,
+  CopClientState,
+  CopPublicPlayer,
   CoupAffordances,
   CoupClientState,
   CoupPendingView,
@@ -77,6 +86,8 @@ export interface RoomSnapshot {
   coup?: CoupGameState | null
   /** The Carnivals engine's state, when this is a Carnivals table. */
   carn?: CarnivalGameState | null
+  /** The COP engine's state, when this is a COP table. */
+  cop?: CopGameState | null
 }
 
 export class Room {
@@ -96,6 +107,8 @@ export class Room {
   coup: CoupGame | null = null
   /** The running Carnivals game, when this room's kind is carnivals. */
   carn: CarnivalGame | null = null
+  /** The running COP game, when this room's kind is cop. */
+  cop: CopGame | null = null
   hostToken = ''
   lastActivity = Date.now()
   /**
@@ -139,6 +152,7 @@ export class Room {
       hg: this.hg?.state ?? null,
       coup: this.coup?.state ?? null,
       carn: this.carn?.state ?? null,
+      cop: this.cop?.state ?? null,
     }
   }
 
@@ -160,11 +174,18 @@ export class Room {
     room.hg = snapshot.hg ? HalliGame.fromState(snapshot.hg) : null
     room.coup = snapshot.coup ? CoupGame.fromState(snapshot.coup) : null
     room.carn = snapshot.carn ? CarnivalGame.fromState(snapshot.carn) : null
+    room.cop = snapshot.cop ? CopGame.fromState(snapshot.cop) : null
     return room
   }
 
   get started(): boolean {
-    return this.game !== null || this.hg !== null || this.coup !== null || this.carn !== null
+    return (
+      this.game !== null ||
+      this.hg !== null ||
+      this.coup !== null ||
+      this.carn !== null ||
+      this.cop !== null
+    )
   }
 
   /** Whether whichever game is running has finished. */
@@ -172,6 +193,7 @@ export class Room {
     if (this.hg) return this.hg.state.phase === 'over'
     if (this.coup) return this.coup.state.phase === 'over'
     if (this.carn) return this.carn.state.phase === 'over'
+    if (this.cop) return this.cop.state.phase === 'over'
     return this.game?.state.phase === 'over'
   }
 
@@ -246,10 +268,12 @@ export class Room {
     this.hg = null
     this.coup = null
     this.carn = null
+    this.cop = null
     const dice = this.options.diceStart
     if (this.options.kind === 'halligalli') this.hg = new HalliGame(this.seats.length, seed, dice)
     else if (this.options.kind === 'coup') this.coup = new CoupGame(this.seats.length, seed, dice)
     else if (this.options.kind === 'carnivals') this.carn = new CarnivalGame(this.seats.length, seed, dice)
+    else if (this.options.kind === 'cop') this.cop = new CopGame(this.seats.length, seed, dice)
     // Samurai reads the option off `options`, which it already carries.
     else this.game = new Game(this.seats.length, this.options, seed)
   }
@@ -288,6 +312,7 @@ export class Room {
     this.hg = null
     this.coup = null
     this.carn = null
+    this.cop = null
     this.dropAbsentPlayers()
     this.touch()
     return null
@@ -319,6 +344,7 @@ export class Room {
     if (this.hg) return this.hg.state.paused
     if (this.coup) return this.coup.state.paused
     if (this.carn) return this.carn.state.paused
+    if (this.cop) return this.cop.state.paused
     return this.game?.state.paused ?? false
   }
 
@@ -327,9 +353,22 @@ export class Room {
     if (!this.options.turnSeconds) return null
     if (this.coup) return this.coupTurnKey()
     if (this.carn) return this.carnivalTurnKey()
+    if (this.cop) return this.copTurnKey()
     const s = this.game?.state
     if (!s || s.phase !== 'play') return null
     return `${s.turnNumber}:${s.current}`
+  }
+
+  /**
+   * COP runs the clock on whatever the round is waiting for. The choosing step
+   * waits on every thief at once and the resolved step on nobody in particular,
+   * so each gets one period keyed on the round; the search and arrest wait on the
+   * Cop. Keyed on the round so a fresh step gets a fresh period.
+   */
+  private copTurnKey(): string | null {
+    const s = this.cop?.state
+    if (!s || s.phase !== 'play') return null
+    return `r${s.round}:${s.step}`
   }
 
   /**
@@ -426,6 +465,7 @@ export class Room {
     if (this.options.kind === 'halligalli') return this.halliStateFor(token)
     if (this.options.kind === 'coup') return this.coupStateFor(token)
     if (this.options.kind === 'carnivals') return this.carnivalStateFor(token)
+    if (this.options.kind === 'cop') return this.copStateFor(token)
     const seat = this.seatByToken(token)
     const game = this.game
     const open = this.options.openInformation || game?.state.phase === 'over'
@@ -820,6 +860,146 @@ export class Room {
       minRaise: s.minRaise,
       can: you === null ? idle : carnivalAffordances(s, you),
       roundResult: s.roundResult,
+      lastEvent: s.lastEvent,
+      log: s.log,
+      result: s.result,
+      paused: s.paused,
+      turnMsLeft: this.turnMsLeft(),
+    }
+  }
+
+  /**
+   * The redacted COP state for one viewer. A seat's loot is the whole secret: a
+   * player always sees their own, the Cop sees a caught thief's while the round
+   * is being arrested and reviewed — the rulebook's "reveal all to the Cop" — and
+   * everyone sees everything once the game is over. Room choices stay hidden
+   * while they are being made: a viewer learns only their own, until the round
+   * resolves and every door is opened for the whole table in `roundResult`.
+   */
+  private copStateFor(token: string): CopClientState {
+    const seat = this.seatByToken(token)
+    const cop = this.cop
+    const hostId = this.seats.find((s) => s.token === this.hostToken)?.id ?? 0
+    const you = seat?.id ?? null
+    const s = cop?.state
+    const open = this.options.openInformation || s?.phase === 'over'
+
+    const players: CopPublicPlayer[] = this.seats.map((x) => {
+      const p = s?.players[x.id]
+      const isYou = you === x.id
+      // A player's loot is theirs alone, with one exception the rulebook makes: a
+      // caught thief reveals their holdings to the Cop for the arrest, so the Cop
+      // can decide what to confiscate. That reveal lasts only the arrest step —
+      // the seat chips never show it, so it reaches only the confiscation panel.
+      const caughtToCop =
+        !!s &&
+        you !== null &&
+        s.cop === you &&
+        s.step === 'arrest' &&
+        !!s.roundResult &&
+        s.roundResult.caught.includes(x.id)
+      const canSee = open || isYou || caughtToCop
+      return {
+        id: x.id,
+        name: x.name,
+        colour: x.colour,
+        connected: x.connected,
+        cop: s ? s.cop === x.id : false,
+        caught: p?.caught ?? 0,
+        selected: s ? s.selections[x.id] !== null : false,
+        loot: canSee && p ? { ...p.loot } : null,
+        total: canSee && p ? lootTotal(p.loot) : null,
+      }
+    })
+
+    const idle: CopAffordances = {
+      select: false,
+      chosen: null,
+      search: false,
+      arrest: false,
+      next: false,
+    }
+
+    const base = {
+      kind: 'cop' as const,
+      code: this.code,
+      options: this.options,
+      hostId,
+      you,
+      players,
+      playerCount: this.seats.length,
+    }
+
+    if (!cop || !s) {
+      return {
+        ...base,
+        phase: 'lobby',
+        current: 0,
+        turnNumber: 0,
+        opening: null,
+        rooms: [],
+        cop: 0,
+        round: 0,
+        totalRounds: 0,
+        step: 'select',
+        yourRoom: null,
+        roommates: [],
+        roundResult: null,
+        can: idle,
+        lastEvent: null,
+        log: [],
+        result: null,
+        paused: false,
+        turnMsLeft: null,
+      }
+    }
+
+    // Redact the resolved round. Once it is resolved, who hid in which room and
+    // who was caught is public to the whole table — that is how you see who
+    // escaped. What stays private is the *loot*: the share a room was split into
+    // reaches only the thieves who were in it, and a confiscation only the Cop
+    // and the thief it was taken from. Everything opens up under open information
+    // or once the game is over.
+    let roundResult = s.roundResult
+    if (roundResult && !open) {
+      const rr = roundResult
+      roundResult = {
+        ...rr,
+        rooms: rr.rooms.map((r) =>
+          you !== null && r.occupants.includes(you) ? r : { ...r, loot: {} },
+        ),
+        confiscations: Object.fromEntries(
+          Object.entries(rr.confiscations).filter(([id]) => you === s.cop || Number(id) === you),
+        ),
+      }
+    }
+
+    const yourRoom = you !== null ? s.selections[you] : null
+    // Once you are through a door you can see who else is already in with you —
+    // but never who is behind any other door until the round is opened up.
+    const roommates =
+      you !== null && yourRoom !== null && (s.step === 'select' || s.step === 'search')
+        ? s.selections.reduce<number[]>((mates, room, id) => {
+            if (room === yourRoom && id !== you) mates.push(id)
+            return mates
+          }, [])
+        : []
+
+    return {
+      ...base,
+      phase: s.phase,
+      current: s.cop,
+      turnNumber: s.turnNumber,
+      opening: s.opening,
+      rooms: s.rooms,
+      cop: s.cop,
+      round: s.round,
+      totalRounds: s.totalRounds,
+      step: s.step,
+      yourRoom,
+      roommates,
+      roundResult,
+      can: you === null ? idle : copAffordances(s, you),
       lastEvent: s.lastEvent,
       log: s.log,
       result: s.result,

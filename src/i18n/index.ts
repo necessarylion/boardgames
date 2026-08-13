@@ -5,10 +5,12 @@ import { enSamurai } from './en/samurai'
 import { enHalli } from './en/halli_galli'
 import { enCoup } from './en/coup'
 import { enCarnivals } from './en/carnivals'
+import { enCop } from './en/cop'
 import { mySamurai } from './my/samurai'
 import { myHalli } from './my/halli_galli'
 import { myCoup } from './my/coup'
 import { myCarnivals } from './my/carnivals'
+import { myCop } from './my/cop'
 
 export const LOCALES = ['en', 'my'] as const
 export type Locale = (typeof LOCALES)[number]
@@ -18,8 +20,8 @@ export type Locale = (typeof LOCALES)[number]
  * strings. English is the catalogue of record; `my` has to match it — the
  * `Record<MessageKey, string>` typing below is what enforces it.
  */
-const en = { ...enSamurai, ...enHalli, ...enCoup, ...enCarnivals }
-const my = { ...mySamurai, ...myHalli, ...myCoup, ...myCarnivals }
+const en = { ...enSamurai, ...enHalli, ...enCoup, ...enCarnivals, ...enCop }
+const my = { ...mySamurai, ...myHalli, ...myCoup, ...myCarnivals, ...myCop }
 
 /** Every message key, across every game. */
 export type MessageKey = keyof typeof en

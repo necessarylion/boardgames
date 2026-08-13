@@ -55,6 +55,14 @@ function pick(kind: GameKind) {
         <span class="meta tiny">{{ t('landing.carnivals.meta') }}</span>
         <span class="go">{{ t('landing.play') }}</span>
       </button>
+
+      <button class="game-card cop" type="button" @click="pick('cop')">
+        <span class="seal siren">🚔</span>
+        <span class="game-name">{{ t('landing.cop.name') }}</span>
+        <span class="game-blurb">{{ t('landing.cop.blurb') }}</span>
+        <span class="meta tiny">{{ t('landing.cop.meta') }}</span>
+        <span class="go">{{ t('landing.play') }}</span>
+      </button>
     </div>
 
     <p class="tiny muted footnote">{{ t('landing.footnote') }}</p>
@@ -147,6 +155,11 @@ function pick(kind: GameKind) {
 .seal.tent {
   font-size: 1.9rem;
   background: linear-gradient(140deg, #a63a30, #2f5a86);
+}
+
+.seal.siren {
+  font-size: 1.9rem;
+  background: linear-gradient(140deg, #1e3a5f, #b23a2c);
 }
 
 .game-name {
