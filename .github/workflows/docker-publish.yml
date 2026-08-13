@@ -81,3 +81,7 @@ jobs:
           # Keeps the package listing to the two real architectures instead of
           # adding "unknown/unknown" provenance entries.
           provenance: false
+
+      - name: Deploy on Coolify
+        run: |
+          curl -sS -X POST --fail-with-body -H "Authorization: Bearer ${{ secrets.COOLIFY_TOKEN }}" "${{ secrets.COOLIFY_WEBHOOK }}"

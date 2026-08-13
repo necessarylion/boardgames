@@ -3,7 +3,7 @@ import { Rng } from './rng'
 import type { LogEntry } from './types'
 
 /**
- * Carnivals — a card-and-betting game of hidden information for two to six,
+ * Carnivals — a card-and-betting game of hidden information for two to eight,
  * unrelated to Samurai, Halli Galli and Coup and sharing none of their rules.
  * Each hand a player holds two cards: a red one only they can see, and a blue
  * one only everyone *else* can see. You bet poker-style on a total you can never
@@ -70,11 +70,11 @@ export interface CarnivalPlayer {
   selected: boolean
   /** Has turned their own hand face up at the showdown. */
   revealed: boolean
-  /** Carnivals put into the pot this hand, ante included. */
+  /** Carnivals put into the pot this hand. */
   committed: number
   /** Folded out of the current hand, forfeiting whatever is already committed. */
   folded: boolean
-  /** Eliminated: no longer able to cover the ante, and out of the game for good. */
+  /** Eliminated: out of Carnivals, and out of the game for good. */
   out: boolean
 }
 
@@ -273,8 +273,8 @@ export function affordances(state: CarnivalGameState, playerId: number): Carniva
     raise: maxRaiseTo >= minRaiseTo,
     minRaiseTo,
     maxRaiseTo,
-    // Cannot cover the bet but has chips left: stay in for everything, and let
-    // the side pots settle who can win what at the showdown.
+    // Cannot cover the bet but has chips left: stay in for everything, knowing
+    // the best hand takes the whole pot and a loss here means going out.
     allIn: callAmount > 0 && player.carnivals > 0 && player.carnivals < callAmount,
     allInAmount: player.carnivals,
     fold: true,
@@ -441,11 +441,10 @@ export class CarnivalGame {
 
   /**
    * Put in everything you have left. A seat that cannot cover the bet stays in
-   * this way rather than folding: it can win only as much as it matched from
-   * each opponent, which the side pots work out at the showdown. Should the
-   * whole stack happen to clear the current bet, it counts as a raise and
-   * reopens the round; otherwise it is a short call that leaves the bet where it
-   * stood.
+   * this way rather than folding, but the best hand takes the whole pot, so an
+   * all-in that loses leaves nothing behind. Should the whole stack happen to
+   * clear the current bet, it counts as a raise and reopens the round; otherwise
+   * it is a short call that leaves the bet where it stood.
    */
   allIn(playerId: number): Outcome {
     const guard = this.guardBetting(playerId)
