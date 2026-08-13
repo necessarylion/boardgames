@@ -7,7 +7,7 @@ export const enCoup = {
   // --- landing (choose a game) ----------------------------------------------
   'landing.coup.name': 'Coup',
   'landing.coup.blurb': 'Claim whatever character suits you — and hope nobody calls your bluff.',
-  'landing.coup.meta': '2–6 players · bluffing',
+  'landing.coup.meta': '2–8 players · bluffing',
 
   // --- home ------------------------------------------------------------------
   'home.coup.tagline':

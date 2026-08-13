@@ -3,16 +3,17 @@ import { computed, ref } from 'vue'
 import CarnivalCard from './CarnivalCard.vue'
 import CarnivalRulesDialog from './CarnivalRulesDialog.vue'
 import { PLAYER_COLOURS } from '@shared/colours'
-import { MAX_PLAYERS, MIN_PLAYERS } from '@shared/types'
+import { MIN_PLAYERS, maxPlayersFor } from '@shared/types'
 import { t } from '@/i18n'
 import { useGameStore } from '@/stores/game'
 
+const maxSeats = maxPlayersFor('carnivals')
 const game = useGameStore()
 const copied = ref(false)
 const showRules = ref(false)
 
 const seats = computed(() => game.carnivalPlayers)
-const emptySeats = computed(() => MAX_PLAYERS - seats.value.length)
+const emptySeats = computed(() => maxSeats - seats.value.length)
 const canStart = computed(() => game.isHost && seats.value.length >= MIN_PLAYERS)
 
 const shareLink = computed(() => `${location.origin}${location.pathname}?room=${game.carnival?.code}`)
@@ -48,7 +49,7 @@ async function copyLink() {
         <h2>
           {{ t('lobby.players') }}
           <span class="tiny muted">
-            {{ t('lobby.seatCount', { seated: seats.length, max: MAX_PLAYERS }) }}
+            {{ t('lobby.seatCount', { seated: seats.length, max: maxSeats }) }}
           </span>
         </h2>
         <ul class="seats">

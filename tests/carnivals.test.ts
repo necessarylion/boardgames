@@ -303,53 +303,110 @@ describe('going all in', () => {
     expect(game.state.step).toBe('showdown')
   })
 
-  it('returns an uncalled bet rather than paying it out as winnings', () => {
-    const game = scripted([[1, 1], [9, 9]], [990, 15]) // seat 1 has the better hand
+  it('gives the whole pot to the best hand, leaving the all-in loser with nothing', () => {
+    // Seat 1 goes all in short and holds the better hand, so it takes everything —
+    // seat 0's larger bet included. There is no side pot.
+    const game = scripted([[1, 1], [9, 9]], [990, 15])
     game.raise(0, 50)
     game.allIn(1)
     revealAll(game)
     const r = game.state.roundResult!
-    // Seat 1 wins the pot it could match (25 from each = 50); seat 0's extra 25
-    // was uncalled, so it comes straight back and seat 0 is not a winner.
-    expect(r.shares).toEqual({ 1: 50 })
     expect(r.winners).toEqual([1])
-    expect(r.pot).toBe(50)
-    expect(game.state.players[1].carnivals).toBe(50)
-    // 990 staked down to 950 on the raise, then the uncalled 25 returned.
-    expect(game.state.players[0].carnivals).toBe(975)
+    expect(r.pot).toBe(75) // 50 from seat 0 + 25 from seat 1
+    expect(r.shares).toEqual({ 1: 75 })
+    expect(game.state.players[1].carnivals).toBe(75)
+    expect(game.state.players[0].carnivals).toBe(950)
   })
 
-  it('pays the covering raiser the main pot and returns their uncalled excess', () => {
-    // Seat 0 raises with the better hand; seat 1 can only call all in for less.
+  it('knocks out a covered seat that goes all in and loses', () => {
+    // Seat 0 raises with the better hand; seat 1 can only call all in for less and
+    // is left with nothing.
     const game = scripted([[9, 9], [1, 1]], [990, 15])
     game.raise(0, 50)
     game.allIn(1)
     revealAll(game)
     const r = game.state.roundResult!
     expect(r.winners).toEqual([0])
-    expect(r.shares).toEqual({ 0: 50 }) // the matched pot only
-    expect(r.pot).toBe(50)
-    // 990 staked to 950 on the raise, then +50 won and +25 uncalled returned.
+    expect(r.pot).toBe(75)
+    expect(r.shares).toEqual({ 0: 75 })
     expect(game.state.players[0].carnivals).toBe(1025)
-    expect(game.state.players[1].carnivals).toBe(0)
+    expect(game.state.players[1].carnivals).toBe(0) // out at the next deal
   })
 
-  it('splits a three-way pot into a main pot and a side pot', () => {
-    // Seat 1 is short and best; seat 2 covers the raise and beats seat 0.
+  it('pays the whole three-way pot to the single best hand', () => {
     const game = scripted([[1, 1], [9, 9], [5, 5]], [990, 20, 990])
     game.raise(0, 60)
     game.allIn(1)
     game.call(2)
     revealAll(game)
     const r = game.state.roundResult!
-    // Main pot 90 (30 from each of three) to seat 1; side pot 60 (seats 0 and 2)
-    // to seat 2.
-    expect(r.shares).toEqual({ 1: 90, 2: 60 })
-    expect(r.winners).toEqual([1, 2])
+    // Seat 1 holds the best hand and takes all 150; seats 0 and 2 win nothing.
+    expect(r.winners).toEqual([1])
+    expect(r.shares).toEqual({ 1: 150 })
     expect(r.pot).toBe(150)
-    expect(game.state.players[1].carnivals).toBe(90)
-    expect(game.state.players[2].carnivals).toBe(1000)
+    expect(game.state.players[1].carnivals).toBe(150)
     expect(game.state.players[0].carnivals).toBe(940)
+    expect(game.state.players[2].carnivals).toBe(940)
+  })
+})
+
+describe('knockouts', () => {
+  it('knocks out every all-in loser when the whole table is all in', () => {
+    const game = scripted([[9, 9], [5, 5], [1, 1]], [990, 990, 990])
+    game.allIn(0)
+    game.allIn(1)
+    game.allIn(2)
+    expect(game.state.step).toBe('showdown')
+    revealAll(game)
+    // Seat 0 holds the best hand and sweeps the pot; the other two are left broke.
+    expect(game.state.players[1].carnivals).toBe(0)
+    expect(game.state.players[2].carnivals).toBe(0)
+    game.nextHand(0)
+    // Both losers drop out at once, ending the game.
+    expect(game.state.players[1].out).toBe(true)
+    expect(game.state.players[2].out).toBe(true)
+    expect(game.state.phase).toBe('over')
+    expect(game.state.result!.winner).toBe(0)
+  })
+})
+
+describe('money conservation', () => {
+  it('does not mint Carnivals from an eliminated seat’s stale bet', () => {
+    // Seats 0 and 1 play the hand; seat 2 was knocked out an earlier hand but is
+    // still carrying the 500 it had committed then. That amount is gone — it must
+    // not be peeled back into this pot.
+    const game = scripted([[5, 5], [3, 3], [9, 9]])
+    game.state.players[2].out = true
+    game.state.players[2].committed = 500
+    game.state.players[2].carnivals = 0
+    // The live pot is only the two contenders' bets.
+    game.state.pot = 20
+    game.state.players[0].committed = 10
+    game.state.players[1].committed = 10
+
+    const before = game.state.players.reduce((sum, p) => sum + p.carnivals, 0)
+    game.check(0)
+    game.check(1)
+    game.reveal(0)
+    game.reveal(1)
+    const after = game.state.players.reduce((sum, p) => sum + p.carnivals, 0)
+
+    // The 20 in the pot is redistributed and nothing else is created.
+    expect(after).toBe(before + 20)
+    expect(game.state.roundResult!.pot).toBe(20)
+  })
+
+  it('clears an eliminated seat’s committed when the next hand is dealt', () => {
+    // Three seats so the game continues after one is knocked out.
+    const game = scripted([[9, 9], [5, 5], [1, 1]], [990, 990, 0]) // seat 2 all in for nothing
+    game.check(0)
+    game.check(1)
+    revealAll(game)
+    // Seat 2 wins nothing, so it is dropped as the next hand is dealt.
+    game.nextHand(0)
+    expect(game.state.players[2].out).toBe(true)
+    // Its committed is wiped, so no stale bet can leak into a later pot.
+    expect(game.state.players[2].committed).toBe(0)
   })
 })
 

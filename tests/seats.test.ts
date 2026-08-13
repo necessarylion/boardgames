@@ -9,9 +9,13 @@ import { MAX_PLAYERS } from '../shared/types'
 /** These rooms all play Samurai, so read their state as a Samurai ClientState. */
 const sfor = (r: Room, token: string): ClientState => r['stateFor'](token) as ClientState
 
-/** A full table, seated in order. */
+/**
+ * A full table, seated in order. It plays Carnivals so the full eight colours
+ * get handed out — Samurai stops at six seats, fewer than the palette carries.
+ */
 function fullRoom(code: string) {
   const room = new Room(code)
+  room.options = { ...DEFAULT_OPTIONS, kind: 'carnivals' }
   for (let i = 0; i < MAX_PLAYERS; i++) room.addSeat(`token-${i}`, `Player ${i}`)
   return room
 }
@@ -33,7 +37,7 @@ describe('seat colours', () => {
     })
 
     // The host was gold at every table before the palette was shuffled. With
-    // six colours over two dozen tables, one repeated colour throughout would
+    // eight colours over two dozen tables, one repeated colour throughout would
     // mean the shuffle is not running at all.
     expect(new Set(first).size).toBeGreaterThan(1)
   })
@@ -46,6 +50,19 @@ describe('seat colours', () => {
 
     expect(room.seats.map((s) => s.colour)).toEqual(palette.slice(0, MAX_PLAYERS - 1))
     expect(new Set(room.seats.map((s) => s.colour)).size).toBe(MAX_PLAYERS - 1)
+  })
+
+  it('opens eight seats for a card game but only six for Samurai', () => {
+    const carn = new Room('EIGHT')
+    carn.options = { ...DEFAULT_OPTIONS, kind: 'carnivals' }
+    for (let i = 0; i < 8; i++) carn.addSeat(`c${i}`, `P${i}`)
+    expect(carn.seats).toHaveLength(8)
+    expect(carn.addSeat('c8', 'P8')).toBeNull() // full at eight
+    expect(carn.start()).toBeNull() // and an eight-player game deals cleanly
+
+    const samurai = new Room('SIX') // Samurai by default
+    for (let i = 0; i < 8; i++) samurai.addSeat(`s${i}`, `P${i}`)
+    expect(samurai.seats).toHaveLength(6) // its board stops at six
   })
 
   it('leaves colours where they are when a game is abandoned', () => {

@@ -6,15 +6,16 @@ import { PLAYER_COLOURS } from '@shared/colours'
 import { DEFAULT_BOARD_SHAPE } from '@shared/board'
 import { supplyPerCaste } from '@shared/setup'
 import { teamArrangements } from '@shared/rules'
-import { BOARD_SHAPES, MAX_PLAYERS, MIN_PLAYERS, type BoardShape } from '@shared/types'
+import { BOARD_SHAPES, MIN_PLAYERS, maxPlayersFor, type BoardShape } from '@shared/types'
 import { t, teamLabel } from '@/i18n'
 import { useGameStore } from '@/stores/game'
 
+const maxSeats = maxPlayersFor('samurai')
 const game = useGameStore()
 const copied = ref(false)
 
 const seats = computed(() => game.players)
-const emptySeats = computed(() => MAX_PLAYERS - seats.value.length)
+const emptySeats = computed(() => maxSeats - seats.value.length)
 
 const teamsValue = computed(() => game.state?.options.teams ?? 0)
 const teamsOn = computed(() => teamsValue.value >= 2)
@@ -104,7 +105,7 @@ function setBoard(shape: BoardShape) {
         <h2>
           {{ t('lobby.players') }}
           <span class="tiny muted">
-            {{ t('lobby.seatCount', { seated: seats.length, max: MAX_PLAYERS }) }}
+            {{ t('lobby.seatCount', { seated: seats.length, max: maxSeats }) }}
           </span>
         </h2>
         <ul class="seats">

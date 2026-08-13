@@ -9,6 +9,7 @@ import {
   STARTING_COINS,
   blockOptions,
   buildDeck,
+  deckSize,
   canChallenge,
   legalActions,
   responders,
@@ -63,10 +64,20 @@ describe('dealing', () => {
     expect(game.state.deck).toHaveLength(DECK_SIZE - 8)
   })
 
-  it('seats six players, the most the base deck stretches to', () => {
+  it('seats six players from the standard fifteen-card deck', () => {
     const game = new CoupGame(6, 5)
     expect(game.state.deck).toHaveLength(DECK_SIZE - 12)
     expect(game.state.players.every((p) => p.hand.length === 2)).toBe(true)
+  })
+
+  it('builds a bigger deck for a table above six so eight can be dealt', () => {
+    // Above six seats the court grows to four of each character (twenty cards),
+    // so eight players still get two influence apiece with a reserve to draw on.
+    expect(deckSize(8)).toBe(20)
+    const game = new CoupGame(8, 5)
+    expect(game.state.players).toHaveLength(8)
+    expect(game.state.players.every((p) => p.hand.length === 2)).toBe(true)
+    expect(game.state.deck).toHaveLength(deckSize(8) - 16)
   })
 })
 

@@ -42,11 +42,28 @@ export const SETTLEMENT_CAPACITY: Record<SettlementKind, number> = {
 export type Section = 'A' | 'B' | 'C' | 'D' | 'E'
 
 /**
- * Table size. Two to four is the published game; five and six extend it onto
- * the outer sections D and E, which have no printed counterpart.
+ * Table size. `MAX_PLAYERS` is the hard ceiling shared across every game — it is
+ * how many distinct player colours the palette carries and the most seats a room
+ * will ever open. Each game then draws its own maximum from `GAME_MAX_PLAYERS`,
+ * because the games do not all seat the same number: the card games run to a full
+ * eight, but Samurai stops at six, since its board only carries sections A–E and
+ * a seventh or eighth seat would need map sections that do not exist.
  */
 export const MIN_PLAYERS = 2
-export const MAX_PLAYERS = 6
+export const MAX_PLAYERS = 8
+
+/** The largest table each game can seat. Never above `MAX_PLAYERS`. */
+export const GAME_MAX_PLAYERS: Record<GameKind, number> = {
+  samurai: 6,
+  halligalli: 8,
+  coup: 8,
+  carnivals: 8,
+}
+
+/** How many seats a room running `kind` may open. */
+export function maxPlayersFor(kind: GameKind): number {
+  return GAME_MAX_PLAYERS[kind]
+}
 
 /**
  * Which island chain a table plays on. Each holds the supply exactly at every
@@ -118,7 +135,15 @@ export interface Player {
   captured: Caste[]
 }
 
-export type PlayerColour = 'gold' | 'red' | 'green' | 'purple' | 'teal' | 'rose'
+export type PlayerColour =
+  | 'gold'
+  | 'red'
+  | 'green'
+  | 'purple'
+  | 'teal'
+  | 'rose'
+  | 'orange'
+  | 'indigo'
 
 export interface PlacedTile {
   tileId: string

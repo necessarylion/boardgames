@@ -1,9 +1,9 @@
 import { chooseFirst, type Opening } from './opening'
 import { Rng } from './rng'
-import type { LogEntry } from './types'
+import { MIN_PLAYERS, type LogEntry } from './types'
 
 /**
- * Coup — a game of bluff and deduction for two to six, unrelated to Samurai and
+ * Coup — a game of bluff and deduction for two to eight, unrelated to Samurai and
  * to Halli Galli, and sharing none of their rules. Each player hides two
  * influence cards and claims whichever character suits them; the claim is only
  * as good as the table's willingness to let it stand. This module is the
@@ -28,9 +28,27 @@ export const CHARACTERS: readonly CoupCharacter[] = [
   'contessa',
 ]
 
-/** Copies of each character in the court deck. Five characters, fifteen cards. */
+/**
+ * Copies of each character in the standard court deck: five characters, fifteen
+ * cards, enough to deal two apiece to six players with a reserve left to draw
+ * from. `DECK_SIZE` is that standard deck; a larger table builds a bigger one.
+ */
 export const COPIES_PER_CHARACTER = 3
 export const DECK_SIZE = CHARACTERS.length * COPIES_PER_CHARACTER
+
+/**
+ * How many copies of each character a table of this size needs. Above six seats
+ * the standard fifteen cannot cover two influence a head and still leave the
+ * court a reserve, so a seventh and eighth seat call for a fourth copy of each.
+ */
+export function copiesFor(playerCount: number): number {
+  return playerCount > 6 ? 4 : COPIES_PER_CHARACTER
+}
+
+/** The full court deck for a table of `playerCount`, before it is shuffled. */
+export function deckSize(playerCount: number): number {
+  return CHARACTERS.length * copiesFor(playerCount)
+}
 
 export const STARTING_COINS = 2
 export const STARTING_INFLUENCE = 2
@@ -41,10 +59,11 @@ export const STEAL_AMOUNT = 2
 /** At this many coins a player may do nothing but launch a coup. */
 export const FORCED_COUP_AT = 10
 
-export function buildDeck(): CoupCharacter[] {
+export function buildDeck(playerCount: number = MIN_PLAYERS): CoupCharacter[] {
   const deck: CoupCharacter[] = []
+  const copies = copiesFor(playerCount)
   for (const character of CHARACTERS) {
-    for (let i = 0; i < COPIES_PER_CHARACTER; i++) deck.push(character)
+    for (let i = 0; i < copies; i++) deck.push(character)
   }
   return deck
 }
@@ -298,7 +317,7 @@ export class CoupGame {
 
   private static deal(playerCount: number, seed: number, diceStart: boolean): CoupGameState {
     const rng = new Rng(seed)
-    const deck = rng.shuffle(buildDeck())
+    const deck = rng.shuffle(buildDeck(playerCount))
     const players: CoupPlayer[] = Array.from({ length: playerCount }, (_, id) => ({
       id,
       coins: STARTING_COINS,

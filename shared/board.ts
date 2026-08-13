@@ -1,5 +1,8 @@
 import { hexId, neighbourIds, offsetToAxial } from './hex'
-import { MAX_PLAYERS, MIN_PLAYERS, type BoardShape, type Section, type Space, type SettlementKind } from './types'
+import { GAME_MAX_PLAYERS, MIN_PLAYERS, type BoardShape, type Section, type Space, type SettlementKind } from './types'
+
+/** Samurai's own ceiling: its board only carries sections A–E, so six seats. */
+const SAMURAI_MAX_PLAYERS = GAME_MAX_PLAYERS.samurai
 
 /** Sections from the centre of a map outward. */
 export const SECTION_ORDER: readonly Section[] = ['A', 'B', 'C', 'D', 'E']
@@ -292,7 +295,7 @@ export function sectionsFor(playerCount: number): Section[] {
 }
 
 function clampPlayers(playerCount: number): number {
-  return Math.min(Math.max(playerCount, MIN_PLAYERS), MAX_PLAYERS)
+  return Math.min(Math.max(playerCount, MIN_PLAYERS), SAMURAI_MAX_PLAYERS)
 }
 
 export interface Board {

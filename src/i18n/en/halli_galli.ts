@@ -7,7 +7,7 @@ export const enHalli = {
   // --- landing (choose a game) --------------------------------------------
   'landing.halli.name': 'Halli Galli',
   'landing.halli.blurb': 'Flip cards and race to slap the bell the instant five fruit appear.',
-  'landing.halli.meta': '2–6 players · reflex',
+  'landing.halli.meta': '2–8 players · reflex',
 
   // --- home ----------------------------------------------------------------
   'home.halli.tagline':

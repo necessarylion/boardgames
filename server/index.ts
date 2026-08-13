@@ -8,8 +8,8 @@ import { DEFAULT_BOARD_SHAPE } from '../shared/board'
 import { TURN_SECONDS_CHOICES } from '../shared/engine'
 import type { ClientMessage, ServerMessage } from '../shared/protocol'
 import { CLOSE_REPLACED, HEARTBEAT_MS, PROTOCOL_VERSION } from '../shared/protocol'
-import { BOARD_SHAPES, GAME_KINDS } from '../shared/types'
-import { MAX_PLAYERS, RoomManager, type Room } from './rooms'
+import { BOARD_SHAPES, GAME_KINDS, maxPlayersFor } from '../shared/types'
+import { RoomManager, type Room } from './rooms'
 import { PostgresRoomStore, type RoomStore } from './store'
 
 const PORT = Number(process.env.PORT ?? 8787)
@@ -172,7 +172,8 @@ wss.on('connection', (socket) => {
       const existing = room.seatByToken(activeToken)
       if (!existing) {
         if (room.started) return fail(socket, 'That game has already started.')
-        if (room.seats.length >= MAX_PLAYERS) return fail(socket, 'That room is full.')
+        if (room.seats.length >= maxPlayersFor(room.options.kind))
+          return fail(socket, 'That room is full.')
         const previous = rooms.roomOf(activeToken)
         if (previous && previous !== room) previous.removeSeat(activeToken)
         room.addSeat(activeToken, msg.name)

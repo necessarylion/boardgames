@@ -33,7 +33,7 @@ import type {
 import { teamArrangements, teamLeader, teamOf } from '../shared/rules'
 import { COLOUR_ORDER } from '../shared/colours'
 import { Rng, randomSeed } from '../shared/rng'
-import { MAX_PLAYERS, MIN_PLAYERS, type PlayerColour } from '../shared/types'
+import { MAX_PLAYERS, MIN_PLAYERS, maxPlayersFor, type PlayerColour } from '../shared/types'
 import type { RoomStore } from './store'
 
 export { MAX_PLAYERS, MIN_PLAYERS }
@@ -184,7 +184,9 @@ export class Room {
   }
 
   addSeat(token: string, name: string): Seat | null {
-    if (this.seats.length >= MAX_PLAYERS) return null
+    // Each game opens its own number of seats — the card games seat eight, Samurai
+    // only six — so the ceiling is the room's game, not the palette-wide maximum.
+    if (this.seats.length >= maxPlayersFor(this.options.kind)) return null
     const seat: Seat = {
       id: this.seats.length,
       token,

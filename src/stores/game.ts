@@ -14,7 +14,7 @@ import {
   type HalliClientState,
   type ServerMessage,
 } from '@shared/protocol'
-import { MAX_PLAYERS, type GameKind } from '@shared/types'
+import { maxPlayersFor, type GameKind } from '@shared/types'
 import { t } from '@/i18n'
 import { createCarnival } from './carnivals/useCarnival'
 import { createCoup } from './coup/useCoup'
@@ -350,7 +350,7 @@ export const useGameStore = defineStore('game', () => {
       reclaimedFor = null
       return
     }
-    const full = next.players.length >= MAX_PLAYERS
+    const full = next.players.length >= maxPlayersFor(next.kind)
     if (next.phase !== 'lobby' || full || !myName.value || reclaimedFor === next.code) return
     reclaimedFor = next.code
     send({ t: 'join', code: next.code, name: myName.value })
@@ -405,7 +405,17 @@ export const useGameStore = defineStore('game', () => {
     send({ t: 'join', code: wanted, name })
   }
 
-  const leaveRoom = () => send({ t: 'leave' })
+  /**
+   * Leave the table for good. Clearing the chosen game as well as the room takes
+   * the player all the way back to the games list rather than dropping them on
+   * the create/join form for the game they just left. Only a deliberate leave
+   * does this — a `left` the server sends for other reasons (an expired invite)
+   * keeps its join form, so the reset lives here rather than in the handler.
+   */
+  const leaveRoom = () => {
+    chosenGame.value = null
+    send({ t: 'leave' })
+  }
   const setOptions = (options: GameOptions) => send({ t: 'options', options })
   /** Team leaders only (the server enforces it); a blank name resets to a letter. */
   const renameTeam = (team: number, name: string) => send({ t: 'renameTeam', team, name })
