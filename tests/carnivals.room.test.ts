@@ -103,6 +103,38 @@ describe('a Carnivals room', () => {
     expect(mine.roundResult).not.toBeNull()
   })
 
+  it('lays a folded seat’s hand face up for the whole table', () => {
+    const r = room()
+    const c = r.carn!
+    pickAll(c)
+    const folder = c.state.current
+    expect(c.fold(folder).ok).toBe(true)
+
+    // A rival sees the folded seat's red — normally private — the instant it folds.
+    const rival = folder === 0 ? 'token-b' : 'token-a'
+    const them = view(r, rival).players.find((p) => p.id === folder)!
+    expect(them.red).toBe(c.state.players[folder].red)
+    expect(them.blue).toBe(c.state.players[folder].blue)
+  })
+
+  it('opens every hand once the round is settled, even a pot conceded by folds', () => {
+    const r = room()
+    const c = r.carn!
+    pickAll(c)
+    // Open the pot so the walkover has something to award, then fold the rest.
+    const opener = c.state.current
+    expect(c.raise(opener, c.state.minRaise).ok).toBe(true)
+    while (!c.state.roundResult) c.fold(c.state.current)
+    expect(c.state.roundResult!.byFold).toBe(true)
+
+    // The winner never turned their hand over, yet the whole table now reads it.
+    const winner = c.state.roundResult!.winners[0]
+    expect(winner).toBe(opener)
+    const them = view(r, 'token-a').players.find((p) => p.id === winner)!
+    expect(them.red).toBe(c.state.players[winner].red)
+    expect(them.blue).toBe(c.state.players[winner].blue)
+  })
+
   it('gives a spectator the public blues, no private reds, and no actions', () => {
     const r = room()
     pickAll(r.carn!)

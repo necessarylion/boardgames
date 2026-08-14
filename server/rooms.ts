@@ -770,7 +770,8 @@ export class Room {
    * and the redaction is Carnivals' upside-down one: a viewer sees their own red
    * and never their own blue, and every opponent's blue and never their red.
    * The showdown lifts both restrictions, so once a hand is down every card is
-   * public. Everything else — the pot, the bets, who has folded — is already
+   * public; folding lifts them the same way, laying the folded hand face up at
+   * once. Everything else — the pot, the bets, who has folded — is already
    * public and travels in full.
    */
   private carnivalStateFor(token: string): CarnivalClientState {
@@ -779,12 +780,19 @@ export class Room {
     const hostId = this.seats.find((s) => s.token === this.hostToken)?.id ?? 0
     const you = seat?.id ?? null
 
+    // Once the hand is settled every card is laid face up, so the whole table
+    // can read the showdown — including a pot conceded to by folds, where nobody
+    // was made to reveal.
+    const roundOver = carn?.state.roundResult != null
+
     const players: CarnivalPublicPlayer[] = this.seats.map((s) => {
       const p = carn?.state.players[s.id]
       const isYou = you === s.id
-      // A card goes public to the whole table only once its owner turns their
-      // hand over at the showdown; a folded or conceded hand is never shown.
-      const shown = p?.revealed ?? false
+      // A card goes public to the whole table once its owner turns their hand
+      // over at the showdown, or the moment they fold — a folded seat lays both
+      // cards face up for everyone. Either way, every hand is open once the round
+      // has resolved.
+      const shown = roundOver || (p?.revealed ?? false) || (p?.folded ?? false)
       return {
         id: s.id,
         name: s.name,
