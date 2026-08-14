@@ -10,13 +10,15 @@ import {
   type CarnivalClientState,
   type ClientMessage,
   type ClientState,
+  type CopClientState,
   type CoupClientState,
   type HalliClientState,
   type ServerMessage,
 } from '@shared/protocol'
-import { MAX_PLAYERS, type GameKind } from '@shared/types'
+import { maxPlayersFor, type GameKind } from '@shared/types'
 import { t } from '@/i18n'
 import { createCarnival } from './carnivals/useCarnival'
+import { createCop } from './cop/useCop'
 import { createCoup } from './coup/useCoup'
 import { createHalliGalli } from './halli_galli/useHalliGalli'
 import { createSamurai } from './samurai/useSamurai'
@@ -76,9 +78,11 @@ export const useGameStore = defineStore('game', () => {
   const coup = ref<CoupClientState | null>(null)
   /** Carnivals' redacted state; null while another game's table is on screen. */
   const carnival = ref<CarnivalClientState | null>(null)
+  /** COP's redacted state; null while another game's table is on screen. */
+  const cop = ref<CopClientState | null>(null)
   /** Whichever game's state is current, for the fields they all share. */
   const room = computed<AnyClientState | null>(
-    () => state.value ?? halli.value ?? coup.value ?? carnival.value,
+    () => state.value ?? halli.value ?? coup.value ?? carnival.value ?? cop.value,
   )
   /**
    * Which game the player picked on the landing screen, before any room exists.
@@ -297,16 +301,25 @@ export const useGameStore = defineStore('game', () => {
           state.value = null
           coup.value = null
           carnival.value = null
+          cop.value = null
         } else if (incoming.kind === 'coup') {
           coup.value = incoming
           state.value = null
           halli.value = null
           carnival.value = null
+          cop.value = null
         } else if (incoming.kind === 'carnivals') {
           carnival.value = incoming
           state.value = null
           halli.value = null
           coup.value = null
+          cop.value = null
+        } else if (incoming.kind === 'cop') {
+          cop.value = incoming
+          state.value = null
+          halli.value = null
+          coup.value = null
+          carnival.value = null
         } else {
           // Any state the local player did not expect invalidates a half-finished
           // interaction (for example a piece someone else just captured).
@@ -315,6 +328,7 @@ export const useGameStore = defineStore('game', () => {
           halli.value = null
           coup.value = null
           carnival.value = null
+          cop.value = null
         }
         reclaimSeat(incoming)
         break
@@ -333,6 +347,7 @@ export const useGameStore = defineStore('game', () => {
         halli.value = null
         coup.value = null
         carnival.value = null
+        cop.value = null
         samurai.resetInteraction()
         reclaimedFor = null
         break
@@ -350,7 +365,7 @@ export const useGameStore = defineStore('game', () => {
       reclaimedFor = null
       return
     }
-    const full = next.players.length >= MAX_PLAYERS
+    const full = next.players.length >= maxPlayersFor(next.kind)
     if (next.phase !== 'lobby' || full || !myName.value || reclaimedFor === next.code) return
     reclaimedFor = next.code
     send({ t: 'join', code: next.code, name: myName.value })
@@ -374,6 +389,7 @@ export const useGameStore = defineStore('game', () => {
   const halliGalli = createHalliGalli({ halli, you, isPaused, send })
   const coupGame = createCoup({ coup, you, send })
   const carnivalGame = createCarnival({ carnival, you, send })
+  const copGame = createCop({ cop, you, send })
 
   // --- room actions --------------------------------------------------------
   /** Bring the seat back to this tab after another one took it over. */
@@ -405,7 +421,17 @@ export const useGameStore = defineStore('game', () => {
     send({ t: 'join', code: wanted, name })
   }
 
-  const leaveRoom = () => send({ t: 'leave' })
+  /**
+   * Leave the table for good. Clearing the chosen game as well as the room takes
+   * the player all the way back to the games list rather than dropping them on
+   * the create/join form for the game they just left. Only a deliberate leave
+   * does this — a `left` the server sends for other reasons (an expired invite)
+   * keeps its join form, so the reset lives here rather than in the handler.
+   */
+  const leaveRoom = () => {
+    chosenGame.value = null
+    send({ t: 'leave' })
+  }
   const setOptions = (options: GameOptions) => send({ t: 'options', options })
   /** Team leaders only (the server enforces it); a blank name resets to a letter. */
   const renameTeam = (team: number, name: string) => send({ t: 'renameTeam', team, name })
@@ -444,6 +470,7 @@ export const useGameStore = defineStore('game', () => {
     halli,
     coup,
     carnival,
+    cop,
     room,
     kind,
     chosenGame,
@@ -474,5 +501,7 @@ export const useGameStore = defineStore('game', () => {
     ...coupGame,
     // Carnivals
     ...carnivalGame,
+    // COP
+    ...copGame,
   }
 })

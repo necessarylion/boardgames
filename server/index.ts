@@ -8,8 +8,8 @@ import { DEFAULT_BOARD_SHAPE } from '../shared/board'
 import { TURN_SECONDS_CHOICES } from '../shared/engine'
 import type { ClientMessage, ServerMessage } from '../shared/protocol'
 import { CLOSE_REPLACED, HEARTBEAT_MS, PROTOCOL_VERSION } from '../shared/protocol'
-import { BOARD_SHAPES, GAME_KINDS } from '../shared/types'
-import { MAX_PLAYERS, RoomManager, type Room } from './rooms'
+import { BOARD_SHAPES, GAME_KINDS, maxPlayersFor } from '../shared/types'
+import { RoomManager, type Room } from './rooms'
 import { PostgresRoomStore, type RoomStore } from './store'
 
 const PORT = Number(process.env.PORT ?? 8787)
@@ -172,7 +172,8 @@ wss.on('connection', (socket) => {
       const existing = room.seatByToken(activeToken)
       if (!existing) {
         if (room.started) return fail(socket, 'That game has already started.')
-        if (room.seats.length >= MAX_PLAYERS) return fail(socket, 'That room is full.')
+        if (room.seats.length >= maxPlayersFor(room.options.kind))
+          return fail(socket, 'That room is full.')
         const previous = rooms.roomOf(activeToken)
         if (previous && previous !== room) previous.removeSeat(activeToken)
         room.addSeat(activeToken, msg.name)
@@ -349,6 +350,34 @@ wss.on('connection', (socket) => {
       return
     }
 
+    // COP likewise: its own engine, routed before the Samurai game below.
+    if (room.cop) {
+      if (!seat) return fail(socket, 'You are watching this game, not playing it.')
+      const cop = room.cop
+      const outcome = (() => {
+        switch (msg.t) {
+          case 'copSelect':
+            return cop.select(seat.id, msg.room)
+          case 'copSearch':
+            return cop.search(seat.id, msg.doorA, msg.doorB)
+          case 'copConfiscate':
+            return cop.confiscate(seat.id, msg.takings ?? {})
+          case 'copNext':
+            return cop.next(seat.id)
+          case 'pause':
+            return cop.pause(seat.id)
+          case 'resume':
+            return cop.resume(seat.id)
+          default:
+            return { ok: false as const, error: 'Unknown action.' }
+        }
+      })()
+      if (!outcome.ok) return fail(socket, outcome.error)
+      room.touch()
+      commit(room)
+      return
+    }
+
     // Everything below is a game action and needs a seat and a running game.
     if (!seat) return fail(socket, 'You are watching this game, not playing it.')
     const game = room.game
@@ -446,6 +475,10 @@ setInterval(() => {
       // Carnivals folds (or checks) for an absent bettor, and deals the next
       // hand when the table is idle on a showdown nobody has moved past.
       if (room.carn.timeOut().ok) room.touch()
+    } else if (room.cop) {
+      // COP settles whatever the round is waiting on: hides an absent thief, opens
+      // the Cop's doors, waves an unmade arrest through, or deals the next round.
+      if (room.cop.timeOut().ok) room.touch()
     }
     room.rearmTurnTimer()
     commit(room)

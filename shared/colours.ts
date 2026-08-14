@@ -22,6 +22,8 @@ export const PLAYER_COLOURS: Record<PlayerColour, ColourSet> = {
   purple: { fill: '#5b429e', ink: '#32235f', text: '#f1ecfb', label: 'Purple' },
   teal: { fill: '#1e6f86', ink: '#0f3f52', text: '#eaf4f8', label: 'Teal' },
   rose: { fill: '#a8336f', ink: '#651a41', text: '#fceef5', label: 'Rose' },
+  orange: { fill: '#c8632a', ink: '#803a13', text: '#fdf0e6', label: 'Orange' },
+  indigo: { fill: '#3d4a9c', ink: '#222c5f', text: '#eceefb', label: 'Indigo' },
 }
 
 /**
@@ -37,6 +39,8 @@ export const COLOUR_ORDER: readonly PlayerColour[] = [
   'purple',
   'teal',
   'rose',
+  'orange',
+  'indigo',
 ]
 
 /**

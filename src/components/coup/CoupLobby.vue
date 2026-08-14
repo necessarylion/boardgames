@@ -5,10 +5,11 @@ import CoupRulesDialog from './CoupRulesDialog.vue'
 import TurnClockOptions from '../common/TurnClockOptions.vue'
 import { PLAYER_COLOURS } from '@shared/colours'
 import { CHARACTERS } from '@shared/coup'
-import { MAX_PLAYERS, MIN_PLAYERS } from '@shared/types'
+import { MIN_PLAYERS, maxPlayersFor } from '@shared/types'
 import { t } from '@/i18n'
 import { useGameStore } from '@/stores/game'
 
+const maxSeats = maxPlayersFor('coup')
 const game = useGameStore()
 const copied = ref(false)
 const showRules = ref(false)
@@ -27,7 +28,7 @@ function setDice(diceStart: boolean) {
 }
 
 const seats = computed(() => game.coupPlayers)
-const emptySeats = computed(() => MAX_PLAYERS - seats.value.length)
+const emptySeats = computed(() => maxSeats - seats.value.length)
 const canStart = computed(() => game.isHost && seats.value.length >= MIN_PLAYERS)
 
 const shareLink = computed(() => `${location.origin}${location.pathname}?room=${game.coup?.code}`)
@@ -63,7 +64,7 @@ async function copyLink() {
         <h2>
           {{ t('lobby.players') }}
           <span class="tiny muted">
-            {{ t('lobby.seatCount', { seated: seats.length, max: MAX_PLAYERS }) }}
+            {{ t('lobby.seatCount', { seated: seats.length, max: maxSeats }) }}
           </span>
         </h2>
         <ul class="seats">

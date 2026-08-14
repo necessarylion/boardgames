@@ -27,6 +27,7 @@ const MASTHEAD = {
   halligalli: { title: 'landing.halli.name', tagline: 'home.halli.tagline', hint: 'home.halli.hostHint' },
   coup: { title: 'landing.coup.name', tagline: 'home.coup.tagline', hint: 'home.coup.hostHint' },
   carnivals: { title: 'landing.carnivals.name', tagline: 'home.carnivals.tagline', hint: 'home.carnivals.hostHint' },
+  cop: { title: 'landing.cop.name', tagline: 'home.cop.tagline', hint: 'home.cop.hostHint' },
 } as const
 
 const masthead = computed(() => MASTHEAD[kind.value])
@@ -75,17 +76,18 @@ function join() {
 
     <aside
       class="art"
-      :class="{ halli: kind === 'halligalli', coup: kind === 'coup', carnivals: kind === 'carnivals' }"
+      :class="{ halli: kind === 'halligalli', coup: kind === 'coup', carnivals: kind === 'carnivals', cop: kind === 'cop' }"
     >
       <img v-if="isSamurai" class="art-image" :src="mainBackground" alt="" />
       <div class="art-wash"></div>
       <header class="masthead">
         <span
           class="seal"
-          :class="{ fruits: kind === 'halligalli', crown: kind === 'coup', tent: kind === 'carnivals' }"
+          :class="{ fruits: kind === 'halligalli', crown: kind === 'coup', tent: kind === 'carnivals', siren: kind === 'cop' }"
         >
           <GameIcon v-if="kind === 'coup'" name="coup.duke" :size="22" />
           <template v-else-if="kind === 'carnivals'">🎪</template>
+          <template v-else-if="kind === 'cop'">🚔</template>
           <template v-else>{{ isSamurai ? '侍' : '🔔' }}</template>
         </span>
         <h1>{{ t(masthead.title) }}</h1>
@@ -167,9 +169,9 @@ function join() {
 
               <TurnClockOptions :seconds="turnSeconds" @pick="turnSeconds = $event" />
             </template>
-            <!-- Coup has no board or hand settings, but it does run a shot clock,
-                 so it gets that one control and nothing else. -->
-            <template v-else-if="kind === 'coup'">
+            <!-- Coup and COP have no board or hand settings, but they do run a
+                 shot clock, so they get that one control and nothing else. -->
+            <template v-else-if="kind === 'coup' || kind === 'cop'">
               <p v-if="masthead.hint" class="muted tiny host-hint">{{ t(masthead.hint) }}</p>
               <TurnClockOptions :seconds="turnSeconds" @pick="turnSeconds = $event" />
             </template>
@@ -251,6 +253,10 @@ function join() {
   background: linear-gradient(160deg, #a63a30 0%, #7a4a5e 50%, #2f5a86 100%);
 }
 
+.art.cop {
+  background: linear-gradient(160deg, #1e3a5f 0%, #3f4e63 50%, #b23a2c 100%);
+}
+
 .back {
   margin: 0 0 1rem !important;
 }
@@ -303,6 +309,11 @@ function join() {
 
 .seal.tent {
   background: linear-gradient(140deg, #a63a30, #2f5a86);
+  font-size: 1.5rem;
+}
+
+.seal.siren {
+  background: linear-gradient(140deg, #1e3a5f, #b23a2c);
   font-size: 1.5rem;
 }
 

@@ -3,7 +3,7 @@ import { Rng } from './rng'
 import type { LogEntry } from './types'
 
 /**
- * Carnivals — a card-and-betting game of hidden information for two to six,
+ * Carnivals — a card-and-betting game of hidden information for two to eight,
  * unrelated to Samurai, Halli Galli and Coup and sharing none of their rules.
  * Each hand a player holds two cards: a red one only they can see, and a blue
  * one only everyone *else* can see. You bet poker-style on a total you can never
@@ -70,11 +70,11 @@ export interface CarnivalPlayer {
   selected: boolean
   /** Has turned their own hand face up at the showdown. */
   revealed: boolean
-  /** Carnivals put into the pot this hand, ante included. */
+  /** Carnivals put into the pot this hand. */
   committed: number
   /** Folded out of the current hand, forfeiting whatever is already committed. */
   folded: boolean
-  /** Eliminated: no longer able to cover the ante, and out of the game for good. */
+  /** Eliminated: out of Carnivals, and out of the game for good. */
   out: boolean
 }
 
@@ -273,8 +273,8 @@ export function affordances(state: CarnivalGameState, playerId: number): Carniva
     raise: maxRaiseTo >= minRaiseTo,
     minRaiseTo,
     maxRaiseTo,
-    // Cannot cover the bet but has chips left: stay in for everything, and let
-    // the side pots settle who can win what at the showdown.
+    // Cannot cover the bet but has chips left: stay in for everything, knowing
+    // the best hand takes the whole pot and a loss here means going out.
     allIn: callAmount > 0 && player.carnivals > 0 && player.carnivals < callAmount,
     allInAmount: player.carnivals,
     fold: true,
@@ -441,11 +441,10 @@ export class CarnivalGame {
 
   /**
    * Put in everything you have left. A seat that cannot cover the bet stays in
-   * this way rather than folding: it can win only as much as it matched from
-   * each opponent, which the side pots work out at the showdown. Should the
-   * whole stack happen to clear the current bet, it counts as a raise and
-   * reopens the round; otherwise it is a short call that leaves the bet where it
-   * stood.
+   * this way rather than folding, but the best hand takes the whole pot, so an
+   * all-in that loses leaves nothing behind. Should the whole stack happen to
+   * clear the current bet, it counts as a raise and reopens the round; otherwise
+   * it is a short call that leaves the bet where it stood.
    */
   allIn(playerId: number): Outcome {
     const guard = this.guardBetting(playerId)
@@ -654,84 +653,50 @@ export class CarnivalGame {
   /**
    * Decide the winner(s) and pay out the pot. `shown` is whether the seats
    * turned their hands over — true at a real showdown, false when the pot was
-   * conceded by folds and nobody had to reveal.
-   *
-   * The pot is settled in layers so an all-in seat can win only as much as it
-   * matched. Each layer is peeled off at the smallest live commitment: every
-   * seat that put in at least that much shares the layer, folded seats fund it
-   * as dead money, and only the seats still in the hand can win it. In the
-   * ordinary hand, where nobody is short, this collapses to a single pot and one
-   * best hand takes the lot.
+   * conceded by folds and nobody had to reveal. The winner takes the whole pot:
+   * this game pays no side pots, so an all-in loser keeps nothing.
    */
   private resolvePot(shown: boolean): void {
     const s = this.state
     const inHand = contesting(s.players)
-    // A hand is contested once two seats are still in it. When only one is — the
-    // rest folded — nobody's bet was really "uncalled", so the sole seat simply
-    // takes the whole pot rather than having its own excess handed back.
-    const contested = inHand.length >= 2
+    const pot = s.pot
 
-    // Every seat's committed chips, to be peeled into layers below.
-    const remaining = new Map<number, number>()
-    for (const p of s.players) if (p.committed > 0) remaining.set(p.id, p.committed)
-
+    // The winner receives every Carnival in the pot — there are no side pots. The
+    // best hand still in takes the lot, so a seat that goes all in and loses is
+    // left with nothing and drops out. A true tie (same total and same high card)
+    // splits it, with the odd Carnivals going to the seats nearest the top.
     const shares: Record<number, number> = {}
-    const award = (amount: number, eligibleIds: number[]) => {
-      // The best hand among the seats entitled to this layer; a true tie splits
-      // it, and the odd Carnivals that will not divide go to the seats nearest
-      // the top. Ranking breaks a level total by the higher single card, so only
-      // matching pairs share.
-      const eligible = eligibleIds.length ? eligibleIds : inHand.map((p) => p.id)
-      const best = Math.max(...eligible.map((id) => handRank(s.players[id])))
-      const winners = eligible.filter((id) => handRank(s.players[id]) === best).sort((a, b) => a - b)
-      const each = Math.floor(amount / winners.length)
-      let remainder = amount - each * winners.length
-      for (const id of winners) {
+    const winners: number[] = []
+    if (pot > 0 && inHand.length > 0) {
+      const best = Math.max(...inHand.map((p) => handRank(p)))
+      const won = inHand
+        .filter((p) => handRank(p) === best)
+        .map((p) => p.id)
+        .sort((a, b) => a - b)
+      const each = Math.floor(pot / won.length)
+      let remainder = pot - each * won.length
+      for (const id of won) {
         const extra = remainder > 0 ? 1 : 0
         remainder -= extra
-        const won = each + extra
-        shares[id] = (shares[id] ?? 0) + won
-        s.players[id].carnivals += won
+        const amount = each + extra
+        shares[id] = amount
+        s.players[id].carnivals += amount
+        winners.push(id)
       }
     }
 
-    while ([...remaining.values()].some((v) => v > 0)) {
-      const positive = [...remaining.entries()].filter(([, v]) => v > 0)
-      const layer = Math.min(...positive.map(([, v]) => v))
-      let amount = 0
-      for (const [id, v] of positive) {
-        remaining.set(id, v - layer)
-        amount += layer
-      }
-      const contributors = positive.map(([id]) => id)
-      const inHandContribs = contributors.filter((id) => inHand.some((p) => p.id === id))
-      // A layer only one seat reached is an uncalled bet: nobody matched it, so
-      // it is returned to its better rather than won. This is what stops a bigger
-      // stack being paid for chips no one could ever cover — the returned amount
-      // is not winnings, so the seat is not counted among the pot's winners.
-      if (contested && contributors.length === 1 && inHandContribs.length === 1) {
-        s.players[inHandContribs[0]].carnivals += amount
-        continue
-      }
-      award(amount, inHandContribs)
-    }
-
-    const winners = Object.keys(shares)
-      .map(Number)
-      .sort((a, b) => a - b)
-    const won = winners.reduce((sum, id) => sum + shares[id], 0)
     const reveals: CarnivalReveal[] = shown
       ? inHand.map((p) => ({ player: p.id, red: p.red!, blue: p.blue!, total: p.red! + p.blue! }))
       : []
 
-    s.roundResult = { hand: s.handNumber, reveals, winners, pot: won, shares, byFold: !shown }
-    s.lastEvent = { kind: 'showdown', winners, pot: won }
+    s.roundResult = { hand: s.handNumber, reveals, winners, pot, shares, byFold: !shown }
+    s.lastEvent = { kind: 'showdown', winners, pot }
     if (winners.length === 0) {
       // Nobody bet a thing, so there is no pot to award — the hand is checked down.
       this.log(null, 'The hand is checked down — no pot.')
     } else {
       const names = winners.map((id) => this.name(id)).join(', ')
-      this.log(null, `${names} ${winners.length > 1 ? 'share' : 'takes'} the pot of ${won} Carnivals.`)
+      this.log(null, `${names} ${winners.length > 1 ? 'share' : 'takes'} the pot of ${pot} Carnivals.`)
     }
   }
 
@@ -752,6 +717,10 @@ export class CarnivalGame {
     s.step = 'selecting'
 
     for (const p of s.players) {
+      // Clear the committed chips for everyone, out seats included — an eliminated
+      // seat that kept its last bet would otherwise have that stale amount peeled
+      // back into a later pot and minted out of nothing.
+      p.committed = 0
       if (p.out) continue
       // Each colour is a shuffled full suit, so the ten face-down cards are the
       // numbers one to ten in some order — a real choice of card, blind.
@@ -762,7 +731,6 @@ export class CarnivalGame {
       p.selected = false
       p.revealed = false
       p.folded = false
-      p.committed = 0
     }
     s.seed = rng.position
     s.current = dealer

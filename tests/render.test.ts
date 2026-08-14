@@ -13,7 +13,10 @@ import { Room } from '../server/rooms'
 import type { ClientState } from '../shared/protocol'
 import { legalPlacements } from '../shared/rules'
 import { tileFromId } from '../shared/tiles'
-import { MAX_PLAYERS } from '../shared/types'
+import { maxPlayersFor } from '../shared/types'
+
+/** Samurai's own ceiling — its lobby lays out this many seats, not the palette's. */
+const SAMURAI_MAX = maxPlayersFor('samurai')
 import { useGameStore } from '../src/stores/game'
 
 /** These rooms all play Samurai, so read their state as a Samurai ClientState. */
@@ -112,8 +115,8 @@ describe('rendering', () => {
     expect(wrapper.text()).toContain('TEST')
     expect(wrapper.text()).toContain('Takeda')
     expect(wrapper.text()).toContain('Uesugi')
-    expect(wrapper.findAll('.seat')).toHaveLength(MAX_PLAYERS)
-    expect(wrapper.findAll('.seat.empty')).toHaveLength(MAX_PLAYERS - 2)
+    expect(wrapper.findAll('.seat')).toHaveLength(SAMURAI_MAX)
+    expect(wrapper.findAll('.seat.empty')).toHaveLength(SAMURAI_MAX - 2)
   })
 
   it('renders the board, every space and both hands from server state', () => {

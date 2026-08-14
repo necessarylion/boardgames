@@ -2,6 +2,8 @@
 import { computed, onMounted } from 'vue'
 import CarnivalGameScreen from './components/carnivals/CarnivalGameScreen.vue'
 import CarnivalLobby from './components/carnivals/CarnivalLobby.vue'
+import CopGameScreen from './components/cop/CopGameScreen.vue'
+import CopLobby from './components/cop/CopLobby.vue'
 import CoupGameScreen from './components/coup/CoupGameScreen.vue'
 import CoupLobby from './components/coup/CoupLobby.vue'
 import DiceRoll from './components/common/DiceRoll.vue'
@@ -83,6 +85,11 @@ onMounted(() => game.connect())
     <template v-else-if="game.kind === 'carnivals'">
       <CarnivalLobby v-if="game.phase === 'lobby'" />
       <CarnivalGameScreen v-else />
+    </template>
+
+    <template v-else-if="game.kind === 'cop'">
+      <CopLobby v-if="game.phase === 'lobby'" />
+      <CopGameScreen v-else />
     </template>
 
     <LobbyScreen v-else-if="game.phase === 'lobby'" />

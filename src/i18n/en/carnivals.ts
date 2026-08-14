@@ -7,7 +7,7 @@ export const enCarnivals = {
   // --- landing (choose a game) ----------------------------------------------
   'landing.carnivals.name': 'Carnivals',
   'landing.carnivals.blurb': 'Bet on a hand you can only half see — your own red, and everyone else’s blue.',
-  'landing.carnivals.meta': '2–6 players · betting',
+  'landing.carnivals.meta': '2–8 players · betting',
 
   // --- home ------------------------------------------------------------------
   'home.carnivals.tagline':
@@ -111,7 +111,7 @@ export const enCarnivals = {
   'carnival.rules.bet.ante': 'There is no ante: the pot starts empty and grows only as the table bets.',
   'carnival.rules.bet.actions': 'On your turn check, bet or raise (by at least {raise}), call or fold.',
   'carnival.rules.bet.close': 'Betting ends once everyone still in has matched the bet or folded.',
-  'carnival.rules.bet.stakes': 'Table stakes: you can only bet what is in front of you. If you cannot cover a bet you may go all in for the rest — a side pot then keeps your winnings to what you matched.',
+  'carnival.rules.bet.stakes': 'Table stakes: you can only bet what is in front of you. If you cannot cover a bet you may go all in for the rest — but the best hand takes the whole pot, so going all in and losing puts you out.',
   'carnival.rules.scoring': 'Winning the pot',
   'carnival.rules.score.total': 'Your score is your red plus your blue. The highest score among those still in wins the pot.',
   'carnival.rules.score.tie': 'Equal totals are broken by the higher single card; only two matching pairs split the pot.',

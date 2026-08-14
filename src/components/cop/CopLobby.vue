@@ -1,26 +1,21 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import CopToken from './CopToken.vue'
+import { RESOURCES } from '@shared/cop'
 import { PLAYER_COLOURS } from '@shared/colours'
 import { MIN_PLAYERS, maxPlayersFor } from '@shared/types'
 import { t } from '@/i18n'
 import { useGameStore } from '@/stores/game'
 
-const maxSeats = maxPlayersFor('halligalli')
+const maxSeats = maxPlayersFor('cop')
 const game = useGameStore()
 const copied = ref(false)
 
-/** Host only, and only before the deal — the seat is drawn when cards are dealt. */
-function setDice(diceStart: boolean) {
-  const options = game.halli?.options
-  if (!options || !game.isHost) return
-  game.setOptions({ ...options, diceStart })
-}
-
-const seats = computed(() => game.hgPlayers)
+const seats = computed(() => game.copPlayers)
 const emptySeats = computed(() => maxSeats - seats.value.length)
 const canStart = computed(() => game.isHost && seats.value.length >= MIN_PLAYERS)
 
-const shareLink = computed(() => `${location.origin}${location.pathname}?room=${game.halli?.code}`)
+const shareLink = computed(() => `${location.origin}${location.pathname}?room=${game.cop?.code}`)
 
 async function copyLink() {
   try {
@@ -38,7 +33,7 @@ async function copyLink() {
     <header class="head">
       <div>
         <p class="tiny muted">{{ t('lobby.roomCode') }}</p>
-        <h1 class="code">{{ game.halli?.code }}</h1>
+        <h1 class="code">{{ game.cop?.code }}</h1>
       </div>
       <div class="share">
         <button class="btn ghost small" @click="copyLink">
@@ -66,7 +61,7 @@ async function copyLink() {
               }"
             />
             <span class="seat-name">{{ seat.name }}</span>
-            <span v-if="seat.id === game.halli?.hostId" class="badge">{{ t('lobby.badge.host') }}</span>
+            <span v-if="seat.id === game.cop?.hostId" class="badge">{{ t('lobby.badge.host') }}</span>
             <span v-if="seat.id === game.you" class="badge you">{{ t('lobby.badge.you') }}</span>
             <span v-if="!seat.connected" class="badge away">{{ t('lobby.badge.away') }}</span>
           </li>
@@ -78,29 +73,18 @@ async function copyLink() {
       </section>
 
       <section class="panel block">
-        <h2>{{ t('halli.lobby.how') }}</h2>
+        <h2>{{ t('cop.lobby.how') }}</h2>
         <ol class="rules">
-          <li>{{ t('halli.rule.flip') }}</li>
-          <li>{{ t('halli.rule.ring') }}</li>
-          <li>{{ t('halli.rule.win') }}</li>
-          <li>{{ t('halli.rule.false') }}</li>
-          <li>{{ t('halli.rule.out') }}</li>
+          <li>{{ t('cop.rule.roles') }}</li>
+          <li>{{ t('cop.rule.hide') }}</li>
+          <li>{{ t('cop.rule.search') }}</li>
+          <li>{{ t('cop.rule.loot') }}</li>
+          <li>{{ t('cop.rule.win') }}</li>
         </ol>
 
         <hr class="rule" />
 
-        <label class="check">
-          <input
-            type="checkbox"
-            :checked="game.halli?.options.diceStart ?? true"
-            :disabled="!game.isHost"
-            @change="setDice(($event.target as HTMLInputElement).checked)"
-          />
-          <span>
-            {{ t('option.diceStart') }}
-            <em class="tiny muted">{{ t('option.diceStart.hint') }}</em>
-          </span>
-        </label>
+        <p v-if="!game.isHost" class="tiny muted">{{ t('lobby.hostOnly') }}</p>
 
         <button class="btn wide" :disabled="!canStart" @click="game.startGame()">
           {{ game.isHost ? t('lobby.start') : t('lobby.waitingHost') }}
@@ -108,6 +92,17 @@ async function copyLink() {
         <p v-if="game.isHost && seats.length < MIN_PLAYERS" class="tiny muted centre">
           {{ t('lobby.needTwo') }}
         </p>
+      </section>
+
+      <section class="panel block wide-panel">
+        <h2>{{ t('cop.lobby.resources') }}</h2>
+        <div class="tokens">
+          <span v-for="r in RESOURCES" :key="r" class="legend">
+            <CopToken :resource="r" />
+            <span class="tiny muted">{{ t(`cop.resource.${r}`) }}</span>
+          </span>
+        </div>
+        <p class="tiny muted note">{{ t('cop.lobby.start') }}</p>
       </section>
     </div>
   </div>
@@ -232,6 +227,29 @@ h2 {
 .wide {
   width: 100%;
   margin-top: 0.5rem;
+}
+
+.wide-panel {
+  grid-column: 1 / -1;
+}
+
+.tokens {
+  display: flex;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.legend {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.note {
+  text-align: center;
+  margin: 0.8rem 0 0;
 }
 
 .centre {
