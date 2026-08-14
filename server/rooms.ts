@@ -281,6 +281,12 @@ export class Room {
   start(): string | null {
     if (this.started) return 'The game has already started.'
     if (this.seats.length < MIN_PLAYERS) return 'At least two players are needed.'
+    // A lobby can fill to eight for a card game and then switch to Samurai, whose
+    // engine seats only six — refuse rather than letting new Game() throw.
+    const seatCap = maxPlayersFor(this.options.kind)
+    if (this.seats.length > seatCap) {
+      return `This game seats at most ${seatCap} players. Remove players or pick another game.`
+    }
     const teams = this.teamsError(this.seats.length)
     if (teams) return teams
     this.deal()

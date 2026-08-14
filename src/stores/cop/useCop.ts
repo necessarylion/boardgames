@@ -91,8 +91,8 @@ export function createCop(ctx: CopContext) {
 
   /**
    * Nudge one resource of one caught thief's confiscation up or down. Bounded by
-   * the four-resource cap and by what the thief actually holds — the Cop sees a
-   * caught thief's loot during the arrest, so a take can never exceed it.
+   * CONFISCATE_LIMIT and by what the thief actually holds — the Cop sees a caught
+   * thief's loot during the arrest, so a take can never exceed it.
    */
   function copAdjustTake(playerId: number, resource: keyof Loot, delta: number) {
     const take = { ...(copTakings.value[playerId] ?? emptyLoot()) }

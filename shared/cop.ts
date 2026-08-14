@@ -342,9 +342,9 @@ export class CopGame {
 
   /**
    * Strip the caught thieves. `takings` gives, per caught seat, the resources the
-   * Cop demands — up to four in total from each. The Cop never sees a catch's
-   * holdings (nobody sees another player's resources until the game is over), so
-   * the demand is made blind: asking for more of a resource than a thief carries
+   * Cop demands — up to `CONFISCATE_LIMIT` in total from each. A caught thief's
+   * holdings are revealed to the Cop for the arrest (see `copStateFor`), so the
+   * demand is made in the open: asking for more of a resource than a thief carries
    * simply takes all they have of it. A seat left out, or an empty entry, is let
    * off. Whatever is taken is added to the Cop's own pile.
    */
@@ -359,8 +359,8 @@ export class CopGame {
 
     const caught = new Set(result.caught)
     // Validate the whole demand before taking a single resource, so a bad entry
-    // cannot leave a thief half-stripped. Only the four-resource cap is checked;
-    // the holdings are not, because the Cop cannot see them.
+    // cannot leave a thief half-stripped. The Cop can see the caught loot here,
+    // so the CONFISCATE_LIMIT clamp is only a safety net against an over-demand.
     for (const [key, take] of Object.entries(takings)) {
       const id = Number(key)
       if (!caught.has(id)) return fail('That thief was not caught.')

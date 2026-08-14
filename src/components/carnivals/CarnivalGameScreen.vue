@@ -334,7 +334,7 @@ watch(
         <!-- The pot, in the middle of the table. -->
         <div ref="potEl" class="pot" :class="{ swept: resolved }">
           <span class="pot-label tiny">{{ t('carnival.pot') }}</span>
-          <span class="pot-amount"><CarnivalCoin :size="20" />{{ money(pot) }}</span>
+          <span class="pot-amount"><CarnivalCoin :size="20" />{{ money(resolved ? 0 : pot) }}</span>
           <span v-if="currentBet > 0" class="tiny muted">{{ t('carnival.currentBet', { n: currentBet }) }}</span>
         </div>
 
