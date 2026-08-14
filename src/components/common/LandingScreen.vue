@@ -76,7 +76,6 @@ function pick(kind: GameKind) {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
   gap: 2rem;
   padding: clamp(2rem, 6vw, 4rem) 1.25rem;
   text-align: center;
