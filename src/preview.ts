@@ -71,7 +71,9 @@ const state: ClientState = {
   playerCount,
   pieces: s.pieces,
   placed: s.placed,
-  current: s.current,
+  // The harness always sits on your own seat, so the hand renders live and a
+  // tile can be picked up and flown onto the board by hand.
+  current: 0,
   turnNumber: s.turnNumber,
   placedThisTurn: s.placedThisTurn,
   lastPlaced: s.lastPlaced,
@@ -113,6 +115,43 @@ app.mount('#app')
 // it has to be posed rather than played out.
 const posed = new URLSearchParams(location.search).get('captured')
 if (posed) store.capturedNotice = posed.split(',') as Caste[]
+
+/*
+ * Captures are the one animation the harness cannot reach by clicking: they are
+ * watched off a *second* state, the one a turn end produces, and the harness
+ * only ever hands the store its first. So pose one — take the pieces off the
+ * board, bank them, and name them in `lastCaptures`, which is what the flight to
+ * the tally reads.
+ *
+ * ?capture=N on the URL fires it once the table has settled; the "c" key fires
+ * it again, so the flight can be watched more than once without a reload.
+ *
+ * Every third piece goes uncontested to nobody, so both destinations in the
+ * header — the caste tally and the set-aside chip — get flown to.
+ */
+function poseCapture(count: number) {
+  const posed = store.state
+  if (!posed) return
+  const taken: { caste: Caste; spaceId: string; winner: number | null }[] = []
+  for (const [spaceId, list] of Object.entries(posed.pieces)) {
+    if (taken.length >= count) break
+    if (!list.length) continue
+    taken.push({ caste: list[list.length - 1], spaceId, winner: taken.length % 3 === 2 ? null : 0 })
+  }
+  for (const capture of taken) {
+    posed.pieces[capture.spaceId].pop()
+    if (capture.winner === null) posed.setAside.push(capture.caste)
+  }
+  posed.lastCaptures = taken
+  // What the watch keys off: without a new turn the state reads as a re-broadcast.
+  posed.turnNumber += 1
+}
+
+const captureCount = Number(new URLSearchParams(location.search).get('capture') ?? 0)
+if (captureCount > 0) setTimeout(() => poseCapture(captureCount), 900)
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'c') poseCapture(captureCount || 2)
+})
 
 // ?zoom=N scrolls the board in by N wheel notches at the given ?at=x,y, so a
 // zoomed view can be captured without a pointer.
