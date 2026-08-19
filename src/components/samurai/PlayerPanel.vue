@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import GameIcon from '../common/GameIcon.vue'
 import { CASTE_COLOURS, PLAYER_COLOURS } from '@shared/colours'
+import { PLAYER_BACKGROUNDS } from '@/game/backgrounds'
 import { setAsideLimit } from '@shared/rules'
 import { ref, watch } from 'vue'
 import { CASTES, type Caste } from '@shared/types'
@@ -126,13 +127,16 @@ function capturedCounts(captured: Caste[] | null): Record<Caste, number> | null 
           :key="player.id"
           class="player"
           :class="{ active: player.id === game.state?.current, offline: !player.connected }"
-          :style="{ '--accent': PLAYER_COLOURS[player.colour].ink }"
+          :style="{
+            '--accent': PLAYER_COLOURS[player.colour].ink,
+            '--cloth': `url(${PLAYER_BACKGROUNDS[player.colour]})`,
+          }"
         >
           <div class="player-head">
             <span
               class="swatch"
               :style="{
-                background: PLAYER_COLOURS[player.colour].fill,
+                backgroundColor: PLAYER_COLOURS[player.colour].fill,
                 borderColor: PLAYER_COLOURS[player.colour].ink,
               }"
             />
@@ -251,9 +255,15 @@ h3 {
 
 /* Ruled rows, not cards. The seat colour stays as a stripe on the leading edge,
    which is the only border a row carries. */
+/* The seat's cloth runs under the row, washed out far enough that the stats stay
+   the thing you read. `--paper` is the wash, so the active row only has to
+   retint it rather than replace the whole background. */
 .player {
+  --paper: rgba(253, 250, 242, 0.82);
   padding: 0.5rem 0.6rem;
   border-left: 4px solid var(--accent);
+  background-image: linear-gradient(var(--paper), var(--paper)), var(--cloth);
+  background-size: cover;
 }
 
 .player + .player {
@@ -261,7 +271,7 @@ h3 {
 }
 
 .player.active {
-  background: rgba(246, 223, 180, 0.55);
+  --paper: rgba(246, 223, 180, 0.72);
 }
 
 .player.offline {
@@ -284,6 +294,8 @@ h3 {
   border-radius: 3px;
   border: 2px solid;
   flex: none;
+  background-image: var(--cloth);
+  background-size: cover;
 }
 
 .badge {

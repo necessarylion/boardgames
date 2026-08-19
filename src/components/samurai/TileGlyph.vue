@@ -2,6 +2,7 @@
 import { computed, useId } from 'vue'
 import GameIcon from '../common/GameIcon.vue'
 import { CASTE_COLOURS, PLAYER_COLOURS } from '@shared/colours'
+import { PLAYER_BACKGROUNDS } from '@/game/backgrounds'
 import { hexPolygon } from '@shared/hex'
 import type { PlayerColour, Tile } from '@shared/types'
 
@@ -33,8 +34,14 @@ const bevel = computed(() => hexPolygon(centre.value, props.size * 0.875))
  * moment the svg that defined it unmounted — hence the per-instance id.
  */
 const weaveId = `tile-weave-${useId()}`
-/** Thread spacing. Fine enough to read as cloth rather than as a grid. */
-const pitch = computed(() => props.size * 0.15)
+const cloth = computed(() => PLAYER_BACKGROUNDS[props.colour])
+/**
+ * One cell is wider than the hex, so a tile shows a single uncut crop of the
+ * cloth rather than a visible repeat. The pattern origin is the svg's, not the
+ * tile's, so neighbouring hexes land on different parts of the weave — which is
+ * what stops a board of one colour looking stamped.
+ */
+const cell = computed(() => props.size * 2.4)
 
 /** Which pictogram sits on the tile's left-hand side. */
 const iconName = computed(() =>
@@ -70,19 +77,17 @@ const iconCentre = computed(() => ({
 
 <template>
   <g>
-    <!-- Warp and weft, crossing at 45° so the tile reads as cloth. Where the two
-         threads overlap the ink doubles up, which is what gives the weave. -->
+    <!-- A photograph of the seat's cloth. The flat fill sits behind it so a tile
+         still reads as its colour if the image has not loaded. -->
     <defs>
-      <pattern
-        :id="weaveId"
-        patternUnits="userSpaceOnUse"
-        :width="pitch"
-        :height="pitch"
-        patternTransform="rotate(45)"
-      >
-        <rect :width="pitch" :height="pitch" :fill="palette.fill" />
-        <rect :width="pitch" :height="pitch * 0.34" :fill="palette.ink" opacity="0.15" />
-        <rect :width="pitch * 0.34" :height="pitch" :fill="palette.ink" opacity="0.15" />
+      <pattern :id="weaveId" patternUnits="userSpaceOnUse" :width="cell" :height="cell">
+        <rect :width="cell" :height="cell" :fill="palette.fill" />
+        <image
+          :href="cloth"
+          :width="cell"
+          :height="cell"
+          preserveAspectRatio="xMidYMid slice"
+        />
       </pattern>
     </defs>
     <polygon
