@@ -36,7 +36,7 @@ Run one test file: `bunx vitest run tests/rules.test.ts`. One case: `bunx vitest
 
 `tests/integration.test.ts` spawns a real server via `bun server/index.ts` on port 8899 and drives two scripted WebSocket clients through a whole game — it is slow and needs that port free. `render.test.ts` and `panzoom.test.ts` opt into jsdom with a per-file `// @vitest-environment jsdom` comment; there is no vitest config block, so everything else runs in node. Vitest reads `vite.config.ts`, so the `@` and `@shared` aliases work in tests too.
 
-There is a dev-only visual harness at `http://localhost:5173/dev-preview.html?players=4&turns=30` (`&shape=circle` to pick a map, `&zoom=4&at=0.45,0.55` to inspect the zoomed view, `&capture=2` — or the `c` key — to pose a turn end so the capture flight to the header plays). It simulates a game locally via `src/preview.ts`, so the table can be checked without a server or four browsers.
+There is a dev-only visual harness at `http://localhost:5173/dev-preview.html?players=4&turns=30` (`&shape=circle` to pick a map, `&zoom=4&at=0.45,0.55` to inspect the zoomed view, `&capture=2` — or the `c` key — to pose a turn end so the capture flights to the seats that took the pieces play). It simulates a game locally via `src/preview.ts`, so the table can be checked without a server or four browsers.
 
 ## Architecture
 

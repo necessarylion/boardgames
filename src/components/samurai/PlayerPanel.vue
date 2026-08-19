@@ -68,6 +68,7 @@ function capturedCounts(captured: Caste[] | null): Record<Caste, number> | null 
         <li
           v-for="player in game.players"
           :key="player.id"
+          :data-seat="player.id"
           class="player"
           :class="{ active: player.id === game.state?.current, offline: !player.connected }"
           :style="{
@@ -106,7 +107,7 @@ function capturedCounts(captured: Caste[] | null): Record<Caste, number> | null 
           >
             <span class="counts">{{ player.handCount }}/{{ player.stackCount }}</span>
             <ul v-if="capturedCounts(player.captured)" class="captured">
-              <li v-for="caste in CASTES" :key="caste">
+              <li v-for="caste in CASTES" :key="caste" :data-seat-caste="`${player.id}:${caste}`">
                 <GameIcon :name="caste" :size="13" />
                 <span>{{ capturedCounts(player.captured)![caste] }}</span>
               </li>

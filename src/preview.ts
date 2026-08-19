@@ -136,11 +136,15 @@ function poseCapture(count: number) {
   for (const [spaceId, list] of Object.entries(posed.pieces)) {
     if (taken.length >= count) break
     if (!list.length) continue
-    taken.push({ caste: list[list.length - 1], spaceId, winner: taken.length % 3 === 2 ? null : 0 })
+    // Round the table rather than all to one seat, so each flight has its own row
+    // to land on, and every third piece is contested and goes to nobody.
+    const winner = taken.length % 3 === 2 ? null : taken.length % playerCount
+    taken.push({ caste: list[list.length - 1], spaceId, winner })
   }
   for (const capture of taken) {
     posed.pieces[capture.spaceId].pop()
     if (capture.winner === null) posed.setAside.push(capture.caste)
+    else posed.players[capture.winner].captured?.push(capture.caste)
   }
   posed.lastCaptures = taken
   // What the watch keys off: without a new turn the state reads as a re-broadcast.

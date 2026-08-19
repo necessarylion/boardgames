@@ -82,10 +82,14 @@ watch(
 )
 
 /**
- * Captured pieces fly off the board to the tally that has just counted them
- * down. The header is the only place the board's loss shows up, and a turn that
- * surrounds a city can take three at once with nothing on screen saying where
- * they went — or, for a contested one, that it left the game entirely.
+ * Captured pieces fly off the board to whoever took them, and a contested one to
+ * the set-aside chip in the header, which is where it really goes. A turn that
+ * surrounds a city can take three pieces at once, and nothing on screen said who
+ * had them — the flight is the only thing that names the winner as it happens.
+ *
+ * Where in the seat's row depends on what that seat is allowed to show: an open
+ * table counts each caste separately, a closed one keeps a single total. The
+ * header tally is the last resort, for a table playing with the sidebar shut.
  *
  * Keyed on the same turn identity the capture notice uses: `lastCaptures` is
  * rewritten only at a turn end, so a re-broadcast mid-turn must not replay it,
@@ -93,7 +97,8 @@ watch(
  * baseline rather than flying a capture that happened before it arrived.
  *
  * `flush: 'post'` because both ends are read out of the DOM this state renders:
- * a set-aside chip is hidden until its first piece lands in it.
+ * a set-aside chip is hidden until its first piece lands in it, and a seat's
+ * caste count only appears once it has one.
  *
  * A piece disc is 0.68 of the hex's circumradius across and the hex itself is
  * √3 of it, so the piece covers a little under two fifths of a hex on screen —
@@ -102,20 +107,30 @@ watch(
 const PIECE_OF_HEX = 0.39
 const CAPTURE_STAGGER_MS = 110
 
+/** Laid out, rather than merely present: the topbar tallies go on a narrow table. */
+const shown = (el: Element | null) => (el?.getBoundingClientRect().width ? el : null)
+
 watch(
   () => (game.state ? `${game.state.turnNumber}:${game.state.current}` : null),
   (key, previous) => {
     if (key === null || previous === null || previous === undefined) return
     const captures = game.state?.lastCaptures ?? []
     captures.forEach((capture, i) => {
+      const pick = (selector: string) => shown(document.querySelector(selector))
       const disc = document.querySelector(`[data-caste="${capture.caste}"]`)
+      const to =
+        capture.winner === null
+          ? pick(`[data-set-aside="${capture.caste}"]`)
+          : pick(`[data-seat-caste="${capture.winner}:${capture.caste}"]`) ??
+            pick(`[data-seat="${capture.winner}"] .captured-hidden`) ??
+            pick(`[data-seat="${capture.winner}"]`)
+      // A disc off the header if there is one, else whatever it is landing on.
+      const node = shown(disc) ?? to
+      if (!node) return
       flyGhost({
-        node: disc,
+        node,
         from: document.querySelector(`[data-space="${capture.spaceId}"]`),
-        to:
-          capture.winner === null
-            ? document.querySelector(`[data-set-aside="${capture.caste}"]`)
-            : disc,
+        to: to ?? disc,
         startFit: PIECE_OF_HEX,
         delay: i * CAPTURE_STAGGER_MS,
         pulse: true,
