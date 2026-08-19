@@ -100,6 +100,17 @@ const setAsideMax = computed(() => setAsideLimit(game.state?.playerCount ?? 0))
   backdrop-filter: blur(2px);
 }
 
+/* Rules are read, not glanced at — the display face is left to the headings,
+   which pick it back up from `--font-display`, and to the names of the pieces. */
+.sheet {
+  font-family: var(--font-body);
+}
+
+.castes strong {
+  font-family: var(--font-display);
+  font-weight: 400;
+}
+
 /* The one place a card survives — it floats over the board, so it keeps the
    lift. Inside it is ruled like every other screen. The header is a fixed row
    and only the body scrolls, so the Close button never leaves the top. */

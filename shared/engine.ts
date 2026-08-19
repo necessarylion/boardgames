@@ -223,9 +223,17 @@ export class Game {
       // Fast tiles are held back from the deal. They cost no placement, so a
       // hand of them can be emptied in a single turn — nobody drafting their
       // own hand would open that way, and a random deal should not force it.
+      // Switch and move go with them because both act on tiles already placed,
+      // so on the opening round there is nothing for either to work on; move is
+      // not a fast tile, so it needs holding back by kind rather than by cost.
       // They stay in the stack in their shuffled order and come up on the draw.
       for (const player of players) {
-        const dealt = player.stack.filter((id) => !tileFromId(id).fast).slice(0, STARTING_HAND_SIZE)
+        const dealt = player.stack
+          .filter((id) => {
+            const tile = tileFromId(id)
+            return !tile.fast && tile.kind !== 'switch' && tile.kind !== 'move'
+          })
+          .slice(0, STARTING_HAND_SIZE)
         for (const id of dealt) player.stack.splice(player.stack.indexOf(id), 1)
         player.hand = dealt
       }

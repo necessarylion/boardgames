@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref, watch } from 'vue'
 import BoardView from './BoardView.vue'
+import GameIcon from '../common/GameIcon.vue'
 import CaptureDialog from './CaptureDialog.vue'
 import GameOverDialog from './GameOverDialog.vue'
 import HandBar from './HandBar.vue'
@@ -9,13 +10,35 @@ import PlayerPanel from './PlayerPanel.vue'
 import RulesDialog from './RulesDialog.vue'
 import TableMenu from '../common/TableMenu.vue'
 import TurnClock from './TurnClock.vue'
-import { PLAYER_COLOURS } from '@shared/colours'
-import { t } from '@/i18n'
+import { CASTE_COLOURS, PLAYER_COLOURS } from '@shared/colours'
+import { CASTES, type Caste } from '@shared/types'
+import { casteName, castePiece, t } from '@/i18n'
+import { flyGhost } from '@/composables/useFlight'
+import { setAsideLimit } from '@shared/rules'
 import { useGameStore } from '@/stores/game'
 
 const game = useGameStore()
 const showRules = ref(false)
-const showSidebar = ref(false)
+/** Wide enough for the 20rem column to cost nothing, so it starts open there. */
+const showSidebar = ref(window.innerWidth > 900)
+
+/** Caste pieces still standing on the board. */
+const remaining = computed(() => {
+  const counts: Record<Caste, number> = { buddha: 0, rice: 0, castle: 0 }
+  for (const list of Object.values(game.state?.pieces ?? {})) {
+    for (const caste of list) counts[caste]++
+  }
+  return counts
+})
+
+/** Pieces lifted off the board undecided; the limit is one of the two endings. */
+const setAsideCounts = computed(() => {
+  const counts: Record<Caste, number> = { buddha: 0, rice: 0, castle: 0 }
+  for (const caste of game.state?.setAside ?? []) counts[caste]++
+  return counts
+})
+
+const setAsideMax = computed(() => setAsideLimit(game.state?.playerCount ?? 0))
 
 const turnLabel = computed(() => {
   if (game.phase === 'over') return t('game.over')
@@ -58,13 +81,57 @@ watch(
   { immediate: true },
 )
 
+/**
+ * Captured pieces fly off the board to the tally that has just counted them
+ * down. The header is the only place the board's loss shows up, and a turn that
+ * surrounds a city can take three at once with nothing on screen saying where
+ * they went — or, for a contested one, that it left the game entirely.
+ *
+ * Keyed on the same turn identity the capture notice uses: `lastCaptures` is
+ * rewritten only at a turn end, so a re-broadcast mid-turn must not replay it,
+ * and a client reconnecting into a game in progress takes its first state as a
+ * baseline rather than flying a capture that happened before it arrived.
+ *
+ * `flush: 'post'` because both ends are read out of the DOM this state renders:
+ * a set-aside chip is hidden until its first piece lands in it.
+ *
+ * A piece disc is 0.68 of the hex's circumradius across and the hex itself is
+ * √3 of it, so the piece covers a little under two fifths of a hex on screen —
+ * whatever the board is zoomed to.
+ */
+const PIECE_OF_HEX = 0.39
+const CAPTURE_STAGGER_MS = 110
+
+watch(
+  () => (game.state ? `${game.state.turnNumber}:${game.state.current}` : null),
+  (key, previous) => {
+    if (key === null || previous === null || previous === undefined) return
+    const captures = game.state?.lastCaptures ?? []
+    captures.forEach((capture, i) => {
+      const disc = document.querySelector(`[data-caste="${capture.caste}"]`)
+      flyGhost({
+        node: disc,
+        from: document.querySelector(`[data-space="${capture.spaceId}"]`),
+        to:
+          capture.winner === null
+            ? document.querySelector(`[data-set-aside="${capture.caste}"]`)
+            : disc,
+        startFit: PIECE_OF_HEX,
+        delay: i * CAPTURE_STAGGER_MS,
+        pulse: true,
+      })
+    })
+  },
+  { flush: 'post' },
+)
+
 onUnmounted(() => {
   if (flashTimer) clearTimeout(flashTimer)
 })
 </script>
 
 <template>
-  <div class="game">
+  <div class="samurai game">
     <header class="topbar">
       <div class="turn">
         <span class="dot" :style="{ background: accent }" />
@@ -80,6 +147,53 @@ onUnmounted(() => {
         <span v-if="game.isPaused" class="paused-badge tiny">{{ t('game.paused.badge') }}</span>
         <TurnClock />
       </div>
+      <div class="tallies">
+        <ul class="tally" :title="t('panel.endNote')">
+          <li
+            v-for="caste in CASTES"
+            :key="caste"
+            :title="`${castePiece(caste)} — ${casteName(caste)}`"
+            :aria-label="`${castePiece(caste)} — ${casteName(caste)}`"
+          >
+            <span
+              class="caste-disc"
+              :data-caste="caste"
+              :style="{
+                background: CASTE_COLOURS[caste].fill,
+                borderColor: CASTE_COLOURS[caste].ink,
+              }"
+            >
+              <GameIcon :name="caste" :size="13" />
+            </span>
+            <strong>{{ remaining[caste] }}</strong>
+          </li>
+        </ul>
+
+        <!-- Bare icons rather than discs, so the two counts never read as one row. -->
+        <div class="tally set-aside" :title="t('panel.setAside')">
+          <span
+            v-for="caste in CASTES"
+            :key="caste"
+            v-show="setAsideCounts[caste] > 0"
+            class="chip"
+            :data-set-aside="caste"
+            :title="castePiece(caste)"
+            :aria-label="castePiece(caste)"
+          >
+            <GameIcon :name="caste" :size="14" />
+            <strong>{{ setAsideCounts[caste] }}</strong>
+          </span>
+          <span class="tiny muted">
+            {{
+              t('panel.setAsideCount', {
+                count: game.state?.setAside.length ?? 0,
+                max: setAsideMax,
+              })
+            }}
+          </span>
+        </div>
+      </div>
+
       <div class="top-actions">
         <span class="tiny muted code">{{ t('game.room', { code: game.state?.code ?? '' }) }}</span>
         <button
@@ -90,14 +204,11 @@ onUnmounted(() => {
           {{ game.isPaused ? t('game.resume') : t('game.pause') }}
         </button>
         <button class="btn ghost small" @click="showRules = true">{{ t('game.rules') }}</button>
-        <button class="btn ghost small sidebar-toggle" @click="showSidebar = !showSidebar">
-          {{ showSidebar ? t('game.hideInfo') : t('game.showInfo') }}
-        </button>
         <TableMenu />
       </div>
     </header>
 
-    <main class="layout">
+    <main class="layout" :class="{ solo: !showSidebar }">
       <div class="board-column">
         <BoardView />
         <HandBar v-if="game.isSeated" />
@@ -115,10 +226,24 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <div class="sidebar" :class="{ open: showSidebar }">
-        <PlayerPanel />
-        <LogPanel />
-      </div>
+      <Transition name="fade">
+        <div v-if="showSidebar" id="game-sidebar" class="sidebar">
+          <PlayerPanel />
+          <LogPanel />
+        </div>
+      </Transition>
+
+      <!-- Sits on the rule beside the sidebar, and on the layout's own edge once
+           the sidebar is gone, which is the only way back to it. -->
+      <button
+        class="sidebar-handle"
+        :aria-expanded="showSidebar"
+        aria-controls="game-sidebar"
+        :aria-label="showSidebar ? t('game.hideInfo') : t('game.showInfo')"
+        @click="showSidebar = !showSidebar"
+      >
+        <span class="chev" aria-hidden="true">◀</span>
+      </button>
     </main>
 
     <RulesDialog v-if="showRules" @close="showRules = false" />
@@ -132,6 +257,7 @@ onUnmounted(() => {
    home and draft screens are put together. Every division on this screen is a
    1px rule in the same ink. */
 .game {
+  --sidebar-ms: 180ms;
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -222,11 +348,72 @@ onUnmounted(() => {
   letter-spacing: 0.12em;
 }
 
+/* Three chips, no labels: the topbar has room for the count and the colour and
+   nothing else. The naming is on each chip's title. */
+.tallies {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+/* A rule, the same one every other division on this screen uses, so the two
+   counts do not read as six numbers in a row. The class carries the padding
+   past .tally's own reset below, and matches the gap so the rule sits centred
+   between the groups rather than against one of them. */
+.tally.set-aside {
+  padding-left: 0.55rem;
+  border-left: 1px solid rgba(160, 137, 102, 0.35);
+}
+
+.tally {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.tally li,
+.tally .chip {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.tally strong {
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+}
+
+/* Matches the disc a piece sits on over on the board. */
+.caste-disc {
+  display: grid;
+  place-items: center;
+  width: 1.15rem;
+  height: 1.15rem;
+  border-radius: 50%;
+  border: 1px solid;
+  flex: none;
+}
+
 .layout {
+  position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 20rem;
+  transition: grid-template-columns var(--sidebar-ms) ease;
   min-height: 0;
   flex: 1 1 auto;
+  /* The sidebar keeps its width and slides out past this edge. */
+  overflow: hidden;
+}
+
+/* Collapsing the track to zero rather than dropping it: grid-template-columns
+   only interpolates between the same number of tracks, so removing the second
+   one makes the browser ignore the transition and snap the board to full width
+   while the panel is still fading. */
+.layout.solo {
+  grid-template-columns: minmax(0, 1fr) 0rem;
 }
 
 .board-column {
@@ -289,13 +476,68 @@ onUnmounted(() => {
 .sidebar {
   display: flex;
   flex-direction: column;
+  width: 20rem;
   min-height: 0;
-  overflow-y: auto;
+  overflow: hidden;
   border-left: 1px solid rgba(160, 137, 102, 0.35);
 }
 
-.sidebar-toggle {
-  display: none;
+/* Level with the head of the sidebar rather than adrift in the middle of the
+   board's edge. */
+.sidebar-handle {
+  position: absolute;
+  top: 1.5rem;
+  right: 20rem;
+  z-index: 5;
+  display: grid;
+  place-items: center;
+  width: 0.95rem;
+  height: 3rem;
+  padding: 0;
+  font-size: 0.6rem;
+  color: var(--ink-soft);
+  background: var(--paper);
+  border: 1px solid rgba(160, 137, 102, 0.35);
+  border-right: none;
+  border-radius: 5px 0 0 5px;
+  transition: right var(--sidebar-ms) ease;
+}
+
+.sidebar-handle:hover {
+  color: var(--ink);
+}
+
+/* One glyph turned rather than two swapped, so the chevron eases with the panel. */
+.chev {
+  transition: transform var(--sidebar-ms) ease;
+}
+
+.sidebar-handle[aria-expanded='true'] .chev {
+  transform: rotate(180deg);
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity var(--sidebar-ms) ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .layout,
+  .chev,
+  .sidebar-handle,
+  .fade-enter-active,
+  .fade-leave-active {
+    transition: none;
+  }
+}
+
+.layout.solo .sidebar-handle {
+  right: 0;
 }
 
 .spectating {
@@ -305,21 +547,28 @@ onUnmounted(() => {
 }
 
 @media (max-width: 900px) {
-  .layout {
+  /* One column, the panel stacking under the board. `.layout.solo` outranks this
+     on specificity, so it has to be answered here rather than left to the
+     desktop rule. */
+  .layout,
+  .layout.solo {
     grid-template-columns: minmax(0, 1fr);
   }
 
+  /* Below the board rather than beside it, and never more than half the screen. */
   .sidebar {
-    display: none;
-  }
-
-  .sidebar.open {
-    display: flex;
+    width: auto;
     max-height: 45vh;
   }
 
-  .sidebar-toggle {
-    display: inline-flex;
+  /* Sooner than wrap the bar onto two lines. */
+  .tallies {
+    display: none;
+  }
+
+  /* No vertical rule to sit on down here, so it keeps to the layout's edge. */
+  .sidebar-handle {
+    right: 0;
   }
 }
 </style>

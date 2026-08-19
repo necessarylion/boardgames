@@ -1,12 +1,10 @@
 <script setup lang="ts">
-import { computed } from 'vue'
 import GameIcon from '../common/GameIcon.vue'
-import { CASTE_COLOURS, PLAYER_COLOURS } from '@shared/colours'
+import { PLAYER_COLOURS } from '@shared/colours'
 import { PLAYER_BACKGROUNDS } from '@/game/backgrounds'
-import { setAsideLimit } from '@shared/rules'
 import { ref, watch } from 'vue'
 import { CASTES, type Caste } from '@shared/types'
-import { casteName, castePiece, t, teamLabel } from '@/i18n'
+import { t, teamLabel } from '@/i18n'
 import { useGameStore } from '@/stores/game'
 
 const game = useGameStore()
@@ -32,23 +30,6 @@ watch(
   () => game.myLedTeam,
   () => (editingTeam.value = false),
 )
-
-const setAsideMax = computed(() => setAsideLimit(game.state?.playerCount ?? 0))
-
-/** Caste pieces still standing on the board. */
-const remaining = computed(() => {
-  const counts: Record<Caste, number> = { buddha: 0, rice: 0, castle: 0 }
-  for (const list of Object.values(game.state?.pieces ?? {})) {
-    for (const caste of list) counts[caste]++
-  }
-  return counts
-})
-
-const setAsideCounts = computed(() => {
-  const counts: Record<Caste, number> = { buddha: 0, rice: 0, castle: 0 }
-  for (const caste of game.state?.setAside ?? []) counts[caste]++
-  return counts
-})
 
 function capturedCounts(captured: Caste[] | null): Record<Caste, number> | null {
   if (!captured) return null
@@ -79,44 +60,6 @@ function capturedCounts(captured: Caste[] | null): Record<Caste, number> | null 
         />
         <button class="btn small" @click="saveTeamName">{{ t('panel.save') }}</button>
       </div>
-    </section>
-
-    <section class="block">
-      <h3>{{ t('panel.onBoard') }}</h3>
-      <ul class="tally">
-        <li v-for="caste in CASTES" :key="caste">
-          <span
-            class="caste-disc"
-            :style="{
-              background: CASTE_COLOURS[caste].fill,
-              borderColor: CASTE_COLOURS[caste].ink,
-            }"
-          >
-            <GameIcon :name="caste" :size="18" />
-          </span>
-          <span class="tally-name">{{ castePiece(caste) }}</span>
-          <span class="tally-sub tiny muted">{{ casteName(caste) }}</span>
-          <strong>{{ remaining[caste] }}</strong>
-        </li>
-      </ul>
-      <p class="tiny muted note">{{ t('panel.endNote') }}</p>
-    </section>
-
-    <section class="block">
-      <h3>
-        {{ t('panel.setAside') }}
-        <span class="tiny muted">
-          {{ t('panel.setAsideCount', { count: game.state?.setAside.length ?? 0, max: setAsideMax }) }}
-        </span>
-      </h3>
-      <p v-if="!game.state?.setAside.length" class="tiny muted">{{ t('panel.setAsideEmpty') }}</p>
-      <ul v-else class="tally compact">
-        <li v-for="caste in CASTES" :key="caste" v-show="setAsideCounts[caste] > 0">
-          <GameIcon :name="caste" :size="16" />
-          <span class="tally-name">{{ castePiece(caste) }}</span>
-          <strong>{{ setAsideCounts[caste] }}</strong>
-        </li>
-      </ul>
     </section>
 
     <section class="block">
@@ -151,22 +94,27 @@ function capturedCounts(captured: Caste[] | null): Record<Caste, number> | null 
               {{ teamLabel(game.teamOfPlayer(player.id), game.teamNames) }}
             </span>
           </div>
-          <div class="player-stats tiny muted">
-            {{
+          <div
+            class="player-stats tiny muted"
+            :title="
               t('panel.stats', {
                 hand: player.handCount,
                 stack: player.stackCount,
                 captured: player.capturedCount,
               })
-            }}
+            "
+          >
+            <span class="counts">{{ player.handCount }}/{{ player.stackCount }}</span>
+            <ul v-if="capturedCounts(player.captured)" class="captured">
+              <li v-for="caste in CASTES" :key="caste">
+                <GameIcon :name="caste" :size="13" />
+                <span>{{ capturedCounts(player.captured)![caste] }}</span>
+              </li>
+            </ul>
+            <span v-else class="captured-hidden" :title="t('panel.hiddenCaptured')">
+              {{ player.capturedCount }} ✦
+            </span>
           </div>
-          <ul v-if="capturedCounts(player.captured)" class="captured">
-            <li v-for="caste in CASTES" :key="caste">
-              <GameIcon :name="caste" :size="15" />
-              <span>{{ capturedCounts(player.captured)![caste] }}</span>
-            </li>
-          </ul>
-          <p v-else class="tiny muted hidden-note">{{ t('panel.hiddenCaptured') }}</p>
         </li>
       </ul>
     </section>
@@ -179,11 +127,12 @@ function capturedCounts(captured: Caste[] | null): Record<Caste, number> | null 
   flex-direction: column;
   gap: 0.75rem;
   min-width: 0;
+  flex: none;
 }
 
 /* Ruled sections rather than stacked cards — see the note in GameScreen. */
 .block {
-  padding: 0.9rem 1rem;
+  padding: 0.7rem 0.9rem;
   border-bottom: 1px solid rgba(160, 137, 102, 0.35);
 }
 
@@ -194,55 +143,6 @@ h3 {
   gap: 0.5rem;
   font-size: 0.95rem;
   margin-bottom: 0.55rem;
-}
-
-.tally {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-}
-
-.tally li {
-  display: grid;
-  grid-template-columns: auto 1fr auto auto;
-  align-items: center;
-  gap: 0.45rem;
-  font-size: 0.9rem;
-}
-
-.tally.compact li {
-  grid-template-columns: auto 1fr auto;
-}
-
-/* Matches the disc a piece sits on over on the board, so the tally reads as the
-   same three things. */
-.caste-disc {
-  display: grid;
-  place-items: center;
-  width: 1.6rem;
-  height: 1.6rem;
-  border-radius: 50%;
-  border: 1px solid;
-  flex: none;
-}
-
-.tally-name {
-  font-weight: 600;
-}
-
-.tally strong {
-  font-family: var(--font-display);
-  font-size: 1.05rem;
-  min-width: 1.4rem;
-  text-align: right;
-}
-
-.note {
-  margin: 0.55rem 0 0;
-  line-height: 1.4;
 }
 
 .players {
@@ -260,7 +160,7 @@ h3 {
    retint it rather than replace the whole background. */
 .player {
   --paper: rgba(253, 250, 242, 0.82);
-  padding: 0.5rem 0.6rem;
+  padding: 0.3rem 0.5rem;
   border-left: 4px solid var(--accent);
   background-image: linear-gradient(var(--paper), var(--paper)), var(--cloth);
   background-size: cover;
@@ -281,16 +181,21 @@ h3 {
 .player-head {
   display: flex;
   align-items: center;
-  gap: 0.45rem;
+  gap: 0.35rem;
+  min-width: 0;
 }
 
 .player-name {
   font-weight: 600;
+  font-size: 0.9rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .swatch {
-  width: 0.85rem;
-  height: 0.85rem;
+  width: 0.7rem;
+  height: 0.7rem;
   border-radius: 3px;
   border: 2px solid;
   flex: none;
@@ -299,11 +204,12 @@ h3 {
 }
 
 .badge {
-  font-size: 0.65rem;
+  font-size: 0.6rem;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
-  padding: 0.1rem 0.35rem;
+  letter-spacing: 0.06em;
+  padding: 0.05rem 0.28rem;
   border-radius: 4px;
+  white-space: nowrap;
   background: rgba(178, 58, 44, 0.16);
   color: var(--vermillion-dark);
 }
@@ -315,6 +221,8 @@ h3 {
 
 .badge.team {
   margin-left: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .badge.team-0 {
@@ -354,28 +262,40 @@ h3 {
   font-size: 0.9rem;
 }
 
+/* Same split as the log: the name keeps the display face, the numbers and
+   badges beside it sit in the plain body face so they stay quick to read. */
+.player-stats,
+.badge {
+  font-family: var(--font-body);
+}
+
+/* Hand/stack and captured share one line — the sentence they used to be lives on
+   as the row's tooltip. */
 .player-stats {
-  margin-top: 0.15rem;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-left: 1.05rem;
+}
+
+.counts {
+  font-variant-numeric: tabular-nums;
 }
 
 .captured {
   list-style: none;
   display: flex;
-  gap: 0.7rem;
-  margin: 0.35rem 0 0;
+  gap: 0.5rem;
+  margin: 0;
   padding: 0;
 }
 
 .captured li {
   display: flex;
   align-items: center;
-  gap: 0.2rem;
-  font-size: 0.85rem;
+  gap: 0.15rem;
+  font-size: 0.78rem;
   font-weight: 600;
-}
-
-.hidden-note {
-  margin: 0.3rem 0 0;
 }
 
 </style>

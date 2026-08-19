@@ -63,3 +63,35 @@ export function hexPolygon(centre: Point, size: number): string {
 
 export const HEX_WIDTH_RATIO = Math.sqrt(3) // width  = size * √3
 export const HEX_HEIGHT_RATIO = 2 // height = size * 2
+
+/**
+ * SVG `d` for the same hexagon with its corners rounded, as a fraction of the
+ * edge length. Rounding has to happen in the geometry rather than through
+ * `stroke-linejoin`, because a tile's fill is a cloth pattern, so a sharp fill
+ * corner would still show through a rounded stroke.
+ */
+export function hexRoundedPath(centre: Point, size: number, round = 0.1): string {
+  const corners: Point[] = []
+  for (let i = 0; i < 6; i++) {
+    const angle = (Math.PI / 180) * (60 * i - 30)
+    corners.push({ x: centre.x + size * Math.cos(angle), y: centre.y + size * Math.sin(angle) })
+  }
+  // Every edge of a regular hexagon is `size` long, so the trim is a constant.
+  const trim = size * Math.min(round, 0.5)
+  const towards = (from: Point, to: Point) => {
+    const dx = to.x - from.x
+    const dy = to.y - from.y
+    const len = Math.hypot(dx, dy)
+    return { x: from.x + (dx / len) * trim, y: from.y + (dy / len) * trim }
+  }
+  const at = (p: Point) => `${p.x.toFixed(3)},${p.y.toFixed(3)}`
+  let d = ''
+  for (let i = 0; i < 6; i++) {
+    const c = corners[i]
+    const start = towards(c, corners[(i + 5) % 6])
+    const end = towards(c, corners[(i + 1) % 6])
+    d += i === 0 ? `M${at(start)}` : `L${at(start)}`
+    d += `Q${at(c)} ${at(end)}`
+  }
+  return `${d}Z`
+}

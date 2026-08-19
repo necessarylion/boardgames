@@ -163,13 +163,21 @@ h4:first-child {
   color: var(--ink-soft);
 }
 
+/* The tile's name is a name, so it keeps the display face; the count and the
+   description beside it are read, and stay body text. */
 .tile-row dt {
   display: flex;
   align-items: baseline;
   flex-wrap: wrap;
   gap: 0.45rem;
+  font-family: var(--font-display);
   font-weight: 600;
   font-size: 0.92rem;
+}
+
+.tile-row dt .tiny {
+  font-family: var(--font-body);
+  font-weight: 400;
 }
 
 .tile-row dd {

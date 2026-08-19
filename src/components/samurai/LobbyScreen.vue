@@ -87,7 +87,7 @@ function setBoard(shape: BoardShape) {
 </script>
 
 <template>
-  <div class="lobby">
+  <div class="samurai lobby">
     <header class="head">
       <div>
         <p class="tiny muted">{{ t('lobby.roomCode') }}</p>

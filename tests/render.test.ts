@@ -57,6 +57,10 @@ function placeableTile(r: Room) {
 beforeEach(() => {
   setActivePinia(createPinia())
   localStorage.clear()
+  // GameScreen opens its sidebar from the viewport width, and jsdom windows are
+  // reused between files, so a narrow one left behind elsewhere would collapse
+  // the panel and take the players and log off screen. Pin it wide.
+  window.innerWidth = 1200
 })
 
 describe('ending and restarting', () => {
@@ -128,9 +132,9 @@ describe('rendering', () => {
     const svg = wrapper.find('svg.board')
     expect(svg.exists()).toBe(true)
 
-    // One terrain polygon per space on the two-player board.
+    // One terrain path per space on the two-player board.
     const spaceCount = Object.keys(r.game!.board.spaces).length
-    expect(svg.findAll('polygon.hex')).toHaveLength(spaceCount)
+    expect(svg.findAll('path.hex')).toHaveLength(spaceCount)
 
     // Caste pieces are drawn for the whole starting supply of 21.
     expect(svg.findAll('.piece')).toHaveLength(21)
@@ -172,7 +176,10 @@ describe('rendering', () => {
 
     const wrapper = mount(GameScreen)
     expect(wrapper.text()).toContain("Takeda's turn")
-    expect(wrapper.text()).toContain('Captured pieces kept behind their screen')
+    // The captured breakdown stays a tooltip on a count, not a spelled-out line.
+    expect(wrapper.find('.captured-hidden').attributes('title')).toContain(
+      'Captured pieces kept behind their screen',
+    )
     // Nothing is playable while it is not your turn.
     expect(wrapper.findAll('.tile-btn:not([disabled])')).toHaveLength(0)
   })

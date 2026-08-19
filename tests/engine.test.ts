@@ -135,15 +135,21 @@ describe('turn structure', () => {
     expect(game.state.phase).toBe('play')
   })
 
-  it('keeps fast tiles out of a random opening hand', () => {
-    // Every seed, not just a lucky one: five of the twenty tiles are fast, so a
-    // straight deal off the top of the stack turns one up more often than not.
+  it('keeps fast, switch and move tiles out of a random opening hand', () => {
+    // Every seed, not just a lucky one: six of the twenty tiles are held back, so
+    // a straight deal off the top of the stack turns one up more often than not.
+    // Move is the one that is not fast, so it only stays out if it is held back
+    // by kind — the case that made this rule wider than the fast flag.
     for (let seed = 1; seed <= 40; seed++) {
       const game = new Game(4, { ...DEFAULT_OPTIONS, randomHands: true }, seed)
       for (const player of game.state.players) {
-        expect(player.hand.map(tileFromId).some((t) => t.fast)).toBe(false)
+        const hand = player.hand.map(tileFromId)
+        expect(hand.some((t) => t.fast)).toBe(false)
+        expect(hand.some((t) => t.kind === 'switch' || t.kind === 'move')).toBe(false)
         // Held back, not removed — they are still there to be drawn later.
-        expect(player.stack.map(tileFromId).filter((t) => t.fast)).toHaveLength(5)
+        const stack = player.stack.map(tileFromId)
+        expect(stack.filter((t) => t.fast)).toHaveLength(5)
+        expect(stack.filter((t) => t.kind === 'move')).toHaveLength(1)
       }
     }
   })

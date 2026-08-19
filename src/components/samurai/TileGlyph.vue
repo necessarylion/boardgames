@@ -3,7 +3,7 @@ import { computed, useId } from 'vue'
 import GameIcon from '../common/GameIcon.vue'
 import { CASTE_COLOURS, PLAYER_COLOURS } from '@shared/colours'
 import { PLAYER_BACKGROUNDS } from '@/game/backgrounds'
-import { hexPolygon } from '@shared/hex'
+import { hexRoundedPath } from '@shared/hex'
 import type { PlayerColour, Tile } from '@shared/types'
 
 /**
@@ -24,9 +24,9 @@ const props = withDefaults(
 
 const palette = computed(() => PLAYER_COLOURS[props.colour])
 const centre = computed(() => ({ x: props.x, y: props.y }))
-const points = computed(() => hexPolygon(centre.value, props.size * 0.97))
+const points = computed(() => hexRoundedPath(centre.value, props.size * 0.97))
 /** A rule just inside the border, which is what makes the tile read as a card. */
-const bevel = computed(() => hexPolygon(centre.value, props.size * 0.875))
+const bevel = computed(() => hexRoundedPath(centre.value, props.size * 0.875))
 
 /**
  * Every glyph carries its own copy of its weave pattern. Several svg roots host
@@ -90,15 +90,15 @@ const iconCentre = computed(() => ({
         />
       </pattern>
     </defs>
-    <polygon
-      :points="points"
+    <path
+      :d="points"
       :fill="`url(#${weaveId})`"
       :stroke="palette.ink"
       :stroke-width="size * 0.09"
       stroke-linejoin="round"
     />
-    <polygon
-      :points="bevel"
+    <path
+      :d="bevel"
       fill="none"
       stroke="#fffaf0"
       stroke-opacity="0.45"

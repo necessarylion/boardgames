@@ -34,7 +34,7 @@ watch(
           <strong :style="{ color: PLAYER_COLOURS[nameOf(entry.player)!.colour].ink }">
             {{ nameOf(entry.player)!.name }}
           </strong>
-          {{ ' ' }}{{ entry.text }}
+          {{ ' ' }}<span class="what">{{ entry.text }}</span>
         </template>
         <span v-else class="system">{{ entry.text }}</span>
       </li>
@@ -67,7 +67,29 @@ h3 {
   font-size: 0.85rem;
   line-height: 1.4;
   min-height: 6rem;
-  max-height: 16rem;
+  /* Fills whatever the compact player list leaves, scrolling on its own rather
+     than pushing the sidebar into one long scroll. */
+  flex: 1 1 auto;
+  overflow-y: auto;
+}
+
+/* Audiowide has one weight, so the bold is the browser's; it runs large for its
+   point size too, hence the step down to sit level with the body face. */
+.entries strong {
+  font-weight: 700;
+  font-size: 0.85em;
+}
+
+/* The name carries the row; what they did sits back a step, in the plain body
+   face — Audiowide is a display font and a wall of it is hard to read fast. */
+.what,
+.system {
+  font-family: var(--font-body);
+  font-size: 0.8em;
+}
+
+.what {
+  color: var(--ink-soft);
 }
 
 .system {

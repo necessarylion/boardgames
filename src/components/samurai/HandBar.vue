@@ -51,6 +51,7 @@ const prompt = computed(() => {
         v-for="tile in game.hand"
         :key="tile.id"
         class="tile-btn"
+        :data-tile="tile.id"
         :class="{
           selected: selectedId === tile.id,
           unplayable: !playable.has(tile.id),
@@ -106,6 +107,7 @@ const prompt = computed(() => {
 
 <style scoped>
 .hand {
+  font-family: var(--font-body);
   display: flex;
   align-items: center;
   gap: 1rem;
@@ -114,6 +116,8 @@ const prompt = computed(() => {
   flex-wrap: wrap;
 }
 
+/* The title and the tile names carry the display face down here; the stack
+   count and the prompt are read mid-turn, so they stay body text. */
 .hand-head {
   min-width: 12rem;
   flex: 1 1 12rem;
@@ -167,6 +171,7 @@ const prompt = computed(() => {
 /* Kept on one line: Burmese has no spaces to wrap at, so a narrow hand widens
    the buttons a little and `.tiles` wraps, rather than breaking mid-syllable. */
 .tile-name {
+  font-family: var(--font-display);
   line-height: 1.1;
   white-space: nowrap;
   font-size: 0.68rem;

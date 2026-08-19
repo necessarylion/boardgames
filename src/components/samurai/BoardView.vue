@@ -2,9 +2,10 @@
 import { computed, ref } from 'vue'
 import GameIcon from '../common/GameIcon.vue'
 import TileGlyph from './TileGlyph.vue'
+import { flyGhost } from '@/composables/useFlight'
 import { usePanZoom, type Bounds } from '@/composables/usePanZoom'
 import { CASTE_COLOURS, PLAYER_COLOURS } from '@shared/colours'
-import { hexCentre, hexPolygon, type Point } from '@shared/hex'
+import { hexCentre, hexRoundedPath, type Point } from '@shared/hex'
 import type { PieceRef } from '@shared/rules'
 import { SETTLEMENT_CAPACITY, type PlayerColour, type Space } from '@shared/types'
 import { t } from '@/i18n'
@@ -18,14 +19,14 @@ const PAD = HEX * 1.2
 interface Cell {
   space: Space
   centre: Point
-  points: string
+  outline: string
 }
 
 const cells = computed<Cell[]>(() =>
   game.board.order.map((id) => {
     const space = game.board.spaces[id]
     const centre = hexCentre(space.q, space.r, HEX)
-    return { space, centre, points: hexPolygon(centre, HEX * 0.985) }
+    return { space, centre, outline: hexRoundedPath(centre, HEX * 0.985) }
   }),
 )
 
@@ -117,6 +118,28 @@ function haloDelay(space: Space, index = 0): string {
   return `${(((((space.q + space.r + index) % 5) + 5) % 5) * 0.11).toFixed(2)}s`
 }
 
+/*
+ * Hand to board. The rects have to be taken before the click is sent: the
+ * server's answer empties the hand slot the tile flew out of, and the tile
+ * itself only exists on the board once that answer lands.
+ *
+ * A tile glyph is a hexagon of 0.83 of the hex it sits in, so it covers a shade
+ * over four fifths of the hex's own width when it gets there.
+ */
+const TILE_OF_HEX = 0.83
+
+function placeOn(spaceId: string) {
+  const act = game.interaction
+  const placing = act.mode === 'place' && game.highlightedSpaces.includes(spaceId)
+  game.clickSpace(spaceId)
+  if (!placing) return
+  flyGhost({
+    from: document.querySelector(`[data-tile="${act.tileId}"] svg`),
+    to: frame.value?.querySelector(`[data-space="${spaceId}"]`) ?? null,
+    endFit: TILE_OF_HEX,
+  })
+}
+
 function isSurroundedNow(space: Space): boolean {
   return (
     space.kind === 'settlement' &&
@@ -150,8 +173,9 @@ function isSurroundedNow(space: Space): boolean {
 
       <g v-for="cell in cells" :key="cell.space.id">
         <!-- terrain -->
-        <polygon
-          :points="cell.points"
+        <path
+          :d="cell.outline"
+          :data-space="cell.space.id"
           :class="[
             'hex',
             `hex-${cell.space.kind}`,
@@ -160,7 +184,7 @@ function isSurroundedNow(space: Space): boolean {
               'hex-surrounded': isSurroundedNow(cell.space),
             },
           ]"
-          @click="game.clickSpace(cell.space.id)"
+          @click="placeOn(cell.space.id)"
         />
 
         <!-- a light that swells out of a target hex; decoration, so no clicks -->
@@ -173,8 +197,8 @@ function isSurroundedNow(space: Space): boolean {
             fill="url(#target-glow)"
             :style="{ animationDelay: haloDelay(cell.space) }"
           />
-          <polygon
-            :points="cell.points"
+          <path
+            :d="cell.outline"
             class="hex-halo"
             :style="{ animationDelay: haloDelay(cell.space) }"
           />
@@ -235,17 +259,17 @@ function isSurroundedNow(space: Space): boolean {
         </template>
 
         <!-- plays since your own turn ended; decoration, so no clicks -->
-        <polygon
+        <path
           v-if="earlierPlaced.has(cell.space.id)"
-          :points="cell.points"
+          :d="cell.outline"
           class="tile-earlier"
           :style="{ '--mark': PLAYER_COLOURS[ownerColour(cell.space.id)].fill }"
         />
 
         <!-- where the last tile went; decoration, so no clicks -->
-        <polygon
+        <path
           v-if="freshlyPlaced.has(cell.space.id)"
-          :points="cell.points"
+          :d="cell.outline"
           class="tile-mark"
           :style="{ '--mark': PLAYER_COLOURS[ownerColour(cell.space.id)].fill }"
         />

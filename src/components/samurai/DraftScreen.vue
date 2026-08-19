@@ -16,7 +16,7 @@ const waitingOn = computed(() => game.players.filter((p) => !p.ready).map((p) =>
 </script>
 
 <template>
-  <div class="draft">
+  <div class="samurai draft">
     <aside class="guide">
       <div class="guide-inner">
         <header class="head">
