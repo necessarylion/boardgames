@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import GameIcon from '../common/GameIcon.vue'
-import { PLAYER_COLOURS } from '@shared/colours'
+import { CASTE_COLOURS, PLAYER_COLOURS } from '@shared/colours'
 import { PLAYER_BACKGROUNDS } from '@/game/backgrounds'
-import { ref, watch } from 'vue'
+import { ref, useId, watch } from 'vue'
+import { hexRoundedPath } from '@shared/hex'
 import { CASTES, type Caste } from '@shared/types'
 import { t, teamLabel } from '@/i18n'
 import { useGameStore } from '@/stores/game'
@@ -30,6 +31,17 @@ watch(
   () => game.myLedTeam,
   () => (editingTeam.value = false),
 )
+
+// The seat marker is a miniature of a player tile: same rounded hex, same cloth,
+// same ink border and inner bevel. Drawn here rather than through TileGlyph,
+// which needs a tile to put a pictogram and a value on.
+const SWATCH = { r: 9.2, x: 8.66, y: 10 }
+const swatchHex = hexRoundedPath(SWATCH, SWATCH.r * 0.97)
+const swatchBevel = hexRoundedPath(SWATCH, SWATCH.r * 0.875)
+// One pattern per seat: several rows share this component instance, so the id
+// has to carry the colour as well.
+const uid = useId()
+const clothId = (colour: string) => `seat-cloth-${uid}-${colour}`
 
 function capturedCounts(captured: Caste[] | null): Record<Caste, number> | null {
   if (!captured) return null
@@ -62,8 +74,7 @@ function capturedCounts(captured: Caste[] | null): Record<Caste, number> | null 
       </div>
     </section>
 
-    <section class="block">
-      <h3>{{ t('panel.players') }}</h3>
+    <section class="block flush">
       <ul class="players">
         <li
           v-for="player in game.players"
@@ -71,50 +82,92 @@ function capturedCounts(captured: Caste[] | null): Record<Caste, number> | null 
           :data-seat="player.id"
           class="player"
           :class="{ active: player.id === game.state?.current, offline: !player.connected }"
-          :style="{
-            '--accent': PLAYER_COLOURS[player.colour].ink,
-            '--cloth': `url(${PLAYER_BACKGROUNDS[player.colour]})`,
-          }"
         >
-          <div class="player-head">
-            <span
-              class="swatch"
-              :style="{
-                backgroundColor: PLAYER_COLOURS[player.colour].fill,
-                borderColor: PLAYER_COLOURS[player.colour].ink,
-              }"
+          <svg class="swatch" viewBox="0 0 17.32 20" aria-hidden="true">
+            <defs>
+              <pattern
+                :id="clothId(player.colour)"
+                patternUnits="userSpaceOnUse"
+                width="17.32"
+                height="20"
+              >
+                <rect width="17.32" height="20" :fill="PLAYER_COLOURS[player.colour].fill" />
+                <image
+                  :href="PLAYER_BACKGROUNDS[player.colour]"
+                  width="17.32"
+                  height="20"
+                  preserveAspectRatio="xMidYMid slice"
+                />
+              </pattern>
+            </defs>
+            <path
+              :d="swatchHex"
+              :fill="`url(#${clothId(player.colour)})`"
+              :stroke="PLAYER_COLOURS[player.colour].ink"
+              stroke-width="0.83"
+              stroke-linejoin="round"
             />
-            <span class="player-name">{{ player.name }}</span>
-            <span v-if="player.id === game.you" class="badge">{{ t('lobby.badge.you') }}</span>
-            <span v-if="!player.connected" class="badge away">{{ t('lobby.badge.away') }}</span>
-            <span
-              v-if="game.isTeamGame"
-              class="badge team"
-              :class="`team-${game.teamOfPlayer(player.id)}`"
+            <path
+              :d="swatchBevel"
+              fill="none"
+              stroke="#fffaf0"
+              stroke-opacity="0.45"
+              stroke-width="0.46"
+              stroke-linejoin="round"
+            />
+            <text
+              x="8.66"
+              y="12.6"
+              font-size="7"
+              font-weight="700"
+              text-anchor="middle"
+              :fill="PLAYER_COLOURS[player.colour].text"
+              style="font-family: var(--font-display)"
             >
-              {{ teamLabel(game.teamOfPlayer(player.id), game.teamNames) }}
-            </span>
-          </div>
-          <div
-            class="player-stats tiny muted"
-            :title="
-              t('panel.stats', {
-                hand: player.handCount,
-                stack: player.stackCount,
-                captured: player.capturedCount,
-              })
-            "
-          >
-            <span class="counts">{{ player.handCount }}/{{ player.stackCount }}</span>
-            <ul v-if="capturedCounts(player.captured)" class="captured">
-              <li v-for="caste in CASTES" :key="caste" :data-seat-caste="`${player.id}:${caste}`">
-                <GameIcon :name="caste" :size="13" />
-                <span>{{ capturedCounts(player.captured)![caste] }}</span>
-              </li>
-            </ul>
-            <span v-else class="captured-hidden" :title="t('panel.hiddenCaptured')">
-              {{ player.capturedCount }} ✦
-            </span>
+              {{ player.stackCount }}
+            </text>
+          </svg>
+          <div class="player-body">
+            <div class="player-head">
+              <span class="player-name">{{ player.name }}</span>
+              <span v-if="player.id === game.you" class="badge">{{ t('lobby.badge.you') }}</span>
+              <span v-if="!player.connected" class="badge away">{{ t('lobby.badge.away') }}</span>
+              <span
+                v-if="game.isTeamGame"
+                class="badge team"
+                :class="`team-${game.teamOfPlayer(player.id)}`"
+              >
+                {{ teamLabel(game.teamOfPlayer(player.id), game.teamNames) }}
+              </span>
+            </div>
+            <div
+              class="player-stats tiny muted"
+              :title="
+                t('panel.stats', {
+                  hand: player.handCount,
+                  stack: player.stackCount,
+                  captured: player.capturedCount,
+                })
+              "
+            >
+              <ul v-if="capturedCounts(player.captured)" class="captured">
+                <li v-for="caste in CASTES" :key="caste" :data-seat-caste="`${player.id}:${caste}`">
+                  <span
+                    class="caste-disc"
+                    :style="{
+                      background: CASTE_COLOURS[caste].fill,
+                      borderColor: CASTE_COLOURS[caste].ink,
+                    }"
+                  >
+                    <GameIcon :name="caste" :size="13" />
+                  </span>
+                  <strong>{{ capturedCounts(player.captured)![caste] }}</strong>
+                </li>
+              </ul>
+              <span v-else class="captured-hidden" :title="t('panel.hiddenCaptured')">
+                {{ player.capturedCount }} ✦
+              </span>
+            </div>
           </div>
         </li>
       </ul>
@@ -137,6 +190,11 @@ function capturedCounts(captured: Caste[] | null): Record<Caste, number> | null 
   border-bottom: 1px solid rgba(160, 137, 102, 0.35);
 }
 
+/* The seat rows are their own heading — they run to the panel's edges. */
+.flush {
+  padding: 0;
+}
+
 h3 {
   display: flex;
   align-items: baseline;
@@ -154,17 +212,20 @@ h3 {
   flex-direction: column;
 }
 
-/* Ruled rows, not cards. The seat colour stays as a stripe on the leading edge,
-   which is the only border a row carries. */
-/* The seat's cloth runs under the row, washed out far enough that the stats stay
-   the thing you read. `--paper` is the wash, so the active row only has to
-   retint it rather than replace the whole background. */
+/* Ruled rows, not cards. The row carries no seat colour of its own — the tile
+   beside the name is the seat, and a stripe and a cloth wash behind it only
+   made the stats harder to read. */
 .player {
-  --paper: rgba(253, 250, 242, 0.82);
+  --swatch-w: 2.35rem;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
   padding: 0.3rem 0.5rem;
-  border-left: 4px solid var(--accent);
-  background-image: linear-gradient(var(--paper), var(--paper)), var(--cloth);
-  background-size: cover;
+}
+
+.player-body {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .player + .player {
@@ -172,7 +233,30 @@ h3 {
 }
 
 .player.active {
-  --paper: rgba(246, 223, 180, 0.72);
+  background: rgba(246, 223, 180, 0.6);
+}
+
+/* Only the seat on turn pulses — the row's wash alone is easy to miss on a
+   crowded table. */
+.player.active .swatch {
+  animation: seat-glow 1.6s ease-in-out infinite;
+}
+
+@keyframes seat-glow {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 1px rgba(178, 58, 44, 0.25));
+  }
+  50% {
+    filter: drop-shadow(0 0 5px rgba(178, 58, 44, 0.9));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .player.active .swatch {
+    animation: none;
+    filter: drop-shadow(0 0 3px rgba(178, 58, 44, 0.7));
+  }
 }
 
 .player.offline {
@@ -188,20 +272,17 @@ h3 {
 
 .player-name {
   font-weight: 600;
-  font-size: 0.9rem;
+  font-size: 0.82rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .swatch {
-  width: 0.7rem;
-  height: 0.7rem;
-  border-radius: 3px;
-  border: 2px solid;
+  width: var(--swatch-w);
+  aspect-ratio: 17.32 / 20;
   flex: none;
-  background-image: var(--cloth);
-  background-size: cover;
+  overflow: visible;
 }
 
 .badge {
@@ -276,11 +357,7 @@ h3 {
   display: flex;
   align-items: center;
   gap: 0.6rem;
-  margin-left: 1.05rem;
-}
-
-.counts {
-  font-variant-numeric: tabular-nums;
+  margin-top: 0.1rem;
 }
 
 .captured {
@@ -294,9 +371,22 @@ h3 {
 .captured li {
   display: flex;
   align-items: center;
-  gap: 0.15rem;
-  font-size: 0.78rem;
-  font-weight: 600;
+  gap: 0.25rem;
 }
 
+/* The same disc and display-face count the header tallies use. */
+.caste-disc {
+  display: grid;
+  place-items: center;
+  width: 1.15rem;
+  height: 1.15rem;
+  border-radius: 50%;
+  border: 1px solid;
+  flex: none;
+}
+
+.captured strong {
+  font-family: var(--font-display);
+  font-size: 0.8rem;
+}
 </style>

@@ -83,7 +83,7 @@ export interface ClientState {
   /** Where the previous turn's tiles landed, so the whole table can see them. */
   lastPlaced: string[]
   /** Every space another player has filled since your own turn last ended. */
-  sinceYourTurn: string[]
+  othersLastPlaced: string[]
   /** How the opening seat was decided, or null when it was drawn quietly. */
   opening: Opening | null
   /** Whether the viewer has anything to take back this turn. */

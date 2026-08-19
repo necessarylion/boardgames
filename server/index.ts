@@ -450,6 +450,7 @@ function sanitiseOptions(options: unknown) {
     // Absent on a client that predates the option, which should still get the
     // roll rather than silently losing it, so this defaults on rather than off.
     diceStart: o.diceStart === undefined ? true : Boolean(o.diceStart),
+    shuffleMidgame: Boolean(o.shuffleMidgame),
   }
 }
 

@@ -125,13 +125,13 @@ describe('rooms survive a restart', () => {
     playSomeTurns(room.game!, 2)
 
     const snapshot = JSON.parse(JSON.stringify(room.toSnapshot())) as RoomSnapshot
-    delete (snapshot.game as Partial<GameState>).unseenPlaced
+    delete (snapshot.game as Partial<GameState>).lastPlacedBy
 
     // Nothing marked is the right default: the table is still playable, it just
     // starts everyone off with a clean board.
     const back = Room.fromSnapshot(snapshot)
-    expect(back.game!.state.unseenPlaced).toEqual([[], []])
-    expect(sfor(back, 'token-a').sinceYourTurn).toEqual([])
+    expect(back.game!.state.lastPlacedBy).toEqual([[], []])
+    expect(sfor(back, 'token-a').othersLastPlaced).toEqual([])
   })
 
   it('keeps playing from where the restored game left off', () => {

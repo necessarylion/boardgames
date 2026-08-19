@@ -4,7 +4,7 @@ import { DEFAULT_BOARD_SHAPE } from '../shared/board'
 import { BOARD_SHAPES, type BoardShape } from '../shared/types'
 import { DEFAULT_OPTIONS, Game } from '../shared/engine'
 import { legalPlacements } from '../shared/rules'
-import { STARTING_HAND_SIZE, tileFromId } from '../shared/tiles'
+import { isSeaTile, STARTING_HAND_SIZE, tileFromId } from '../shared/tiles'
 import type { Tile } from '../shared/types'
 
 /**
@@ -231,35 +231,37 @@ describe('turn structure', () => {
     expect(game.state.lastPlaced).toEqual([nextSpace])
   })
 
-  it('holds every play for each player until they have had their own turn', () => {
+  it('keeps each seat marked on their own last move until they move again', () => {
     const game = newGame(4)
     const a = takeTurn(game)
     const b = takeTurn(game)
     const c = takeTurn(game)
 
-    // Seat 3 has been waiting through all three; seat 0 has played since the
-    // first of them, so that one is no longer news to them.
-    expect(game.state.unseenPlaced[3]).toEqual([...a, ...b, ...c])
-    expect(game.state.unseenPlaced[0]).toEqual([...b, ...c])
-    expect(game.state.unseenPlaced[2]).toEqual([])
+    expect(game.state.lastPlacedBy[0]).toEqual(a)
+    expect(game.state.lastPlacedBy[1]).toEqual(b)
+    expect(game.state.lastPlacedBy[2]).toEqual(c)
+    expect(game.state.lastPlacedBy[3]).toEqual([])
 
+    // A lap of the table replaces a seat's mark rather than clearing anyone
+    // else's — that is the whole point of hanging it on the player.
     const d = takeTurn(game)
-    expect(game.state.unseenPlaced[3]).toEqual([])
-    expect(game.state.unseenPlaced[0]).toEqual([...b, ...c, ...d])
+    expect(game.state.lastPlacedBy[3]).toEqual(d)
+    expect(game.state.lastPlacedBy[0]).toEqual(a)
   })
 
-  it('counts a turn that places nothing as having seen the board', () => {
+  it('clears a seat that ends a turn without placing anything', () => {
     const game = newGame(3)
     const first = takeTurn(game)
-    expect(game.state.unseenPlaced[1]).toEqual(first)
+    const second = takeTurn(game)
+    expect(game.state.lastPlacedBy[1]).toEqual(second)
 
     // Nothing playable is the one way a turn ends without touching the board.
-    game.state.players[1].hand = []
-    expect(game.canEndTurn(1)).toBe(true)
-    expect(game.endTurn(1).ok).toBe(true)
+    game.state.players[2].hand = []
+    expect(game.canEndTurn(2)).toBe(true)
+    expect(game.endTurn(2).ok).toBe(true)
 
-    expect(game.state.unseenPlaced[1]).toEqual([])
-    expect(game.state.unseenPlaced[2]).toEqual(first)
+    expect(game.state.lastPlacedBy[2]).toEqual([])
+    expect(game.state.lastPlacedBy[0]).toEqual(first)
   })
 
   it('passes on the final turn of the game like any other', () => {
@@ -270,10 +272,50 @@ describe('turn structure', () => {
     // The game ends before the turn passes on, so `current` is still whoever
     // closed it out.
     const ender = game.state.current
-    expect(game.state.unseenPlaced[ender]).toEqual([])
-    for (const seat of [0, 1, 2].filter((id) => id !== ender)) {
-      expect(game.state.unseenPlaced[seat]).toEqual(expect.arrayContaining(game.state.lastPlaced))
+    expect(game.state.lastPlacedBy[ender]).toEqual(game.state.lastPlaced)
+  })
+
+  it('shuffles the board once half the tiles are gone, and only if asked', () => {
+    const shuffling = openAt(
+      new Game(2, { ...DEFAULT_OPTIONS, randomHands: true, shuffleMidgame: true }, 12345),
+      0,
+    )
+    const plain = openAt(
+      new Game(2, { ...DEFAULT_OPTIONS, randomHands: true }, 12345),
+      0,
+    )
+
+    const runTo = (game: Game, half: () => boolean) => {
+      let guard = 0
+      while (game.state.phase === 'play' && !half() && guard++ < 400) takeTurn(game)
     }
+    const gone = (game: Game) =>
+      game.state.players.reduce((n, p) => n + p.hand.length + p.stack.length, 0) * 2 <=
+      Object.keys(game.tiles).length
+
+    runTo(shuffling, () => shuffling.state.shuffled)
+    expect(shuffling.state.shuffled).toBe(true)
+
+    runTo(plain, () => gone(plain))
+    expect(plain.state.shuffled).toBe(false)
+
+    // Same tiles, same spaces, different arrangement — and a ship never ends up
+    // ashore, which is the one thing that would make the position unreachable.
+    expect(Object.keys(shuffling.state.placed).sort()).toEqual(
+      Object.keys(plain.state.placed).sort(),
+    )
+    expect(Object.values(shuffling.state.placed).map((p) => p.tileId).sort()).toEqual(
+      Object.values(plain.state.placed).map((p) => p.tileId).sort(),
+    )
+    expect(shuffling.state.placed).not.toEqual(plain.state.placed)
+    for (const [spaceId, tile] of Object.entries(shuffling.state.placed)) {
+      const sea = shuffling.board.spaces[spaceId].kind === 'sea'
+      expect(isSeaTile(tileFromId(tile.tileId))).toBe(sea)
+    }
+
+    // The marks named a player per space; the shuffle has made that untrue.
+    expect(shuffling.state.lastPlaced).toEqual([])
+    expect(shuffling.state.lastPlacedBy).toEqual([[], []])
   })
 
   it('refills the hand to five at the end of a turn', () => {

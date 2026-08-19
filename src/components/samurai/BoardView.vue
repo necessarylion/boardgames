@@ -5,7 +5,7 @@ import TileGlyph from './TileGlyph.vue'
 import { flyGhost } from '@/composables/useFlight'
 import { usePanZoom, type Bounds } from '@/composables/usePanZoom'
 import { CASTE_COLOURS, PLAYER_COLOURS } from '@shared/colours'
-import { hexCentre, hexRoundedPath, type Point } from '@shared/hex'
+import { hexCentre, hexPolygon, hexRoundedPath, type Point } from '@shared/hex'
 import type { PieceRef } from '@shared/rules'
 import { SETTLEMENT_CAPACITY, type PlayerColour, type Space } from '@shared/types'
 import { t } from '@/i18n'
@@ -20,13 +20,19 @@ interface Cell {
   space: Space
   centre: Point
   outline: string
+  full: string
 }
 
 const cells = computed<Cell[]>(() =>
   game.board.order.map((id) => {
     const space = game.board.spaces[id]
     const centre = hexCentre(space.q, space.r, HEX)
-    return { space, centre, outline: hexRoundedPath(centre, HEX * 0.985) }
+    return {
+      space,
+      centre,
+      outline: hexRoundedPath(centre, HEX * 0.985),
+      full: hexPolygon(centre, HEX),
+    }
   }),
 )
 
@@ -71,15 +77,16 @@ const freshlyPlaced = computed(() => {
 })
 
 /*
- * Everything the rest of the table has played since this viewer's own turn
- * closed — at five and six players that is four or five moves they would
- * otherwise have to spot for themselves. The turn that just ended is in here
- * too, under the brighter mark that will shortly fade off it.
+ * Where every other player last placed — one mark per opponent, standing until
+ * that same opponent moves again. Deliberately not tied to the lap of the
+ * table: a mark that cleared on the viewer's own turn vanished every time play
+ * came back round. The turn that just ended is in here too, under the brighter
+ * mark that will shortly fade off it.
  */
 const earlierPlaced = computed(() => {
   const state = game.state
   if (!state || state.phase !== 'play') return new Set<string>()
-  return new Set(state.sinceYourTurn.filter((id) => id in placed.value))
+  return new Set(state.othersLastPlaced.filter((id) => id in placed.value))
 })
 
 /** Offsets for laying out a settlement's caste pieces inside its hex. */
@@ -170,6 +177,18 @@ function isSurroundedNow(space: Space): boolean {
           <stop offset="100%" stop-color="#9ed37c" stop-opacity="0" />
         </radialGradient>
       </defs>
+
+      <!--
+        Sharp, full-size hexes tile without a seam, so they colour the gaps the
+        rounded corners leave. Drawn as one layer under every hex, or a
+        neighbour's underlay would cover the rounded outline's stroke.
+      -->
+      <polygon
+        v-for="cell in cells"
+        :key="`u${cell.space.id}`"
+        :points="cell.full"
+        :class="['hex-under', `hex-${cell.space.kind}`]"
+      />
 
       <g v-for="cell in cells" :key="cell.space.id">
         <!-- terrain -->
@@ -263,7 +282,10 @@ function isSurroundedNow(space: Space): boolean {
           v-if="earlierPlaced.has(cell.space.id)"
           :d="cell.outline"
           class="tile-earlier"
-          :style="{ '--mark': PLAYER_COLOURS[ownerColour(cell.space.id)].fill }"
+          :style="{
+            '--mark': PLAYER_COLOURS[ownerColour(cell.space.id)].fill,
+            animationDelay: haloDelay(cell.space),
+          }"
         />
 
         <!-- where the last tile went; decoration, so no clicks -->
@@ -441,6 +463,11 @@ function isSurroundedNow(space: Space): boolean {
  * Both layers scale about the hex's own centre, which needs `fill-box` —
  * an SVG transform-origin is otherwise the user-space origin, far off-board.
  */
+.hex-under {
+  stroke: none;
+  pointer-events: none;
+}
+
 .hex-glow,
 .hex-halo {
   pointer-events: none;
@@ -509,6 +536,11 @@ function isSurroundedNow(space: Space): boolean {
   .piece-selectable .piece-halo,
   .piece-chosen .piece-halo {
     stroke-opacity: 0.8;
+  }
+
+  /* No blink, but the wash still marks the hex. */
+  .tile-earlier {
+    animation: none;
   }
 }
 
@@ -599,8 +631,9 @@ function isSurroundedNow(space: Space): boolean {
  * a hairline. The stroke stays narrower than the fresh mark's 3.4 so it sits
  * entirely under it and is simply revealed when that fades.
  *
- * No animation — this one stands until your own next turn closes, and five of
- * them breathing at once would be a strobe.
+ * It blinks, slowly and out of step with its neighbours (`haloDelay`), so five
+ * of them at once read as several separate moves rather than one strobe. The
+ * blink never leaves, since the mark stands until your own next turn closes.
  */
 .tile-earlier {
   fill: var(--mark);
@@ -610,6 +643,19 @@ function isSurroundedNow(space: Space): boolean {
   stroke-opacity: 0.5;
   pointer-events: none;
   filter: drop-shadow(0 0 2px var(--mark));
+  animation: earlier-blink 2.4s ease-in-out infinite;
+}
+
+@keyframes earlier-blink {
+  0%,
+  100% {
+    fill-opacity: 0.1;
+    stroke-opacity: 0.3;
+  }
+  50% {
+    fill-opacity: 0.34;
+    stroke-opacity: 0.85;
+  }
 }
 
 /*

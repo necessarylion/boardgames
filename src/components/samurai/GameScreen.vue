@@ -19,7 +19,7 @@ import { useGameStore } from '@/stores/game'
 
 const game = useGameStore()
 const showRules = ref(false)
-/** Wide enough for the 20rem column to cost nothing, so it starts open there. */
+/** Wide enough for the sidebar column to cost nothing, so it starts open there. */
 const showSidebar = ref(window.innerWidth > 900)
 
 /** Caste pieces still standing on the board. */
@@ -273,6 +273,7 @@ onUnmounted(() => {
    1px rule in the same ink. */
 .game {
   --sidebar-ms: 180ms;
+  --sidebar-w: 16rem;
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -415,7 +416,7 @@ onUnmounted(() => {
 .layout {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 20rem;
+  grid-template-columns: minmax(0, 1fr) var(--sidebar-w);
   transition: grid-template-columns var(--sidebar-ms) ease;
   min-height: 0;
   flex: 1 1 auto;
@@ -491,7 +492,7 @@ onUnmounted(() => {
 .sidebar {
   display: flex;
   flex-direction: column;
-  width: 20rem;
+  width: var(--sidebar-w);
   min-height: 0;
   overflow: hidden;
   border-left: 1px solid rgba(160, 137, 102, 0.35);
@@ -502,7 +503,7 @@ onUnmounted(() => {
 .sidebar-handle {
   position: absolute;
   top: 1.5rem;
-  right: 20rem;
+  right: var(--sidebar-w);
   z-index: 5;
   display: grid;
   place-items: center;

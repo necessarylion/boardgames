@@ -76,6 +76,10 @@ export const enSamurai = {
   'option.openInfo': 'Open information',
   'option.openInfo.hint': "— everyone's captured pieces stay visible",
   'option.openInfo.long': 'Open information (captured pieces stay visible)',
+  'option.shuffleMidgame': 'Shuffle the board halfway',
+  'option.shuffleMidgame.hint':
+    '— once half the tiles are played, every tile on the board moves to another space',
+  'option.shuffleMidgame.long': 'Shuffle the board once half the tiles are played',
   'game.timeLeft': 'Time left this turn',
   'option.turnClock': 'Turn timer',
   'option.turnClock.hint': '— out of time plays one tile at random and ends the turn',

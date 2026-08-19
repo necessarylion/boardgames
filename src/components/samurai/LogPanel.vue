@@ -9,6 +9,14 @@ const list = ref<HTMLElement | null>(null)
 
 const entries = computed(() => game.state?.log ?? [])
 
+/** The two tiles that rearrange what is already on the board — worth spotting in
+    a scrolling log, so they are marked in red. The engine words these lines
+    (`shared/engine.ts`); this matches its wording rather than widening
+    `LogEntry`, which every game and every stored snapshot shares. */
+function isRearrange(text: string) {
+  return text.includes('the switch tile') || text.includes('the move tile')
+}
+
 function nameOf(id: number | null) {
   if (id === null) return null
   return game.players.find((p) => p.id === id) ?? null
@@ -34,7 +42,9 @@ watch(
           <strong :style="{ color: PLAYER_COLOURS[nameOf(entry.player)!.colour].ink }">
             {{ nameOf(entry.player)!.name }}
           </strong>
-          {{ ' ' }}<span class="what">{{ entry.text }}</span>
+          {{ ' ' }}<span class="what" :class="{ rearrange: isRearrange(entry.text) }">{{
+            entry.text
+          }}</span>
         </template>
         <span v-else class="system">{{ entry.text }}</span>
       </li>
@@ -90,6 +100,11 @@ h3 {
 
 .what {
   color: var(--ink-soft);
+}
+
+.what.rearrange {
+  color: var(--vermillion);
+  font-weight: 600;
 }
 
 .system {

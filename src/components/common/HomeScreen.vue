@@ -46,6 +46,7 @@ const openInformation = ref(DEFAULT_OPTIONS.openInformation)
 const boardShape = ref(DEFAULT_OPTIONS.boardShape)
 const turnSeconds = ref(DEFAULT_OPTIONS.turnSeconds)
 const diceStart = ref(DEFAULT_OPTIONS.diceStart)
+const shuffleMidgame = ref(DEFAULT_OPTIONS.shuffleMidgame)
 
 function create() {
   if (!name.value.trim()) return game.showError(t('home.error.name'))
@@ -54,6 +55,7 @@ function create() {
     kind: kind.value,
     randomHands: randomHands.value,
     openInformation: openInformation.value,
+    shuffleMidgame: shuffleMidgame.value,
     boardShape: boardShape.value,
     // Carnivals runs no shot clock and draws its dealer quietly.
     turnSeconds: carnivals ? 0 : turnSeconds.value,
@@ -147,6 +149,13 @@ function join() {
                 <span>
                   {{ t('option.openInfo') }}
                   <em class="tiny muted">{{ t('option.openInfo.hint') }}</em>
+                </span>
+              </label>
+              <label class="check">
+                <input v-model="shuffleMidgame" type="checkbox" />
+                <span>
+                  {{ t('option.shuffleMidgame') }}
+                  <em class="tiny muted">{{ t('option.shuffleMidgame.hint') }}</em>
                 </span>
               </label>
               <div class="board-pick">

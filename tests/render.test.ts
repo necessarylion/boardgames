@@ -339,18 +339,17 @@ describe('what each seat has yet to see', () => {
     return space
   }
 
-  it('tells each seat only what has happened since their own turn', () => {
+  it('tells each seat where the others last played, never their own move', () => {
     const r = table()
     const first = turn(r)
     const second = turn(r)
 
-    expect(sfor(r, 'token-c').sinceYourTurn).toEqual([first, second])
-    expect(sfor(r, 'token-a').sinceYourTurn).toEqual([second])
-    expect(sfor(r, 'token-b').sinceYourTurn).toEqual([])
+    expect(sfor(r, 'token-c').othersLastPlaced).toEqual([first, second])
+    expect(sfor(r, 'token-a').othersLastPlaced).toEqual([second])
+    expect(sfor(r, 'token-b').othersLastPlaced).toEqual([first])
 
-    // A spectator gets the union of every bucket — the last lap of the table —
-    // with each placement in it once, however many seats have yet to see it.
-    expect([...sfor(r, 'nobody').sinceYourTurn].sort()).toEqual([first, second].sort())
+    // A spectator has no move of their own to leave out, so they get all of it.
+    expect([...sfor(r, 'nobody').othersLastPlaced].sort()).toEqual([first, second].sort())
   })
 
   it('keeps the earlier plays marked underneath the newest one', async () => {
@@ -375,10 +374,11 @@ describe('what each seat has yet to see', () => {
     expect(wrapper.findAll('.tile-mark')).toHaveLength(1)
     expect(wrapper.findAll('.tile-earlier')).toHaveLength(2)
 
-    // Seat 1 has just played, so they are caught up and nothing is left over.
+    // Seat 1 has just played, so their own mark is left out of their view —
+    // seat 0's still stands, because a mark only goes when its own player moves.
     game.state = sfor(r, 'token-b')
     await nextTick()
-    expect(wrapper.findAll('.tile-earlier')).toHaveLength(0)
+    expect(wrapper.findAll('.tile-earlier')).toHaveLength(1)
   })
 })
 

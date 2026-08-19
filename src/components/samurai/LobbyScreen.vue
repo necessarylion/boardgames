@@ -65,7 +65,7 @@ async function copyLink() {
   }
 }
 
-function toggle(key: 'randomHands' | 'openInformation' | 'diceStart') {
+function toggle(key: 'randomHands' | 'openInformation' | 'diceStart' | 'shuffleMidgame') {
   const options = game.state?.options
   if (!options || !game.isHost) return
   game.setOptions({ ...options, [key]: !options[key] })
@@ -150,6 +150,15 @@ function setBoard(shape: BoardShape) {
             @change="toggle('openInformation')"
           />
           <span>{{ t('option.openInfo.long') }}</span>
+        </label>
+        <label class="check" :class="{ locked: !game.isHost }">
+          <input
+            type="checkbox"
+            :checked="game.state?.options.shuffleMidgame"
+            :disabled="!game.isHost"
+            @change="toggle('shuffleMidgame')"
+          />
+          <span>{{ t('option.shuffleMidgame.long') }}</span>
         </label>
         <div class="team-pick" :class="{ locked: !game.isHost }">
           <span class="board-label tiny muted">{{ t('option.teams') }}</span>
@@ -301,6 +310,19 @@ h2 {
   gap: 0.5rem;
   font-size: 1.1rem;
   margin-bottom: 0.75rem;
+}
+
+/* The same split as the log and the player panel: the room code, the headings
+   and the seat names keep Audiowide, and everything you actually read to make a
+   choice — option labels, hints, counts, badges — sits in the body face. */
+p,
+label,
+em,
+.badge,
+.board-label,
+h2 .tiny,
+.seat .muted {
+  font-family: var(--font-body);
 }
 
 .seats {

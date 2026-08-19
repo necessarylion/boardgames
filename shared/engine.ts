@@ -57,6 +57,12 @@ export interface GameOptions {
    * watch it being decided.
    */
   diceStart: boolean
+  /**
+   * Shuffle the tiles already on the board once, the first time half the
+   * table's tiles have been played. Off by default: it is not a rule of the
+   * game, and it redraws every contest at once.
+   */
+  shuffleMidgame: boolean
 }
 
 /** Shot-clock lengths a table can be set up with. 0 is no clock at all. */
@@ -70,6 +76,7 @@ export const DEFAULT_OPTIONS: GameOptions = {
   turnSeconds: 0,
   teams: 0,
   diceStart: true,
+  shuffleMidgame: false,
 }
 
 export interface EnginePlayer {
@@ -120,11 +127,12 @@ export interface GameState {
    */
   lastPlaced: string[]
   /**
-   * Indexed by seat: the spaces every *other* player has committed since that
-   * seat's own turn last closed. `lastPlaced` holds one turn only, so at a
-   * five-player table four plays go unmarked before play comes back round.
+   * Indexed by seat: the spaces that seat committed on its own most recent
+   * turn, replaced each time it plays again. `lastPlaced` holds the newest turn
+   * only, so at a five-player table four plays would go unmarked before play
+   * came back round.
    */
-  unseenPlaced: string[][]
+  lastPlacedBy: string[][]
   /**
    * What the current player has done this turn, newest last, so a misclick can
    * be taken back. Emptied by `endTurn`, which is the point everything commits:
@@ -145,6 +153,8 @@ export interface GameState {
    * can toggle it, so it is not tied to whose turn it is.
    */
   paused: boolean
+  /** The midgame shuffle has already fired; it happens once a game or not at all. */
+  shuffled: boolean
 }
 
 export type ActionResult = { ok: true } | { ok: false; error: string }
@@ -208,7 +218,7 @@ export class Game {
       turnNumber: 1,
       placedThisTurn: [],
       lastPlaced: [],
-      unseenPlaced: Array.from({ length: playerCount }, () => []),
+      lastPlacedBy: Array.from({ length: playerCount }, () => []),
       undoStack: [],
       playedNonFast: false,
       redrewThisTurn: false,
@@ -217,6 +227,7 @@ export class Game {
       result: null,
       lastCaptures: [],
       paused: false,
+      shuffled: false,
     }
 
     if (options.randomHands) {
@@ -262,11 +273,13 @@ export class Game {
       ...state,
       undoStack: state.undoStack ?? [],
       lastPlaced: state.lastPlaced ?? [],
-      unseenPlaced: Array.from({ length: state.playerCount }, (_, i) => state.unseenPlaced?.[i] ?? []),
+      lastPlacedBy: Array.from({ length: state.playerCount }, (_, i) => state.lastPlacedBy?.[i] ?? []),
       // A snapshot written before pause existed was never paused.
       paused: state.paused ?? false,
       // Nor could it have redrawn under a rule it predates.
       redrewThisTurn: state.redrewThisTurn ?? false,
+      // Nor shuffled under an option it predates.
+      shuffled: state.shuffled ?? false,
       // A snapshot from before the opening seat was drawn started on seat 0,
       // which is exactly what rounds were counted from at the time.
       first: state.first ?? 0,
@@ -513,15 +526,17 @@ export class Game {
     // placed nothing clears the mark rather than leaving the last one to linger.
     this.state.lastPlaced = this.state.placedThisTurn.filter((id) => id in this.state.placed)
 
-    // Hand this turn to everyone who has not acted since, and clear the ending
-    // player's own bucket — they have just had their look at the board. Written
-    // here rather than after the end-of-game check below, which returns early:
-    // the final turn has to reach the table like any other.
-    for (let seat = 0; seat < this.state.playerCount; seat++) {
-      this.state.unseenPlaced[seat] =
-        seat === playerId ? [] : [...this.state.unseenPlaced[seat], ...this.state.lastPlaced]
-    }
+    // Each seat's own last move, replacing whatever it had before — the mark is
+    // tied to the player who made it and not to the lap of the table, so it
+    // stands until that same player places again rather than clearing on a
+    // round boundary. Written here rather than after the end-of-game check
+    // below, which returns early: the final turn has to reach the table like
+    // any other.
+    this.state.lastPlacedBy[playerId] = this.state.lastPlaced
 
+    // Before the contests, not after: a shuffle can finish a surround, and the
+    // one `resolveCaptures` below then settles the board as it actually stands.
+    this.maybeShuffle()
     this.resolveCaptures()
     this.refreshHand(playerId)
 
@@ -677,6 +692,40 @@ export class Game {
       }
     }
     return false
+  }
+
+  /**
+   * Pick the board up and put it down again: every placed tile lands on some
+   * other occupied space, owner riding along. Fires once a game, the first time
+   * half the tiles have left the players' hands and stacks, and only for a table
+   * that asked for it.
+   *
+   * Sea and land are permuted separately, because that is the whole of what
+   * makes a placement legal (`legalPlacements`) — a ship in a rice field would
+   * be a position no player could have reached.
+   */
+  private maybeShuffle() {
+    if (!this.state.options.shuffleMidgame || this.state.shuffled) return
+    const left = this.state.players.reduce((n, p) => n + p.hand.length + p.stack.length, 0)
+    if (left * 2 > Object.keys(this.tiles).length) return
+
+    this.state.shuffled = true
+    // Derived from the seed rather than carried in the state, the way a redraw
+    // is, so a restored game shuffles exactly as the original one did.
+    const rng = new Rng(this.state.seed + 104729 * (this.state.turnNumber + 1))
+    for (const kind of ['sea', 'land'] as const) {
+      const spaces = Object.keys(this.state.placed).filter(
+        (id) => this.board.spaces[id].kind === kind,
+      )
+      const tiles = rng.shuffle(spaces.map((id) => this.state.placed[id]))
+      spaces.forEach((id, i) => (this.state.placed[id] = tiles[i]))
+    }
+
+    // Both marks name a space by who last played there, which the shuffle has
+    // just made a lie of.
+    this.state.lastPlaced = []
+    this.state.lastPlacedBy = this.state.lastPlacedBy.map(() => [])
+    this.log(null, 'Half the tiles are gone: the board is shuffled.')
   }
 
   private resolveCaptures() {
