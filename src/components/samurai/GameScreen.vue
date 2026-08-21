@@ -5,7 +5,7 @@ import GameIcon from '../common/GameIcon.vue'
 import CaptureDialog from './CaptureDialog.vue'
 import GameOverDialog from './GameOverDialog.vue'
 import HandBar from './HandBar.vue'
-import LogPanel from './LogPanel.vue'
+import LogPanel from '../common/LogPanel.vue'
 import PlayerPanel from './PlayerPanel.vue'
 import RulesDialog from './RulesDialog.vue'
 import TableMenu from '../common/TableMenu.vue'
@@ -244,7 +244,7 @@ onUnmounted(() => {
       <Transition name="fade">
         <div v-if="showSidebar" id="game-sidebar" class="sidebar">
           <PlayerPanel />
-          <LogPanel />
+          <LogPanel :entries="game.state?.log ?? []" :players="game.players" />
         </div>
       </Transition>
 

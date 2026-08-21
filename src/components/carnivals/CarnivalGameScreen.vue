@@ -3,6 +3,7 @@ import { computed, nextTick, onUnmounted, ref, watch } from 'vue'
 import CarnivalCard from './CarnivalCard.vue'
 import CarnivalCoin from './CarnivalCoin.vue'
 import CarnivalRulesDialog from './CarnivalRulesDialog.vue'
+import LogPanel from '../common/LogPanel.vue'
 import TableMenu from '../common/TableMenu.vue'
 import { HAND_CARDS } from '@shared/carnivals'
 import { PLAYER_COLOURS } from '@shared/colours'
@@ -12,8 +13,7 @@ import { useGameStore } from '@/stores/game'
 
 const game = useGameStore()
 const showRules = ref(false)
-/** The play log, floated bottom-left; folds down to its header on request. */
-const logOpen = ref(true)
+const showSidebar = ref(window.innerWidth > 900)
 
 const players = computed(() => game.carnivalPlayers)
 const nameOf = (id: number | null) =>
@@ -280,29 +280,7 @@ function seatStyle(index: number, count: number) {
 const raiseTo = computed({
   get: () => game.carnivalRaiseTo,
   set: (v: number) => (game.carnivalRaiseTo = v),
-})
-
-/** Log, newest last, with seat tokens swapped for names. */
-const logLines = computed(() =>
-  (game.carnival?.log ?? []).map((entry, i) => ({
-    key: `${i}:${entry.turn}`,
-    who: entry.player === null ? null : nameOf(entry.player),
-    colour: players.value.find((p) => p.id === entry.player)?.colour ?? null,
-    text: entry.text.replace(/#(\d+)/g, (whole, id: string) => nameOf(Number(id)) || whole),
-  })),
-)
-
-const logEl = ref<HTMLElement | null>(null)
-watch(
-  () => logLines.value.length,
-  async () => {
-    await nextTick()
-    const el = logEl.value
-    if (el) el.scrollTop = el.scrollHeight
-  },
-  { flush: 'post' },
-)
-</script>
+})</script>
 
 <template>
   <div class="game">
@@ -329,107 +307,112 @@ watch(
       </div>
     </header>
 
-    <main class="table">
-      <div ref="ringEl" class="ring" :class="{ stacked: !isRing }">
-        <!-- The pot, in the middle of the table. -->
-        <div ref="potEl" class="pot" :class="{ swept: resolved }">
-          <span class="pot-label tiny">{{ t('carnival.pot') }}</span>
-          <span class="pot-amount"><CarnivalCoin :size="20" />{{ money(resolved ? 0 : pot) }}</span>
-          <span v-if="currentBet > 0" class="tiny muted">{{ t('carnival.currentBet', { n: currentBet }) }}</span>
+    <main class="layout" :class="{ solo: !showSidebar }">
+      <div class="table">
+        <div ref="ringEl" class="ring" :class="{ stacked: !isRing }">
+          <!-- The pot, in the middle of the table. -->
+          <div ref="potEl" class="pot" :class="{ swept: resolved }">
+            <span class="pot-label tiny">{{ t('carnival.pot') }}</span>
+            <span class="pot-amount"><CarnivalCoin :size="20" />{{ money(resolved ? 0 : pot) }}</span>
+            <span v-if="currentBet > 0" class="tiny muted">{{ t('carnival.currentBet', { n: currentBet }) }}</span>
+          </div>
+
+          <div
+            v-for="(p, i) in seatOrder"
+            :key="p.id"
+            :ref="(el) => setSeatRef(p.id, el as Element | null)"
+            class="seat"
+            :class="{
+              active: p.id === game.carnival?.current && step === 'betting' && !isOver,
+              me: p.id === game.you,
+              folded: p.folded,
+              out: p.out,
+              won: step === 'showdown' && winnerIds.has(p.id),
+            }"
+            :style="{ '--seat': PLAYER_COLOURS[p.colour].ink, ...seatStyle(i, seatOrder.length) }"
+          >
+            <div class="seat-head">
+              <span class="dot" :style="{ background: PLAYER_COLOURS[p.colour].ink }" />
+              <span class="pname">{{ p.name }}</span>
+              <span v-if="p.id === game.you" class="tag you">{{ t('lobby.badge.you') }}</span>
+              <span v-if="p.out" class="tag out-tag">{{ t('carnival.out') }}</span>
+              <span v-else-if="p.folded" class="tag">{{ t('carnival.folded') }}</span>
+              <span v-else-if="step === 'selecting'" class="tag" :class="{ waiting: !p.selected }">
+                {{ p.selected ? t('carnival.ready') : t('carnival.picking') }}
+              </span>
+              <span
+                v-else-if="step === 'showdown' && !resolved"
+                class="tag"
+                :class="{ waiting: !p.revealed }"
+              >
+                {{ p.revealed ? t('carnival.shown') : t('carnival.hidden') }}
+              </span>
+              <span
+                v-if="!p.out && !p.folded && p.carnivals === 0 && step !== 'selecting'"
+                class="tag allin-tag"
+              >
+                {{ t('carnival.allInTag') }}
+              </span>
+            </div>
+
+            <div class="cards">
+              <CarnivalCard
+                colour="red"
+                :value="cardsFor(p).red.value"
+                :facedown="cardsFor(p).red.facedown"
+                :dim="p.folded"
+                :win="step === 'showdown' && winnerIds.has(p.id)"
+                size="small"
+              />
+              <CarnivalCard
+                colour="blue"
+                :value="cardsFor(p).blue.value"
+                :facedown="cardsFor(p).blue.facedown"
+                :dim="p.folded"
+                :win="step === 'showdown' && winnerIds.has(p.id)"
+                size="small"
+              />
+            </div>
+
+            <div class="money-row">
+              <span class="bank">{{ money(p.carnivals) }}</span>
+              <span v-if="p.committed > 0 && step === 'betting'" class="bet tiny">
+                {{ t('carnival.inPot', { n: p.committed }) }}
+              </span>
+              <span
+                v-else-if="resolved && result?.shares[p.id]"
+                class="won-badge"
+                aria-hidden="true"
+              >
+                <CarnivalCoin :size="14" />+{{ result?.shares[p.id] }}
+              </span>
+            </div>
+          </div>
         </div>
 
-        <div
-          v-for="(p, i) in seatOrder"
-          :key="p.id"
-          :ref="(el) => setSeatRef(p.id, el as Element | null)"
-          class="seat"
-          :class="{
-            active: p.id === game.carnival?.current && step === 'betting' && !isOver,
-            me: p.id === game.you,
-            folded: p.folded,
-            out: p.out,
-            won: step === 'showdown' && winnerIds.has(p.id),
-          }"
-          :style="{ '--seat': PLAYER_COLOURS[p.colour].ink, ...seatStyle(i, seatOrder.length) }"
-        >
-          <div class="seat-head">
-            <span class="dot" :style="{ background: PLAYER_COLOURS[p.colour].ink }" />
-            <span class="pname">{{ p.name }}</span>
-            <span v-if="p.id === game.you" class="tag you">{{ t('lobby.badge.you') }}</span>
-            <span v-if="p.out" class="tag out-tag">{{ t('carnival.out') }}</span>
-            <span v-else-if="p.folded" class="tag">{{ t('carnival.folded') }}</span>
-            <span v-else-if="step === 'selecting'" class="tag" :class="{ waiting: !p.selected }">
-              {{ p.selected ? t('carnival.ready') : t('carnival.picking') }}
-            </span>
-            <span
-              v-else-if="step === 'showdown' && !resolved"
-              class="tag"
-              :class="{ waiting: !p.revealed }"
-            >
-              {{ p.revealed ? t('carnival.shown') : t('carnival.hidden') }}
-            </span>
-            <span
-              v-if="!p.out && !p.folded && p.carnivals === 0 && step !== 'selecting'"
-              class="tag allin-tag"
-            >
-              {{ t('carnival.allInTag') }}
-            </span>
-          </div>
-
-          <div class="cards">
-            <CarnivalCard
-              colour="red"
-              :value="cardsFor(p).red.value"
-              :facedown="cardsFor(p).red.facedown"
-              :dim="p.folded"
-              :win="step === 'showdown' && winnerIds.has(p.id)"
-              size="small"
-            />
-            <CarnivalCard
-              colour="blue"
-              :value="cardsFor(p).blue.value"
-              :facedown="cardsFor(p).blue.facedown"
-              :dim="p.folded"
-              :win="step === 'showdown' && winnerIds.has(p.id)"
-              size="small"
-            />
-          </div>
-
-          <div class="money-row">
-            <span class="bank">{{ money(p.carnivals) }}</span>
-            <span v-if="p.committed > 0 && step === 'betting'" class="bet tiny">
-              {{ t('carnival.inPot', { n: p.committed }) }}
-            </span>
-            <span
-              v-else-if="resolved && result?.shares[p.id]"
-              class="won-badge"
-              aria-hidden="true"
-            >
-              <CarnivalCoin :size="14" />+{{ result?.shares[p.id] }}
-            </span>
-          </div>
-        </div>
       </div>
 
-      <!-- The play log, floated in the bottom-left corner and folded away to its
-           header on request, so it never sits on top of a seat for long. -->
-      <aside class="log panel" :class="{ folded: !logOpen }">
-        <button class="log-head" type="button" @click="logOpen = !logOpen">
-          <span>{{ t('carnival.log.title') }}</span>
-          <span aria-hidden="true">{{ logOpen ? '▾' : '▴' }}</span>
-        </button>
-        <ol v-if="logOpen" ref="logEl" class="log-lines scroll">
-          <li v-for="line in logLines" :key="line.key">
-            <span
-              v-if="line.colour"
-              class="log-dot"
-              :style="{ background: PLAYER_COLOURS[line.colour].ink }"
-            />
-            <span v-if="line.who" class="log-who">{{ line.who }}</span>
-            <span class="log-text">{{ line.text }}</span>
-          </li>
-        </ol>
-      </aside>
+      <Transition name="fade">
+        <aside v-if="showSidebar" id="game-sidebar" class="sidebar">
+          <LogPanel
+            :entries="game.carnival?.log ?? []"
+            :players="players"
+            :mark-of="(hand: number) => t('carnival.handNo', { hand })"
+          />
+        </aside>
+      </Transition>
+
+      <!-- Sits on the rule beside the sidebar, and on the layout's own edge once
+           the sidebar is gone, which is the only way back to it. -->
+      <button
+        class="sidebar-handle"
+        :aria-expanded="showSidebar"
+        aria-controls="game-sidebar"
+        :aria-label="showSidebar ? t('game.hideInfo') : t('game.showInfo')"
+        @click="showSidebar = !showSidebar"
+      >
+        <span class="chev" aria-hidden="true">◀</span>
+      </button>
     </main>
 
     <!-- The controls: betting when it is your turn, and dealing on between hands. -->
@@ -640,14 +623,95 @@ watch(
 
 /* The table fills the window under the topbar and above the controls; the ring
    grows into whatever is left, so a bigger screen is a bigger table. */
+.layout {
+  --sidebar-ms: 180ms;
+  --sidebar-w: 16rem;
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--sidebar-w);
+  transition: grid-template-columns var(--sidebar-ms) ease;
+  flex: 1 1 auto;
+  min-height: 0;
+  /* The sidebar keeps its width and slides out past this edge. */
+  overflow: hidden;
+}
+
+/* The track goes to zero rather than away: grid-template-columns only
+   interpolates between the same number of tracks. */
+.layout.solo {
+  grid-template-columns: minmax(0, 1fr) 0rem;
+}
+
 .table {
   position: relative;
-  flex: 1 1 auto;
   min-height: 0;
   display: flex;
   flex-direction: column;
   padding: 0.75rem 1rem;
-  width: 100%;
+}
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  width: var(--sidebar-w);
+  min-height: 0;
+  overflow: hidden;
+  border-left: 1px solid rgba(160, 137, 102, 0.35);
+}
+
+.sidebar-handle {
+  position: absolute;
+  top: 1.5rem;
+  right: var(--sidebar-w);
+  z-index: 5;
+  display: grid;
+  place-items: center;
+  width: 0.95rem;
+  height: 3rem;
+  padding: 0;
+  font-size: 0.6rem;
+  color: var(--ink-soft);
+  background: var(--paper);
+  border: 1px solid rgba(160, 137, 102, 0.35);
+  border-right: none;
+  border-radius: 5px 0 0 5px;
+  transition: right var(--sidebar-ms) ease;
+}
+
+.sidebar-handle:hover {
+  color: var(--ink);
+}
+
+.layout.solo .sidebar-handle {
+  right: 0;
+}
+
+.chev {
+  transition: transform var(--sidebar-ms) ease;
+}
+
+.sidebar-handle[aria-expanded='true'] .chev {
+  transform: rotate(180deg);
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity var(--sidebar-ms) ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .layout,
+  .chev,
+  .sidebar-handle,
+  .fade-enter-active,
+  .fade-leave-active {
+    transition: none;
+  }
 }
 
 /* Seats are laid round an ellipse by the inline left/top the script computes;
@@ -858,82 +922,6 @@ watch(
   }
 }
 
-/* --- log ------------------------------------------------------------------ */
-
-/* Floated in the bottom-left corner, over the ring. Collapses to its header so
-   it can get out of the way of a seat when the table is crowded. */
-.log {
-  position: absolute;
-  left: 1rem;
-  bottom: 1rem;
-  z-index: 20;
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-  width: min(17rem, calc(100% - 2rem));
-  max-height: min(45%, 14rem);
-  padding: 0.5rem 0.7rem;
-  border: 2px solid var(--gold-line);
-  border-radius: 10px;
-  background: linear-gradient(170deg, rgba(255, 252, 242, 0.96), rgba(246, 231, 193, 0.92));
-  box-shadow: var(--shadow);
-}
-
-.log.folded {
-  max-height: none;
-}
-
-.log-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.6rem;
-  width: 100%;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  background: none;
-  font-family: var(--font-display);
-  font-size: 0.9rem;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--ink-soft);
-  cursor: pointer;
-}
-
-.log-lines {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  font-size: 0.78rem;
-  line-height: 1.35;
-  color: var(--ink-soft);
-}
-
-.log-lines li {
-  display: flex;
-  align-items: baseline;
-  gap: 0.3rem;
-}
-
-.log-dot {
-  flex: none;
-  width: 0.45rem;
-  height: 0.45rem;
-  border-radius: 50%;
-  transform: translateY(-0.05rem);
-}
-
-.log-who {
-  flex: none;
-  font-weight: 600;
-  color: var(--ink);
-}
-
 /* --- controls ------------------------------------------------------------ */
 
 .controls {
@@ -991,16 +979,25 @@ watch(
 
 /* Narrow: the seats stack (decided by measurement in the script), so the log
    drops back into the flow beneath them rather than floating over the corner. */
-@media (max-width: 46rem) {
+@media (max-width: 900px) {
+  /* One column, the log stacking under the table and never more than half the
+     screen. `.layout.solo` outranks the desktop rule, so it is answered here. */
+  .layout,
+  .layout.solo {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .table {
     overflow-y: auto;
   }
 
-  .log {
-    position: static;
+  .sidebar {
     width: auto;
-    max-height: 11rem;
-    margin-top: 0.6rem;
+    max-height: 45vh;
+  }
+
+  .sidebar-handle {
+    right: 0;
   }
 }
 

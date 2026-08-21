@@ -48,7 +48,6 @@ export const enCarnivals = {
   'carnival.ready': 'ready',
   'carnival.hidden': 'to show',
   'carnival.shown': 'shown',
-  'carnival.log.title': 'Log',
 
   // --- picking your cards ----------------------------------------------------
   'carnival.pick.title': 'Pick your cards',

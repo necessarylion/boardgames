@@ -1,14 +1,25 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
 import { PLAYER_COLOURS } from '@shared/colours'
-import type { LogEntry } from '@shared/types'
+import type { LogEntry, PlayerColour } from '@shared/types'
 import { t } from '@/i18n'
-import { useGameStore } from '@/stores/game'
 
-const game = useGameStore()
+/**
+ * The play log, shared by every table that keeps one. The entries are worded by
+ * the engine; this only swaps seat ids for names and rules off each turn.
+ */
+const props = withDefaults(
+  defineProps<{
+    entries: LogEntry[]
+    players: { id: number; name: string; colour: PlayerColour }[]
+    /** The label on the rule where `LogEntry.turn` changes — a round, a hand... */
+    markOf?: (turn: number) => string
+  }>(),
+  { markOf: (turn: number) => t('game.round', { turn }) },
+)
+
 const list = ref<HTMLElement | null>(null)
-
-const entries = computed(() => game.state?.log ?? [])
+const entries = computed(() => props.entries)
 
 /**
  * The log with a rule dropped in wherever the round changes. Built here rather
@@ -38,7 +49,12 @@ function isRearrange(text: string) {
 
 function nameOf(id: number | null) {
   if (id === null) return null
-  return game.players.find((p) => p.id === id) ?? null
+  return props.players.find((p) => p.id === id) ?? null
+}
+
+/** Engines that cannot see names write a seat as `#id`; it reads as the name here. */
+function wording(text: string) {
+  return text.replace(/#(\d+)/g, (whole, id: string) => nameOf(Number(id))?.name ?? whole)
 }
 
 watch(
@@ -58,7 +74,7 @@ watch(
            so it is the one string on screen that stays in English. -->
       <template v-for="(row, i) in rows" :key="i">
         <li v-if="'mark' in row" class="round-mark">
-          <span>{{ t('game.round', { turn: row.mark }) }}</span>
+          <span>{{ markOf(row.mark) }}</span>
         </li>
         <li
           v-else-if="nameOf(row.entry.player)"
@@ -67,11 +83,11 @@ watch(
         >
           <strong>{{ nameOf(row.entry.player)!.name }}</strong>
           {{ ' ' }}<span class="what" :class="{ rearrange: isRearrange(row.entry.text) }">{{
-            row.entry.text
+            wording(row.entry.text)
           }}</span>
         </li>
         <li v-else class="entry system-row">
-          <span class="system">{{ row.entry.text }}</span>
+          <span class="system">{{ wording(row.entry.text) }}</span>
         </li>
       </template>
       <li v-if="!entries.length" class="muted tiny">{{ t('log.empty') }}</li>

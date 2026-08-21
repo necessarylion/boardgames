@@ -48,7 +48,6 @@ export const myCarnivals = {
   'carnival.ready': 'အဆင်သင့်',
   'carnival.hidden': 'ပြရန်',
   'carnival.shown': 'ပြပြီး',
-  'carnival.log.title': 'မှတ်တမ်း',
 
   // --- picking your cards ----------------------------------------------------
   'carnival.pick.title': 'ကတ်များ ရွေးပါ',
