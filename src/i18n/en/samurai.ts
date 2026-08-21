@@ -107,6 +107,7 @@ export const enSamurai = {
   'lobby.copyFailed': 'Could not copy — select the link and copy it manually.',
   'lobby.leave': 'Leave',
   'lobby.players': 'Players',
+  'lobby.pickColour': 'Pick your colour',
   'lobby.seatCount': '{seated} / {max}',
   'lobby.badge.host': 'Host',
   'lobby.badge.you': 'You',

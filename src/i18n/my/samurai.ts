@@ -106,6 +106,7 @@ export const mySamurai = {
   'lobby.copyFailed': 'မိတ္တူကူး၍ မရပါ — လင့်ခ်ကို ရွေးချယ်ပြီး ကိုယ်တိုင် မိတ္တူကူးပါ။',
   'lobby.leave': 'ထွက်ရန်',
   'lobby.players': 'ကစားသမားများ',
+  'lobby.pickColour': 'အရောင်ရွေးပါ',
   'lobby.seatCount': '{seated} / {max}',
   'lobby.badge.host': 'အိမ်ရှင်',
   'lobby.badge.you': 'သင်',

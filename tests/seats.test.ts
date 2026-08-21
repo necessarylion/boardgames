@@ -42,14 +42,45 @@ describe('seat colours', () => {
     expect(new Set(first).size).toBeGreaterThan(1)
   })
 
-  it('keeps to the same palette when a seat opens up', () => {
+  it('leaves every colour with its wearer when a seat opens up', () => {
     const room = fullRoom('LEAV')
     const palette = [...room.colours]
 
     room.removeSeat('token-2')
 
-    expect(room.seats.map((s) => s.colour)).toEqual(palette.slice(0, MAX_PLAYERS - 1))
+    // Renumbering never recolours — a colour someone chose must stay theirs.
+    expect(room.seats.map((s) => s.colour)).toEqual(palette.filter((_, i) => i !== 2))
     expect(new Set(room.seats.map((s) => s.colour)).size).toBe(MAX_PLAYERS - 1)
+  })
+
+  it('lets a player pick a free colour, and never a taken one', () => {
+    const room = new Room('PICK')
+    room.addSeat('token-a', 'Ada')
+    room.addSeat('token-b', 'Bo')
+
+    const taken = room.seats[1].colour
+    expect(room.setColour('token-a', taken)).not.toBeNull()
+
+    const free = COLOUR_ORDER.find((c) => room.seats.every((s) => s.colour !== c))!
+    expect(room.setColour('token-a', free)).toBeNull()
+    expect(room.seats[0].colour).toBe(free)
+
+    expect(room.setColour('token-a', 'tartan' as never)).not.toBeNull()
+    expect(room.setColour('nobody', free)).not.toBeNull()
+
+    room.start()
+    const another = COLOUR_ORDER.find((c) => room.seats.every((s) => s.colour !== c))!
+    expect(room.setColour('token-a', another)).not.toBeNull()
+  })
+
+  it('hands a new seat a colour nobody wears, even after a pick', () => {
+    const room = new Room('JOIN')
+    room.addSeat('token-a', 'Ada')
+    // Ada takes exactly the colour the next joiner would have been dealt.
+    expect(room.setColour('token-a', room.colours[1])).toBeNull()
+
+    room.addSeat('token-b', 'Bo')
+    expect(room.seats[1].colour).not.toBe(room.seats[0].colour)
   })
 
   it('opens eight seats for a card game but only six for Samurai', () => {

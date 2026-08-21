@@ -209,6 +209,13 @@ wss.on('connection', (socket) => {
         return
       }
 
+      case 'colour': {
+        const error = room.setColour(activeToken, msg.colour)
+        if (error) return fail(socket, error)
+        commit(room)
+        return
+      }
+
       case 'renameTeam': {
         const error = room.renameTeam(activeToken, msg.team, msg.name)
         if (error) return fail(socket, error)

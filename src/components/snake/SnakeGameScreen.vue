@@ -1,15 +1,33 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted } from 'vue'
 import TableMenu from '../common/TableMenu.vue'
-import { PLAYER_COLOURS } from '@shared/colours'
 import { SNAKE_TICK_MS, type SnakeDir } from '@shared/snake'
+import type { PlayerColour } from '@shared/types'
 import { t } from '@/i18n'
 import { useGameStore } from '@/stores/game'
+
+/**
+ * The board's own palette, not the shared dyed-cloth one: eight snakes moving
+ * five times a second have to be told apart at a glance, so each seat gets a
+ * saturated hue as far from its neighbours as the wheel allows, with a darker
+ * head in the same hue.
+ */
+const SNAKE_COLOURS: Record<PlayerColour, { body: string; head: string }> = {
+  gold: { body: '#F9A825', head: '#A26D18' },
+  red: { body: '#D32F2F', head: '#8E1F1F' },
+  green: { body: '#388E3C', head: '#245C27' },
+  purple: { body: '#7B1FA2', head: '#4F1468' },
+  teal: { body: '#00897B', head: '#005950' },
+  rose: { body: '#C2185B', head: '#7E0F3B' },
+  orange: { body: '#795548', head: '#4E372E' },
+  indigo: { body: '#1976D2', head: '#104E89' },
+}
 
 const game = useGameStore()
 
 const players = computed(() => game.snPlayers)
-const size = computed(() => game.snake?.gridSize ?? 1)
+const w = computed(() => game.snake?.gridW ?? 1)
+const h = computed(() => game.snake?.gridH ?? 1)
 const isOver = computed(() => game.snake?.phase === 'over')
 
 const countdownSeconds = computed(() => {
@@ -104,15 +122,19 @@ function eyeOffsets(dir: SnakeDir): [number, number][] {
       <div class="board-wrap">
         <svg
           class="board"
-          :viewBox="`0 0 ${size} ${size}`"
+          :viewBox="`0 0 ${w} ${h}`"
+          :style="{
+            aspectRatio: `${w} / ${h}`,
+            width: `min(100%, calc((100vh - 11rem) * ${(w / h).toFixed(4)}))`,
+          }"
           @pointerdown="onPointerDown"
           @pointerup="onPointerUp"
         >
-          <rect x="0" y="0" :width="size" :height="size" class="ground" />
+          <rect x="0" y="0" :width="w" :height="h" class="ground" />
           <!-- A faint grid, so distances can be judged at a glance. -->
           <g class="gridlines">
-            <line v-for="n in size - 1" :key="`v${n}`" :x1="n" y1="0" :x2="n" :y2="size" />
-            <line v-for="n in size - 1" :key="`h${n}`" x1="0" :y1="n" :x2="size" :y2="n" />
+            <line v-for="n in w - 1" :key="`v${n}`" :x1="n" y1="0" :x2="n" :y2="h" />
+            <line v-for="n in h - 1" :key="`h${n}`" x1="0" :y1="n" :x2="w" :y2="n" />
           </g>
 
           <g v-for="[fx, fy] in game.snake?.food ?? []" :key="`f${fx},${fy}`" class="apple">
@@ -129,7 +151,7 @@ function eyeOffsets(dir: SnakeDir): [number, number][] {
               width="0.88"
               height="0.88"
               rx="0.24"
-              :fill="i === 0 ? PLAYER_COLOURS[p.colour].ink : PLAYER_COLOURS[p.colour].fill"
+              :fill="i === 0 ? SNAKE_COLOURS[p.colour].head : SNAKE_COLOURS[p.colour].body"
             />
             <template v-if="p.body.length">
               <circle
@@ -161,7 +183,7 @@ function eyeOffsets(dir: SnakeDir): [number, number][] {
             class="score"
             :class="{ dead: !p.alive, me: p.id === game.you }"
           >
-            <span class="dot" :style="{ background: PLAYER_COLOURS[p.colour].ink }" />
+            <span class="dot" :style="{ background: SNAKE_COLOURS[p.colour].body }" />
             <span class="pname">{{ p.name }}</span>
             <span v-if="p.id === game.you" class="tag">{{ t('lobby.badge.you') }}</span>
             <span class="stats tiny">
@@ -266,15 +288,17 @@ function eyeOffsets(dir: SnakeDir): [number, number][] {
 
 .board-wrap {
   position: relative;
-  flex: none;
-  width: min(88vmin, calc(100vh - 12rem), 42rem);
-  max-width: 100%;
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 78rem;
+  display: flex;
+  justify-content: center;
 }
 
+/* The board is wider than tall, so it takes the row; its inline style caps the
+   width by the height left under the chrome, keeping the box on the drawing. */
 .board {
   display: block;
-  width: 100%;
-  aspect-ratio: 1;
   border-radius: 10px;
   box-shadow: var(--shadow);
   /* Swiping steers; it must never scroll the page instead. */

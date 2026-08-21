@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import mainBackground from '../../../assets/mainbg.png'
-import { PLAYER_COLOURS } from '@shared/colours'
+import { COLOUR_ORDER, PLAYER_COLOURS } from '@shared/colours'
 import type { GameKind, PlayerColour } from '@shared/types'
 import { t } from '@/i18n'
 import { useGameStore } from '@/stores/game'
@@ -34,6 +34,8 @@ const game = useGameStore()
 const copied = ref(false)
 
 const emptySeats = computed(() => props.maxSeats - props.seats.length)
+/** Colours already worn, so the picker can grey them out before the server would. */
+const worn = computed(() => new Set(props.seats.map((s) => s.colour)))
 const shareLink = computed(() => `${location.origin}${location.pathname}?room=${props.code}`)
 
 async function copyLink() {
@@ -91,6 +93,31 @@ async function copyLink() {
                 <span v-if="seat.id === game.you" class="badge you">{{ t('lobby.badge.you') }}</span>
                 <span v-if="!seat.connected" class="badge away">{{ t('lobby.badge.away') }}</span>
                 <slot name="seat-badges" :seat="seat" />
+                <!-- Your own row carries the palette: pick any colour nobody
+                     else is wearing. The server refuses a taken one anyway;
+                     the disabling only saves the round trip. -->
+                <div
+                  v-if="seat.id === game.you"
+                  class="palette"
+                  role="group"
+                  :aria-label="t('lobby.pickColour')"
+                >
+                  <button
+                    v-for="c in COLOUR_ORDER"
+                    :key="c"
+                    type="button"
+                    class="swatch pick"
+                    :class="{ worn: c === seat.colour }"
+                    :disabled="worn.has(c) && c !== seat.colour"
+                    :style="{
+                      background: PLAYER_COLOURS[c].fill,
+                      borderColor: PLAYER_COLOURS[c].ink,
+                    }"
+                    :title="PLAYER_COLOURS[c].label"
+                    :aria-label="PLAYER_COLOURS[c].label"
+                    @click="game.setColour(c)"
+                  />
+                </div>
               </li>
               <!-- One row for all the open seats: a ghost swatch per seat says
                    how many are left without repeating the line five times. -->
@@ -282,11 +309,34 @@ h2 .tiny,
 .seat {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 0.6rem;
   padding: 0.5rem 0.65rem;
   border-radius: 8px;
   background: rgba(255, 253, 246, 0.07);
   border: 1px solid rgba(246, 236, 224, 0.16);
+}
+
+/* Your colour choice, on its own line under your name. */
+.palette {
+  flex-basis: 100%;
+  display: flex;
+  gap: 0.35rem;
+}
+
+.pick {
+  padding: 0;
+  cursor: pointer;
+}
+
+.pick.worn {
+  outline: 2px solid #f6ece0;
+  outline-offset: 1px;
+}
+
+.pick:disabled {
+  opacity: 0.25;
+  cursor: not-allowed;
 }
 
 .seat.empty {

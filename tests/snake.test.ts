@@ -3,8 +3,8 @@ import { describe, expect, it } from 'vitest'
 import {
   COUNTDOWN_TICKS,
   SnakeGame,
+  boardFor,
   foodTarget,
-  gridFor,
   type Cell,
   type SnakeGameState,
 } from '../shared/snake'
@@ -35,7 +35,8 @@ describe('dealing', () => {
     for (let n = 2; n <= 8; n++) {
       const game = new SnakeGame(n, 1)
       const s = game.state
-      expect(s.gridSize).toBe(gridFor(n))
+      expect({ w: s.gridW, h: s.gridH }).toEqual(boardFor(n))
+      expect(s.gridW).toBeGreaterThan(s.gridH)
       expect(s.players).toHaveLength(n)
       expect(s.countdown).toBe(COUNTDOWN_TICKS)
       const seen = new Set<string>()
@@ -44,8 +45,8 @@ describe('dealing', () => {
         for (const [x, y] of p.body) {
           expect(x).toBeGreaterThanOrEqual(0)
           expect(y).toBeGreaterThanOrEqual(0)
-          expect(x).toBeLessThan(s.gridSize)
-          expect(y).toBeLessThan(s.gridSize)
+          expect(x).toBeLessThan(s.gridW)
+          expect(y).toBeLessThan(s.gridH)
           expect(seen.has(`${x},${y}`)).toBe(false)
           seen.add(`${x},${y}`)
         }

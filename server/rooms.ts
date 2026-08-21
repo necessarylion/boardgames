@@ -224,7 +224,11 @@ export class Room {
       id: this.seats.length,
       token,
       name: name.trim().slice(0, 18) || `Player ${this.seats.length + 1}`,
-      colour: this.colours[this.seats.length],
+      // The first palette colour nobody wears, not the one at this index —
+      // players may have picked their own, leaving the palette out of order.
+      colour:
+        this.colours.find((c) => !this.seats.some((s) => s.colour === c)) ??
+        this.colours[this.seats.length],
       connected: true,
     }
     this.seats.push(seat)
@@ -241,10 +245,8 @@ export class Room {
       return
     }
     this.seats = this.seats.filter((s) => s.token !== token)
-    this.seats.forEach((seat, i) => {
-      seat.id = i
-      seat.colour = this.colours[i]
-    })
+    // Renumbering never recolours: a colour someone chose stays theirs.
+    this.seats.forEach((seat, i) => (seat.id = i))
     if (this.hostToken === token) this.hostToken = this.seats[0]?.token ?? ''
     this.touch()
   }
@@ -260,6 +262,24 @@ export class Room {
     if (!Number.isInteger(team) || team < 0 || team >= this.options.teams) return 'No such team.'
     if (seat.id !== teamLeader(team)) return 'Only the team leader can rename the team.'
     this.teamNames[team] = String(name ?? '').trim().slice(0, 20)
+    this.touch()
+    return null
+  }
+
+  /**
+   * A player picks their own colour, from the shared palette only and never one
+   * another seat is wearing. Lobby only: seat colours are how the table reads a
+   * running game, and must not change under it.
+   */
+  setColour(token: string, colour: PlayerColour): string | null {
+    const seat = this.seatByToken(token)
+    if (!seat) return 'You have no seat in this room.'
+    if (this.started) return 'The game has already started.'
+    if (!COLOUR_ORDER.includes(colour)) return 'No such colour.'
+    if (this.seats.some((s) => s.token !== token && s.colour === colour)) {
+      return 'Another player already wears that colour.'
+    }
+    seat.colour = colour
     this.touch()
     return null
   }
@@ -346,10 +366,8 @@ export class Room {
    */
   private dropAbsentPlayers() {
     this.seats = this.seats.filter((seat) => seat.connected)
-    this.seats.forEach((seat, i) => {
-      seat.id = i
-      seat.colour = this.colours[i]
-    })
+    // Renumbering never recolours: a colour someone chose stays theirs.
+    this.seats.forEach((seat, i) => (seat.id = i))
     this.ensureHost()
   }
 
@@ -1083,7 +1101,8 @@ export class Room {
         current: 0,
         turnNumber: 0,
         opening: null,
-        gridSize: 0,
+        gridW: 0,
+        gridH: 0,
         food: [],
         countdown: 0,
         log: [],
@@ -1099,7 +1118,8 @@ export class Room {
       current: s.current,
       turnNumber: s.turnNumber,
       opening: s.opening,
-      gridSize: s.gridSize,
+      gridW: s.gridW,
+      gridH: s.gridH,
       food: s.food.map((c) => [...c] as [number, number]),
       countdown: s.countdown,
       log: s.log,

@@ -444,7 +444,8 @@ export interface SnakeClientState {
   turnNumber: number
   /** Always null: there is no opening seat when everyone moves at once. */
   opening: Opening | null
-  gridSize: number
+  gridW: number
+  gridH: number
   food: [number, number][]
   /** Frames until the snakes start moving; 0 once underway. */
   countdown: number
@@ -470,6 +471,8 @@ export type ClientMessage =
   | { t: 'create'; name: string; options: GameOptions }
   | { t: 'join'; code: string; name: string }
   | { t: 'rename'; name: string }
+  /** Pick your own seat colour — palette colours only, and only ones nobody wears. */
+  | { t: 'colour'; colour: PlayerColour }
   /** Team leaders only: rename their side. A blank name resets it to a letter. */
   | { t: 'renameTeam'; team: number; name: string }
   | { t: 'options'; options: GameOptions }

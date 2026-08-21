@@ -29,7 +29,8 @@ describe('a Snake room', () => {
     const state = view(r, 'token-a')
     expect(state.kind).toBe('snake')
     expect(state.phase).toBe('play')
-    expect(state.gridSize).toBe(r.snake!.state.gridSize)
+    expect(state.gridW).toBe(r.snake!.state.gridW)
+    expect(state.gridH).toBe(r.snake!.state.gridH)
     expect(state.food.length).toBeGreaterThan(0)
     for (const p of state.players) {
       expect(p.alive).toBe(true)

@@ -45,9 +45,16 @@ const OPPOSITE: Record<SnakeDir, SnakeDir> = {
   right: 'left',
 }
 
-/** Bigger tables get a bigger board, capped where cells would get too small. */
-export function gridFor(playerCount: number): number {
-  return Math.min(31, 17 + playerCount * 2)
+/**
+ * Bigger tables get a bigger board, capped where cells would get too small.
+ * Wider than tall, because screens are — the extra room is what lets a game
+ * run long instead of ending in the opening scramble.
+ */
+export const BOARD_RATIO = 1.5
+
+export function boardFor(playerCount: number): { w: number; h: number } {
+  const h = Math.min(31, 19 + playerCount * 2)
+  return { w: Math.round(h * BOARD_RATIO), h }
 }
 
 /** How many apples the board keeps on it. */
@@ -79,7 +86,8 @@ export type SnakePhase = 'play' | 'over'
 
 export interface SnakeGameState {
   playerCount: number
-  gridSize: number
+  gridW: number
+  gridH: number
   players: SnakeSeat[]
   food: Cell[]
   /** Frames until the snakes start moving. */
@@ -107,21 +115,24 @@ const key = (cell: Cell): string => `${cell[0]},${cell[1]}`
 const sameCell = (a: Cell, b: Cell): boolean => a[0] === b[0] && a[1] === b[1]
 
 /**
- * Seats spaced round a ring, each facing clockwise along it — the direction
+ * Seats spaced round an ellipse, each facing clockwise along it — the direction
  * with the longest open run, so nobody starts pointed at a nearby wall.
  */
-function spawnSnakes(playerCount: number, size: number): SnakeSeat[] {
-  const centre = (size - 1) / 2
-  const radius = size / 2 - 4
+function spawnSnakes(playerCount: number, w: number, h: number): SnakeSeat[] {
+  const cx = (w - 1) / 2
+  const cy = (h - 1) / 2
+  const rx = w / 2 - 4
+  const ry = h / 2 - 4
   return Array.from({ length: playerCount }, (_, id) => {
     const angle = -Math.PI / 2 + (id * 2 * Math.PI) / playerCount
     const head: Cell = [
-      Math.round(centre + radius * Math.cos(angle)),
-      Math.round(centre + radius * Math.sin(angle)),
+      Math.round(cx + rx * Math.cos(angle)),
+      Math.round(cy + ry * Math.sin(angle)),
     ]
-    // The clockwise tangent at `angle` (y grows downwards), snapped to an axis.
-    const tx = -Math.sin(angle)
-    const ty = Math.cos(angle)
+    // The clockwise tangent of the ellipse at `angle` (y grows downwards),
+    // snapped to an axis.
+    const tx = -rx * Math.sin(angle)
+    const ty = ry * Math.cos(angle)
     const dir: SnakeDir =
       Math.abs(tx) >= Math.abs(ty) ? (tx > 0 ? 'right' : 'left') : (ty > 0 ? 'down' : 'up')
     const [dx, dy] = DELTA[dir]
@@ -139,10 +150,10 @@ function spawnFood(state: SnakeGameState, rng: Rng): void {
   for (const p of state.players) for (const cell of p.body) taken.add(key(cell))
   for (const cell of state.food) taken.add(key(cell))
   while (state.food.length < foodTarget(state.playerCount)) {
-    // ponytail: full free-cell scan per apple; fine at ≤31×31 once a frame.
+    // ponytail: full free-cell scan per apple; fine at ≤47×31 once a frame.
     const free: Cell[] = []
-    for (let x = 0; x < state.gridSize; x++) {
-      for (let y = 0; y < state.gridSize; y++) {
+    for (let x = 0; x < state.gridW; x++) {
+      for (let y = 0; y < state.gridH; y++) {
         if (!taken.has(key([x, y]))) free.push([x, y])
       }
     }
@@ -168,12 +179,13 @@ export class SnakeGame {
   }
 
   private static deal(playerCount: number, seed: number): SnakeGameState {
-    const size = gridFor(playerCount)
+    const { w, h } = boardFor(playerCount)
     const rng = new Rng(seed)
     const state: SnakeGameState = {
       playerCount,
-      gridSize: size,
-      players: spawnSnakes(playerCount, size),
+      gridW: w,
+      gridH: h,
+      players: spawnSnakes(playerCount, w, h),
       food: [],
       countdown: COUNTDOWN_TICKS,
       phase: 'play',
@@ -182,7 +194,7 @@ export class SnakeGame {
       current: 0,
       opening: null,
       log: [
-        { turn: 0, player: null, text: `${playerCount} snakes on a ${size}×${size} board.` },
+        { turn: 0, player: null, text: `${playerCount} snakes on a ${w}×${h} board.` },
       ],
       result: null,
       rngPosition: 0,
@@ -266,7 +278,7 @@ export class SnakeGame {
     const dying: SnakeSeat[] = []
     for (const p of movers) {
       const [x, y] = heads.get(p.id)!
-      const offBoard = x < 0 || y < 0 || x >= s.gridSize || y >= s.gridSize
+      const offBoard = x < 0 || y < 0 || x >= s.gridW || y >= s.gridH
       // Two heads on one cell — or trading cells head-on — kill both snakes.
       const headOn = movers.some((q) => q.id !== p.id && sameCell(heads.get(q.id)!, [x, y]))
       if (offBoard || occupied.has(key([x, y])) || headOn) dying.push(p)

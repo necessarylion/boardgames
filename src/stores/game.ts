@@ -16,7 +16,7 @@ import {
   type ServerMessage,
   type SnakeClientState,
 } from '@shared/protocol'
-import { maxPlayersFor, type GameKind } from '@shared/types'
+import { maxPlayersFor, type GameKind, type PlayerColour } from '@shared/types'
 import { t } from '@/i18n'
 import { createCarnival } from './carnivals/useCarnival'
 import { createCop } from './cop/useCop'
@@ -423,6 +423,8 @@ export const useGameStore = defineStore('game', () => {
     send({ t: 'leave' })
   }
   const setOptions = (options: GameOptions) => send({ t: 'options', options })
+  /** Pick your own seat colour; the server refuses one another player wears. */
+  const setColour = (colour: PlayerColour) => send({ t: 'colour', colour })
   /** Team leaders only (the server enforces it); a blank name resets to a letter. */
   const renameTeam = (team: number, name: string) => send({ t: 'renameTeam', team, name })
   const startGame = () => send({ t: 'start' })
@@ -476,6 +478,7 @@ export const useGameStore = defineStore('game', () => {
     joinRoom,
     leaveRoom,
     setOptions,
+    setColour,
     renameTeam,
     startGame,
     rematch,
