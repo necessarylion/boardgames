@@ -12,15 +12,15 @@ import { useGameStore } from '@/stores/game'
  * saturated hue as far from its neighbours as the wheel allows, with a darker
  * head in the same hue.
  */
-const SNAKE_COLOURS: Record<PlayerColour, { body: string; head: string }> = {
-  gold: { body: '#F9A825', head: '#A26D18' },
-  red: { body: '#D32F2F', head: '#8E1F1F' },
-  green: { body: '#388E3C', head: '#245C27' },
-  purple: { body: '#7B1FA2', head: '#4F1468' },
-  teal: { body: '#00897B', head: '#005950' },
-  rose: { body: '#C2185B', head: '#7E0F3B' },
-  orange: { body: '#795548', head: '#4E372E' },
-  indigo: { body: '#1976D2', head: '#104E89' },
+const SNAKE_COLOURS: Record<PlayerColour, { body: string; head: string; text: string }> = {
+  gold: { body: '#F9A825', head: '#A26D18', text: '#3d2903' },
+  red: { body: '#D32F2F', head: '#8E1F1F', text: '#fdeee8' },
+  green: { body: '#388E3C', head: '#245C27', text: '#eff7ec' },
+  purple: { body: '#7B1FA2', head: '#4F1468', text: '#f1ecfb' },
+  teal: { body: '#00897B', head: '#005950', text: '#eaf4f8' },
+  rose: { body: '#C2185B', head: '#7E0F3B', text: '#fceef5' },
+  orange: { body: '#795548', head: '#4E372E', text: '#fdf0e6' },
+  indigo: { body: '#1976D2', head: '#104E89', text: '#eceefb' },
 }
 
 const game = useGameStore()
@@ -175,23 +175,40 @@ function eyeOffsets(dir: SnakeDir): [number, number][] {
         </p>
       </div>
 
-      <aside class="scores panel">
-        <ul>
+      <!-- The seat column, styled after Samurai's player panel: ruled rows on
+           the layout's own edge rather than a floating card, with the seat's
+           colour carried by the swatch — which doubles as the live length. -->
+      <aside class="side">
+        <ul class="players">
           <li
             v-for="p in players"
             :key="p.id"
-            class="score"
-            :class="{ dead: !p.alive, me: p.id === game.you }"
+            class="player"
+            :class="{ dead: !p.alive, offline: !p.connected }"
           >
-            <span class="dot" :style="{ background: SNAKE_COLOURS[p.colour].body }" />
-            <span class="pname">{{ p.name }}</span>
-            <span v-if="p.id === game.you" class="tag">{{ t('lobby.badge.you') }}</span>
-            <span class="stats tiny">
-              <template v-if="p.alive || isOver">
-                {{ t('snake.length', { n: p.length }) }} · {{ t('snake.apples', { n: p.apples }) }}
-              </template>
-              <template v-if="!p.alive"> {{ t('snake.crashed') }}</template>
+            <span
+              class="swatch"
+              :style="{
+                background: SNAKE_COLOURS[p.colour].body,
+                borderColor: SNAKE_COLOURS[p.colour].head,
+                color: SNAKE_COLOURS[p.colour].text,
+              }"
+            >
+              {{ p.alive ? p.length : '✕' }}
             </span>
+            <div class="player-body">
+              <div class="player-head">
+                <span class="player-name">{{ p.name }}</span>
+                <span v-if="p.id === game.you" class="badge">{{ t('lobby.badge.you') }}</span>
+                <span v-if="!p.connected" class="badge away">{{ t('lobby.badge.away') }}</span>
+              </div>
+              <div class="player-stats tiny muted">
+                <span>{{ t('snake.length', { n: p.length }) }}</span>
+                <span>·</span>
+                <span>{{ t('snake.apples', { n: p.apples }) }}</span>
+                <span v-if="!p.alive" class="crashed-note">{{ t('snake.crashed') }}</span>
+              </div>
+            </div>
           </li>
         </ul>
       </aside>
@@ -282,29 +299,33 @@ function eyeOffsets(dir: SnakeDir): [number, number][] {
   letter-spacing: 0.12em;
 }
 
+/* The sidebar runs the full height on the layout's own edge, so the padding
+   lives on the board half rather than on the row. */
 .table {
   flex: 1 1 auto;
   min-height: 0;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: clamp(0.8rem, 2vw, 1.6rem);
-  padding: clamp(0.8rem, 2vw, 1.4rem);
+  align-items: stretch;
 }
 
 .board-wrap {
   position: relative;
   flex: 1 1 auto;
   min-width: 0;
-  max-width: 78rem;
   display: flex;
+  align-items: center;
   justify-content: center;
+  padding: clamp(0.8rem, 2vw, 1.4rem);
 }
 
 /* The board is wider than tall, so it takes the row; its inline style caps the
    width by the height left under the chrome, keeping the box on the drawing. */
 .board {
   display: block;
+  /* The frame is a CSS border, not a stroke on the ground rect: a stroke is
+     drawn square and the corner radius clips it, leaving the edge line broken
+     around every curve. The border follows the radius. */
+  border: 1px solid rgba(120, 100, 70, 0.5);
   border-radius: 10px;
   box-shadow: var(--shadow);
   /* Swiping steers; it must never scroll the page instead. */
@@ -313,8 +334,6 @@ function eyeOffsets(dir: SnakeDir): [number, number][] {
 
 .ground {
   fill: rgba(255, 253, 246, 0.9);
-  stroke: rgba(120, 100, 70, 0.5);
-  stroke-width: 0.12;
 }
 
 .gridlines line {
@@ -358,64 +377,109 @@ function eyeOffsets(dir: SnakeDir): [number, number][] {
   pointer-events: none;
 }
 
-/* --- scoreboard ---------------------------------------------------------- */
-.scores {
+/* --- the seat column, after Samurai's player panel ------------------------ */
+.side {
   flex: none;
-  width: 13rem;
-  max-height: 100%;
+  width: 13.5rem;
+  min-height: 0;
   overflow-y: auto;
-  padding: 0.7rem 0.8rem;
+  border-left: 1px solid rgba(160, 137, 102, 0.35);
 }
 
-.scores ul {
+.players {
   list-style: none;
   margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
 }
 
-.score {
+/* Ruled rows, not cards: the swatch beside the name is the seat, and it also
+   carries the one number that matters live — the snake's length. */
+.player {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-  line-height: 1.3;
+  gap: 0.55rem;
+  padding: 0.45rem 0.6rem;
 }
 
-.score.dead {
-  opacity: 0.5;
+.player + .player {
+  border-top: 1px solid rgba(160, 137, 102, 0.28);
 }
 
-.dot {
-  width: 0.7rem;
-  height: 0.7rem;
-  border-radius: 50%;
+.player.dead,
+.player.offline {
+  opacity: 0.55;
+}
+
+.swatch {
+  display: grid;
+  place-items: center;
+  width: 2.1rem;
+  height: 2.1rem;
   flex: none;
+  border-radius: 8px;
+  border: 2px solid;
+  font-family: var(--font-display);
+  font-size: 0.92rem;
 }
 
-.pname {
+.player-body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.player-head {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.player-name {
   font-weight: 600;
+  font-size: 0.82rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 7.5rem;
 }
 
-.tag {
-  font-size: 0.62rem;
+.badge {
+  font-size: 0.6rem;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  padding: 0.08rem 0.32rem;
+  padding: 0.05rem 0.28rem;
   border-radius: 4px;
-  background: rgba(178, 58, 44, 0.14);
+  white-space: nowrap;
+  background: rgba(178, 58, 44, 0.16);
   color: var(--vermillion-dark);
 }
 
-.stats {
-  flex-basis: 100%;
+.badge.away {
+  background: rgba(120, 120, 120, 0.2);
   color: var(--ink-soft);
+}
+
+/* The numbers read faster in the body face, as in the Samurai panel. */
+.player-stats,
+.badge {
+  font-family: var(--font-body);
+}
+
+.player-stats {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-top: 0.1rem;
+  white-space: nowrap;
+}
+
+.crashed-note {
+  margin-left: 0.25rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 0.62rem;
+  color: var(--vermillion-dark);
 }
 
 /* --- d-pad --------------------------------------------------------------- */
@@ -502,20 +566,29 @@ function eyeOffsets(dir: SnakeDir): [number, number][] {
 
 .over-actions {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: 0.6rem;
   margin-top: 0.4rem;
 }
 
-/* Narrow: scoreboard drops under the board and the whole table scrolls. */
+/* A label never breaks mid-phrase; a tight card wraps whole buttons instead. */
+.over-actions .btn {
+  white-space: nowrap;
+}
+
+/* Narrow: the seat column drops under the board and the whole table scrolls. */
 @media (max-width: 46rem) {
   .table {
     flex-direction: column;
     overflow-y: auto;
   }
 
-  .scores {
+  .side {
     width: 100%;
-    max-width: 26rem;
+    overflow: visible;
+    border-left: 0;
+    border-top: 1px solid rgba(160, 137, 102, 0.35);
   }
 }
 </style>
