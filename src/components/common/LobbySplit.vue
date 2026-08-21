@@ -36,7 +36,11 @@ const copied = ref(false)
 const emptySeats = computed(() => props.maxSeats - props.seats.length)
 /** Colours already worn, so the picker can grey them out before the server would. */
 const worn = computed(() => new Set(props.seats.map((s) => s.colour)))
-const shareLink = computed(() => `${location.origin}${location.pathname}?room=${props.code}`)
+// The kind rides along so the join screen can dress itself for this game —
+// the code alone cannot say which table it opens.
+const shareLink = computed(
+  () => `${location.origin}${location.pathname}?room=${props.code}&g=${props.kind}`,
+)
 
 async function copyLink() {
   try {

@@ -114,7 +114,9 @@ describe('one identity per table', () => {
     socket.receive({ t: 'state', state: new Room('ABCD').stateFor('nobody') })
 
     expect(game.state?.code).toBe('ABCD')
-    expect(location.search).toBe('?room=ABCD')
+    // The kind rides along, so a reload — or the join form after an expiry —
+    // can dress itself for the right game.
+    expect(location.search).toBe('?room=ABCD&g=samurai')
     expect(localStorage.getItem('samurai.token.ABCD')).toBe(TOKEN_A)
   })
 

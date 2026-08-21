@@ -16,7 +16,7 @@ import {
   type ServerMessage,
   type SnakeClientState,
 } from '@shared/protocol'
-import { maxPlayersFor, type GameKind, type PlayerColour } from '@shared/types'
+import { GAME_KINDS, maxPlayersFor, type GameKind, type PlayerColour } from '@shared/types'
 import { t } from '@/i18n'
 import { createCarnival } from './carnivals/useCarnival'
 import { createCop } from './cop/useCop'
@@ -53,11 +53,27 @@ function roomFromUrl(): string | null {
   return code ? code.trim().toUpperCase() : null
 }
 
+/**
+ * Which game an invite link is for. A room code alone cannot say — the server
+ * is not asked until the join — so the share link carries the kind alongside
+ * it, and the join screen dresses itself for that game rather than defaulting
+ * to Samurai's artwork. Absent or unrecognised, the old default stands.
+ */
+function gameFromUrl(): GameKind | null {
+  const g = new URLSearchParams(location.search).get('g')
+  return GAME_KINDS.find((k) => k === g) ?? null
+}
+
 /** Put the table in the URL, so a refresh — or a second tab — lands back here. */
-function showRoomInUrl(code: string | null) {
+function showRoomInUrl(code: string | null, kind?: GameKind) {
   const url = new URL(location.href)
-  if (code) url.searchParams.set('room', code)
-  else url.searchParams.delete('room')
+  if (code) {
+    url.searchParams.set('room', code)
+    if (kind) url.searchParams.set('g', kind)
+  } else {
+    url.searchParams.delete('room')
+    url.searchParams.delete('g')
+  }
   if (url.href !== location.href) history.replaceState(history.state, '', url)
 }
 
@@ -92,7 +108,7 @@ export const useGameStore = defineStore('game', () => {
    * Which game the player picked on the landing screen, before any room exists.
    * An invite link points straight at a table, so it skips the landing entirely.
    */
-  const chosenGame = ref<GameKind | null>(roomFromUrl() ? 'samurai' : null)
+  const chosenGame = ref<GameKind | null>(roomFromUrl() ? gameFromUrl() ?? 'samurai' : null)
   const error = ref<string | null>(null)
   const myName = ref(localStorage.getItem(NAME_KEY) ?? '')
   /** Another tab took this seat. Nothing reconnects until the player says so. */
@@ -256,9 +272,9 @@ export const useGameStore = defineStore('game', () => {
   let hasLeft = false
 
   /** Tie this tab's token to the table it is at, in storage and in the URL. */
-  function rememberSeat(code: string) {
+  function rememberSeat(code: string, kind?: GameKind) {
     if (token) localStorage.setItem(tokenKey(code), token)
-    showRoomInUrl(code)
+    showRoomInUrl(code, kind)
   }
 
   /**
@@ -313,7 +329,7 @@ export const useGameStore = defineStore('game', () => {
       case 'state': {
         if (hasLeft) return
         const incoming = message.state
-        rememberSeat(incoming.code)
+        rememberSeat(incoming.code, incoming.kind)
         // Any state the local player did not expect invalidates a half-finished
         // interaction (for example a piece someone else just captured).
         if (incoming.kind === 'samurai' && incoming.you !== incoming.current) {
