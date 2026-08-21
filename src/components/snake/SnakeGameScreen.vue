@@ -212,6 +212,12 @@ function eyeOffsets(dir: SnakeDir): [number, number][] {
         <p class="tiny muted">{{ game.snake?.result?.reason }}</p>
         <div class="over-actions">
           <button v-if="game.isHost" class="btn" @click="game.rematch()">{{ t('over.playAgain') }}</button>
+          <!-- Back to the lobby with the table intact, so seats and colours are
+               kept and the host can simply deal again later. Host only: it ends
+               the game for everyone, and the server holds it to the host anyway. -->
+          <button v-if="game.isHost" class="btn ghost" @click="game.abandonGame()">
+            {{ t('over.backToLobby') }}
+          </button>
           <button class="btn ghost" @click="game.leaveRoom()">{{ t('lobby.leave') }}</button>
         </div>
       </div>
