@@ -1,0 +1,491 @@
+<script setup lang="ts">
+import { computed, onMounted, onUnmounted } from 'vue'
+import TableMenu from '../common/TableMenu.vue'
+import { PLAYER_COLOURS } from '@shared/colours'
+import { SNAKE_TICK_MS, type SnakeDir } from '@shared/snake'
+import { t } from '@/i18n'
+import { useGameStore } from '@/stores/game'
+
+const game = useGameStore()
+
+const players = computed(() => game.snPlayers)
+const size = computed(() => game.snake?.gridSize ?? 1)
+const isOver = computed(() => game.snake?.phase === 'over')
+
+const countdownSeconds = computed(() => {
+  const frames = game.snake?.countdown ?? 0
+  return frames > 0 ? Math.ceil((frames * SNAKE_TICK_MS) / 1000) : 0
+})
+
+const topLabel = computed(() => {
+  if (isOver.value) return t('game.over')
+  if (game.isPaused) return t('game.paused.badge')
+  if (countdownSeconds.value > 0) return t('snake.countdownHint')
+  return t('snake.steer.hint')
+})
+
+const winner = computed(() => {
+  const w = game.snake?.result?.winner
+  if (w === null || w === undefined) return null
+  return players.value.find((p) => p.id === w)?.name ?? null
+})
+
+// --- steering ---------------------------------------------------------------
+
+const KEY_DIRS: Record<string, SnakeDir> = {
+  ArrowUp: 'up',
+  ArrowDown: 'down',
+  ArrowLeft: 'left',
+  ArrowRight: 'right',
+  w: 'up',
+  s: 'down',
+  a: 'left',
+  d: 'right',
+}
+
+function onKey(event: KeyboardEvent) {
+  const dir = KEY_DIRS[event.key] ?? KEY_DIRS[event.key.toLowerCase()]
+  if (!dir) return
+  // Arrows scroll the page; that must never happen while steering a snake.
+  event.preventDefault()
+  game.steer(dir)
+}
+
+/** Swipes on the board steer too, for anyone without keys. */
+let swipeFrom: [number, number] | null = null
+const SWIPE_MIN_PX = 24
+
+function onPointerDown(event: PointerEvent) {
+  swipeFrom = [event.clientX, event.clientY]
+}
+
+function onPointerUp(event: PointerEvent) {
+  if (!swipeFrom) return
+  const dx = event.clientX - swipeFrom[0]
+  const dy = event.clientY - swipeFrom[1]
+  swipeFrom = null
+  if (Math.max(Math.abs(dx), Math.abs(dy)) < SWIPE_MIN_PX) return
+  const dir: SnakeDir =
+    Math.abs(dx) >= Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up')
+  game.steer(dir)
+}
+
+onMounted(() => window.addEventListener('keydown', onKey))
+onUnmounted(() => window.removeEventListener('keydown', onKey))
+
+// --- drawing ----------------------------------------------------------------
+
+/** The two little eyes, offset towards where the head is going. */
+function eyeOffsets(dir: SnakeDir): [number, number][] {
+  if (dir === 'up') return [[0.3, 0.3], [0.7, 0.3]]
+  if (dir === 'down') return [[0.3, 0.7], [0.7, 0.7]]
+  if (dir === 'left') return [[0.3, 0.3], [0.3, 0.7]]
+  return [[0.7, 0.3], [0.7, 0.7]]
+}
+</script>
+
+<template>
+  <div class="game">
+    <header class="topbar">
+      <div class="turn">
+        <strong>{{ topLabel }}</strong>
+        <span v-if="game.isPaused" class="paused-badge tiny">{{ t('game.paused.badge') }}</span>
+      </div>
+      <div class="top-actions">
+        <span class="tiny muted code">{{ t('game.room', { code: game.snake?.code ?? '' }) }}</span>
+        <button v-if="game.isSeated && !isOver" class="btn ghost small" @click="game.togglePause()">
+          {{ game.isPaused ? t('game.resume') : t('game.pause') }}
+        </button>
+        <TableMenu />
+      </div>
+    </header>
+
+    <main class="table">
+      <div class="board-wrap">
+        <svg
+          class="board"
+          :viewBox="`0 0 ${size} ${size}`"
+          @pointerdown="onPointerDown"
+          @pointerup="onPointerUp"
+        >
+          <rect x="0" y="0" :width="size" :height="size" class="ground" />
+          <!-- A faint grid, so distances can be judged at a glance. -->
+          <g class="gridlines">
+            <line v-for="n in size - 1" :key="`v${n}`" :x1="n" y1="0" :x2="n" :y2="size" />
+            <line v-for="n in size - 1" :key="`h${n}`" x1="0" :y1="n" :x2="size" :y2="n" />
+          </g>
+
+          <g v-for="[fx, fy] in game.snake?.food ?? []" :key="`f${fx},${fy}`" class="apple">
+            <circle :cx="fx + 0.5" :cy="fy + 0.55" r="0.32" />
+            <line :x1="fx + 0.5" :y1="fy + 0.25" :x2="fx + 0.62" :y2="fy + 0.08" />
+          </g>
+
+          <g v-for="p in players" :key="p.id">
+            <rect
+              v-for="([x, y], i) in p.body"
+              :key="`${p.id}:${i}`"
+              :x="x + 0.06"
+              :y="y + 0.06"
+              width="0.88"
+              height="0.88"
+              rx="0.24"
+              :fill="i === 0 ? PLAYER_COLOURS[p.colour].ink : PLAYER_COLOURS[p.colour].fill"
+            />
+            <template v-if="p.body.length">
+              <circle
+                v-for="([ex, ey], i) in eyeOffsets(p.dir)"
+                :key="`eye${p.id}:${i}`"
+                :cx="p.body[0][0] + ex"
+                :cy="p.body[0][1] + ey"
+                r="0.09"
+                fill="#fff"
+              />
+            </template>
+          </g>
+        </svg>
+
+        <div v-if="countdownSeconds > 0 && !game.isPaused" class="countdown" aria-live="polite">
+          {{ countdownSeconds }}
+        </div>
+
+        <p v-if="!isOver && game.snYou && !game.snYou.alive" class="crashed-pill">
+          {{ t('snake.you.crashed') }}
+        </p>
+      </div>
+
+      <aside class="scores panel">
+        <ul>
+          <li
+            v-for="p in players"
+            :key="p.id"
+            class="score"
+            :class="{ dead: !p.alive, me: p.id === game.you }"
+          >
+            <span class="dot" :style="{ background: PLAYER_COLOURS[p.colour].ink }" />
+            <span class="pname">{{ p.name }}</span>
+            <span v-if="p.id === game.you" class="tag">{{ t('lobby.badge.you') }}</span>
+            <span class="stats tiny">
+              <template v-if="p.alive || isOver">
+                {{ t('snake.length', { n: p.length }) }} · {{ t('snake.apples', { n: p.apples }) }}
+              </template>
+              <template v-if="!p.alive"> {{ t('snake.crashed') }}</template>
+            </span>
+          </li>
+        </ul>
+      </aside>
+    </main>
+
+    <!-- On-screen steering, for touch screens without keys. -->
+    <div class="dpad" aria-hidden="true">
+      <button class="pad up" @click="game.steer('up')">▲</button>
+      <button class="pad left" @click="game.steer('left')">◀</button>
+      <button class="pad right" @click="game.steer('right')">▶</button>
+      <button class="pad down" @click="game.steer('down')">▼</button>
+    </div>
+
+    <!-- Game over -->
+    <div v-if="isOver" class="over-veil">
+      <div class="over-card panel">
+        <h2>{{ winner ? t('snake.winner', { name: winner }) : t('snake.draw') }}</h2>
+        <p class="tiny muted">{{ game.snake?.result?.reason }}</p>
+        <div class="over-actions">
+          <button v-if="game.isHost" class="btn" @click="game.rematch()">{{ t('over.playAgain') }}</button>
+          <button class="btn ghost" @click="game.leaveRoom()">{{ t('lobby.leave') }}</button>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="game.isPaused && !isOver" class="over-veil">
+      <div class="over-card panel">
+        <strong>{{ t('game.paused.title') }}</strong>
+        <p class="tiny muted">{{ t('game.paused.body') }}</p>
+        <button v-if="game.isSeated" class="btn" @click="game.togglePause()">
+          {{ t('game.resume') }}
+        </button>
+      </div>
+    </div>
+  </div>
+</template>
+
+<style scoped>
+.game {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.6rem clamp(0.9rem, 2vw, 1.5rem);
+  border-bottom: 1px solid rgba(160, 137, 102, 0.35);
+  flex: none;
+}
+
+.turn {
+  display: flex;
+  align-items: baseline;
+  gap: 0.55rem;
+}
+
+.turn strong {
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+}
+
+.paused-badge {
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  background: rgba(178, 58, 44, 0.16);
+  color: var(--vermillion-dark);
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.top-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.code {
+  letter-spacing: 0.12em;
+}
+
+.table {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(0.8rem, 2vw, 1.6rem);
+  padding: clamp(0.8rem, 2vw, 1.4rem);
+}
+
+.board-wrap {
+  position: relative;
+  flex: none;
+  width: min(88vmin, calc(100vh - 12rem), 42rem);
+  max-width: 100%;
+}
+
+.board {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  /* Swiping steers; it must never scroll the page instead. */
+  touch-action: none;
+}
+
+.ground {
+  fill: rgba(255, 253, 246, 0.9);
+  stroke: rgba(120, 100, 70, 0.5);
+  stroke-width: 0.12;
+}
+
+.gridlines line {
+  stroke: rgba(150, 128, 94, 0.14);
+  stroke-width: 0.03;
+}
+
+.apple circle {
+  fill: var(--vermillion, #b23a2c);
+}
+
+.apple line {
+  stroke: #4a6b2a;
+  stroke-width: 0.1;
+  stroke-linecap: round;
+}
+
+.countdown {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-display);
+  font-size: clamp(4rem, 18vmin, 8rem);
+  color: var(--vermillion-dark);
+  text-shadow: 0 2px 12px rgba(255, 253, 246, 0.9);
+  pointer-events: none;
+}
+
+.crashed-pill {
+  position: absolute;
+  top: 0.6rem;
+  left: 50%;
+  transform: translateX(-50%);
+  margin: 0;
+  padding: 0.35rem 0.9rem;
+  border-radius: 999px;
+  background: rgba(58, 43, 28, 0.85);
+  color: #f7efe2;
+  font-size: 0.85rem;
+  pointer-events: none;
+}
+
+/* --- scoreboard ---------------------------------------------------------- */
+.scores {
+  flex: none;
+  width: 13rem;
+  max-height: 100%;
+  overflow-y: auto;
+  padding: 0.7rem 0.8rem;
+}
+
+.scores ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.score {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  line-height: 1.3;
+}
+
+.score.dead {
+  opacity: 0.5;
+}
+
+.dot {
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 50%;
+  flex: none;
+}
+
+.pname {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 7.5rem;
+}
+
+.tag {
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 0.08rem 0.32rem;
+  border-radius: 4px;
+  background: rgba(178, 58, 44, 0.14);
+  color: var(--vermillion-dark);
+}
+
+.stats {
+  flex-basis: 100%;
+  color: var(--ink-soft);
+}
+
+/* --- d-pad --------------------------------------------------------------- */
+.dpad {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 30;
+  display: grid;
+  grid-template-areas: '. up .' 'left . right' '. down .';
+  gap: 0.3rem;
+}
+
+/* Keyboards steer better than buttons; the pad is for screens without one. */
+@media (pointer: fine) {
+  .dpad {
+    display: none;
+  }
+}
+
+.pad {
+  width: 3rem;
+  height: 3rem;
+  border-radius: 10px;
+  border: 1px solid rgba(160, 137, 102, 0.5);
+  background: rgba(255, 253, 246, 0.85);
+  color: var(--ink);
+  font-size: 1.1rem;
+  box-shadow: var(--shadow);
+}
+
+.pad:active {
+  background: rgba(178, 58, 44, 0.16);
+}
+
+.pad.up {
+  grid-area: up;
+}
+
+.pad.down {
+  grid-area: down;
+}
+
+.pad.left {
+  grid-area: left;
+}
+
+.pad.right {
+  grid-area: right;
+}
+
+/* --- overlays ------------------------------------------------------------ */
+.over-veil {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(20, 16, 12, 0.55);
+}
+
+.over-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+  max-width: 24rem;
+  padding: 1.6rem 1.8rem;
+  text-align: center;
+  box-shadow: var(--shadow-lg);
+}
+
+.over-card h2,
+.over-card strong {
+  font-family: var(--font-display);
+  font-size: 1.35rem;
+}
+
+.over-card p {
+  margin: 0;
+}
+
+.over-actions {
+  display: flex;
+  gap: 0.6rem;
+  margin-top: 0.4rem;
+}
+
+/* Narrow: scoreboard drops under the board and the whole table scrolls. */
+@media (max-width: 46rem) {
+  .table {
+    flex-direction: column;
+    overflow-y: auto;
+  }
+
+  .scores {
+    width: 100%;
+    max-width: 26rem;
+  }
+}
+</style>

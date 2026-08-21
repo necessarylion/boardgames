@@ -28,6 +28,7 @@ const MASTHEAD = {
   coup: { title: 'landing.coup.name', tagline: 'home.coup.tagline', hint: 'home.coup.hostHint' },
   carnivals: { title: 'landing.carnivals.name', tagline: 'home.carnivals.tagline', hint: 'home.carnivals.hostHint' },
   cop: { title: 'landing.cop.name', tagline: 'home.cop.tagline', hint: 'home.cop.hostHint' },
+  snake: { title: 'landing.snake.name', tagline: 'home.snake.tagline', hint: 'home.snake.hostHint' },
 } as const
 
 const masthead = computed(() => MASTHEAD[kind.value])
@@ -50,18 +51,19 @@ const shuffleMidgame = ref(DEFAULT_OPTIONS.shuffleMidgame)
 
 function create() {
   if (!name.value.trim()) return game.showError(t('home.error.name'))
-  const carnivals = kind.value === 'carnivals'
+  // Carnivals draws its dealer quietly and runs no shot clock; Snake has no
+  // opening seat at all — every snake moves at once — and no clock either.
+  const quiet = kind.value === 'carnivals' || kind.value === 'snake'
   game.createRoom(name.value.trim(), {
     kind: kind.value,
     randomHands: randomHands.value,
     openInformation: openInformation.value,
     shuffleMidgame: shuffleMidgame.value,
     boardShape: boardShape.value,
-    // Carnivals runs no shot clock and draws its dealer quietly.
-    turnSeconds: carnivals ? 0 : turnSeconds.value,
+    turnSeconds: quiet ? 0 : turnSeconds.value,
     // Team play needs four or six seats, so it is chosen in the lobby, not here.
     teams: 0,
-    diceStart: carnivals ? false : diceStart.value,
+    diceStart: quiet ? false : diceStart.value,
   })
 }
 
@@ -78,18 +80,19 @@ function join() {
 
     <aside
       class="art"
-      :class="{ halli: kind === 'halligalli', coup: kind === 'coup', carnivals: kind === 'carnivals', cop: kind === 'cop' }"
+      :class="{ halli: kind === 'halligalli', coup: kind === 'coup', carnivals: kind === 'carnivals', cop: kind === 'cop', snake: kind === 'snake' }"
     >
       <img v-if="isSamurai" class="art-image" :src="mainBackground" alt="" />
       <div class="art-wash"></div>
       <header class="masthead">
         <span
           class="seal"
-          :class="{ fruits: kind === 'halligalli', crown: kind === 'coup', tent: kind === 'carnivals', siren: kind === 'cop' }"
+          :class="{ fruits: kind === 'halligalli', crown: kind === 'coup', tent: kind === 'carnivals', siren: kind === 'cop', serpent: kind === 'snake' }"
         >
           <GameIcon v-if="kind === 'coup'" name="coup.duke" :size="22" />
           <template v-else-if="kind === 'carnivals'">🎪</template>
           <template v-else-if="kind === 'cop'">🚔</template>
+          <template v-else-if="kind === 'snake'">🐍</template>
           <template v-else>{{ isSamurai ? '侍' : '🔔' }}</template>
         </span>
         <h1>{{ t(masthead.title) }}</h1>
@@ -116,7 +119,7 @@ function join() {
 
         <hr class="rule" />
 
-        <section v-if="invited">
+        <section v-if="invited" class="invite-card">
           <h2>{{ t('home.invited.title') }}</h2>
           <p class="muted tiny join-hint">{{ t('home.invited.hint') }}</p>
           <input
@@ -187,8 +190,8 @@ function join() {
             <p v-else-if="masthead.hint" class="muted tiny host-hint">{{ t(masthead.hint) }}</p>
 
             <!-- The opening roll is offered to every game but Carnivals, which
-                 draws its dealer quietly and runs no clock. -->
-            <label v-if="kind !== 'carnivals'" class="check">
+                 draws its dealer quietly, and Snake, which has no opening seat. -->
+            <label v-if="kind !== 'carnivals' && kind !== 'snake'" class="check">
               <input v-model="diceStart" type="checkbox" />
               <span>
                 {{ t('option.diceStart') }}
@@ -204,15 +207,17 @@ function join() {
           <section>
             <h2>{{ t('home.join.title') }}</h2>
             <p class="muted tiny join-hint">{{ t('home.join.hint') }}</p>
-            <input
-              v-model="code"
-              class="field code"
-              maxlength="4"
-              :placeholder="t('home.join.placeholder')"
-              @input="code = code.toUpperCase()"
-              @keyup.enter="join"
-            />
-            <button class="btn wide ghost" @click="join">{{ t('home.join.action') }}</button>
+            <div class="join-row">
+              <input
+                v-model="code"
+                class="field code"
+                maxlength="4"
+                :placeholder="t('home.join.placeholder')"
+                @input="code = code.toUpperCase()"
+                @keyup.enter="join"
+              />
+              <button class="btn ghost" @click="join">{{ t('home.join.action') }}</button>
+            </div>
           </section>
         </template>
 
@@ -264,6 +269,10 @@ function join() {
 
 .art.cop {
   background: linear-gradient(160deg, #1e3a5f 0%, #3f4e63 50%, #b23a2c 100%);
+}
+
+.art.snake {
+  background: linear-gradient(160deg, #123420 0%, #2f7a45 55%, #7ba05b 100%);
 }
 
 .back {
@@ -323,6 +332,11 @@ function join() {
 
 .seal.siren {
   background: linear-gradient(140deg, #1e3a5f, #b23a2c);
+  font-size: 1.5rem;
+}
+
+.seal.serpent {
+  background: linear-gradient(140deg, #17482a, #2f7a45);
   font-size: 1.5rem;
 }
 
@@ -395,6 +409,39 @@ h2 {
 
 .join-hint {
   margin: -0.25rem 0 0.7rem;
+}
+
+/* An invite link lands on one action, so it gets the weight of a card: a
+   vermillion ribbon on paper, like the seal on the envelope it came in. */
+.invite-card {
+  padding: 1.5rem 1.5rem 1.4rem;
+  border: 1px solid var(--gold-line);
+  border-top: 3px solid var(--vermillion);
+  border-radius: 14px;
+  background: rgba(255, 253, 247, 0.75);
+  box-shadow: var(--shadow);
+  text-align: center;
+}
+
+.invite-card .code {
+  max-width: 11rem;
+}
+
+/* Joining is one code and one press, so it sits on one row. */
+.join-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.6rem;
+  align-items: stretch;
+}
+
+.join-row .code {
+  font-size: 1.2rem;
+  padding: 0.45rem 0.6rem;
+}
+
+.join-row .btn {
+  margin: 0;
 }
 
 /* Offers the other half of the screen to a guest who followed an invite but

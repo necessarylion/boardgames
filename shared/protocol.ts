@@ -24,9 +24,10 @@ import type { Opening } from './opening'
 import type { GameOptions, Phase } from './engine'
 import type { Card, Fruit, HalliEvent, HalliResult } from './halligalli'
 import type { PieceRef } from './rules'
+import type { SnakeDir, SnakeResult } from './snake'
 import type { Caste, GameResult, LogEntry, PlacedTile, PlayerColour } from './types'
 
-export const PROTOCOL_VERSION = 6
+export const PROTOCOL_VERSION = 7
 
 /**
  * How often the server pings each client. A client that hears nothing for a few
@@ -406,6 +407,52 @@ export interface CopClientState {
   turnMsLeft: number | null
 }
 
+/**
+ * What every client knows about a Snake seat — which is everything: the whole
+ * board is public, so a seat's body travels in full and only leaves the wire
+ * once the snake has crashed and left the board.
+ */
+export interface SnakePublicPlayer {
+  id: number
+  name: string
+  colour: PlayerColour
+  connected: boolean
+  alive: boolean
+  /** Cells occupied, head first; empty once the snake has crashed. */
+  body: [number, number][]
+  dir: SnakeDir
+  apples: number
+  /** Body length, frozen at death for the final standing. */
+  length: number
+}
+
+/**
+ * The Snake state sent to one client. Nothing is secret here at all, so this is
+ * the engine's state reshaped for the wire rather than redacted.
+ */
+export interface SnakeClientState {
+  kind: 'snake'
+  code: string
+  phase: 'lobby' | 'play' | 'over'
+  options: GameOptions
+  hostId: number
+  you: number | null
+  players: SnakePublicPlayer[]
+  playerCount: number
+  /** Nobody has a turn — every snake moves each frame. Kept for the shell. */
+  current: number
+  turnNumber: number
+  /** Always null: there is no opening seat when everyone moves at once. */
+  opening: Opening | null
+  gridSize: number
+  food: [number, number][]
+  /** Frames until the snakes start moving; 0 once underway. */
+  countdown: number
+  log: LogEntry[]
+  result: SnakeResult | null
+  paused: boolean
+}
+
 /** Any game's redacted state; `kind` says which, for the client to route on. */
 export type AnyClientState =
   | ClientState
@@ -413,6 +460,7 @@ export type AnyClientState =
   | CoupClientState
   | CarnivalClientState
   | CopClientState
+  | SnakeClientState
 
 export type ClientMessage =
   /** `code` is the table this client believes it is at, so a server that has
@@ -470,6 +518,8 @@ export type ClientMessage =
   | { t: 'copConfiscate'; takings: Record<number, Loot> }
   /** COP: deal the next round on once this one is resolved. */
   | { t: 'copNext' }
+  /** Snake: queue a turn for your snake's next frame. */
+  | { t: 'snakeDir'; dir: SnakeDir }
   /** Suspend or resume the table. Open to any seated player. */
   | { t: 'pause' }
   | { t: 'resume' }

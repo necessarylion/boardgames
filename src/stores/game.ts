@@ -14,6 +14,7 @@ import {
   type CoupClientState,
   type HalliClientState,
   type ServerMessage,
+  type SnakeClientState,
 } from '@shared/protocol'
 import { maxPlayersFor, type GameKind } from '@shared/types'
 import { t } from '@/i18n'
@@ -22,6 +23,7 @@ import { createCop } from './cop/useCop'
 import { createCoup } from './coup/useCoup'
 import { createHalliGalli } from './halli_galli/useHalliGalli'
 import { createSamurai } from './samurai/useSamurai'
+import { createSnake } from './snake/useSnake'
 
 // Re-exported so callers that only know the store keep their import unchanged,
 // even though the values now live with the game they belong to.
@@ -80,9 +82,11 @@ export const useGameStore = defineStore('game', () => {
   const carnival = ref<CarnivalClientState | null>(null)
   /** COP's redacted state; null while another game's table is on screen. */
   const cop = ref<CopClientState | null>(null)
+  /** Snake's wire state; null while another game's table is on screen. */
+  const snake = ref<SnakeClientState | null>(null)
   /** Whichever game's state is current, for the fields they all share. */
   const room = computed<AnyClientState | null>(
-    () => state.value ?? halli.value ?? coup.value ?? carnival.value ?? cop.value,
+    () => state.value ?? halli.value ?? coup.value ?? carnival.value ?? cop.value ?? snake.value,
   )
   /**
    * Which game the player picked on the landing screen, before any room exists.
@@ -268,6 +272,20 @@ export const useGameStore = defineStore('game', () => {
     showRoomInUrl(null)
   }
 
+  /**
+   * Every game's state, not just the newest arrival's: `room` falls through to
+   * whichever is left set, so one survivor keeps `inRoom` true and leaves the
+   * wrong table on screen.
+   */
+  function clearStates() {
+    state.value = null
+    halli.value = null
+    coup.value = null
+    carnival.value = null
+    cop.value = null
+    snake.value = null
+  }
+
   function handle(message: ServerMessage) {
     // Past a version mismatch nothing is safe to act on: a state this build
     // cannot read would be rendered as though it understood it. The socket is
@@ -296,40 +314,18 @@ export const useGameStore = defineStore('game', () => {
         if (hasLeft) return
         const incoming = message.state
         rememberSeat(incoming.code)
-        if (incoming.kind === 'halligalli') {
-          halli.value = incoming
-          state.value = null
-          coup.value = null
-          carnival.value = null
-          cop.value = null
-        } else if (incoming.kind === 'coup') {
-          coup.value = incoming
-          state.value = null
-          halli.value = null
-          carnival.value = null
-          cop.value = null
-        } else if (incoming.kind === 'carnivals') {
-          carnival.value = incoming
-          state.value = null
-          halli.value = null
-          coup.value = null
-          cop.value = null
-        } else if (incoming.kind === 'cop') {
-          cop.value = incoming
-          state.value = null
-          halli.value = null
-          coup.value = null
-          carnival.value = null
-        } else {
-          // Any state the local player did not expect invalidates a half-finished
-          // interaction (for example a piece someone else just captured).
-          if (incoming.you !== incoming.current) samurai.resetInteraction()
-          state.value = incoming
-          halli.value = null
-          coup.value = null
-          carnival.value = null
-          cop.value = null
+        // Any state the local player did not expect invalidates a half-finished
+        // interaction (for example a piece someone else just captured).
+        if (incoming.kind === 'samurai' && incoming.you !== incoming.current) {
+          samurai.resetInteraction()
         }
+        clearStates()
+        if (incoming.kind === 'halligalli') halli.value = incoming
+        else if (incoming.kind === 'coup') coup.value = incoming
+        else if (incoming.kind === 'carnivals') carnival.value = incoming
+        else if (incoming.kind === 'cop') cop.value = incoming
+        else if (incoming.kind === 'snake') snake.value = incoming
+        else state.value = incoming
         reclaimSeat(incoming)
         break
       }
@@ -340,14 +336,7 @@ export const useGameStore = defineStore('game', () => {
       case 'left':
         forgetSeat(room.value?.code ?? null)
         hasLeft = true
-        // Every game's state, not just the two that came first: `room` falls
-        // through to whichever is left set, so one survivor keeps `inRoom` true
-        // and leaves the abandoned table on screen.
-        state.value = null
-        halli.value = null
-        coup.value = null
-        carnival.value = null
-        cop.value = null
+        clearStates()
         samurai.resetInteraction()
         reclaimedFor = null
         break
@@ -390,6 +379,7 @@ export const useGameStore = defineStore('game', () => {
   const coupGame = createCoup({ coup, you, send })
   const carnivalGame = createCarnival({ carnival, you, send })
   const copGame = createCop({ cop, you, send })
+  const snakeGame = createSnake({ snake, you, isPaused, send })
 
   // --- room actions --------------------------------------------------------
   /** Bring the seat back to this tab after another one took it over. */
@@ -471,6 +461,7 @@ export const useGameStore = defineStore('game', () => {
     coup,
     carnival,
     cop,
+    snake,
     room,
     kind,
     chosenGame,
@@ -503,5 +494,7 @@ export const useGameStore = defineStore('game', () => {
     ...carnivalGame,
     // COP
     ...copGame,
+    // Snake
+    ...snakeGame,
   }
 })

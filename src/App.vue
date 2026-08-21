@@ -14,6 +14,8 @@ import HalliLobby from './components/halli_galli/HalliLobby.vue'
 import HomeScreen from './components/common/HomeScreen.vue'
 import LandingScreen from './components/common/LandingScreen.vue'
 import LobbyScreen from './components/samurai/LobbyScreen.vue'
+import SnakeGameScreen from './components/snake/SnakeGameScreen.vue'
+import SnakeLobby from './components/snake/SnakeLobby.vue'
 import { useOpeningRoll } from './composables/useOpeningRoll'
 import { t } from './i18n'
 import { useGameStore } from './stores/game'
@@ -92,6 +94,11 @@ onMounted(() => game.connect())
       <CopGameScreen v-else />
     </template>
 
+    <template v-else-if="game.kind === 'snake'">
+      <SnakeLobby v-if="game.phase === 'lobby'" />
+      <SnakeGameScreen v-else />
+    </template>
+
     <LobbyScreen v-else-if="game.phase === 'lobby'" />
     <DraftScreen v-else-if="game.phase === 'draft'" />
     <GameScreen v-else />
@@ -121,9 +128,9 @@ onMounted(() => game.connect())
   min-height: 0;
 }
 
-/* Every screen scrolls as a whole except home, which pins its artwork column at
-   full height and scrolls only the forms beside it. */
-.app > :not(.connection):not(.toast):not(.home) {
+/* Every screen scrolls as a whole except home and the Samurai lobby, which pin
+   one column at full height and scroll only the other beside it. */
+.app > :not(.connection):not(.toast):not(.home):not(.lobby-split) {
   overflow-y: auto;
 }
 

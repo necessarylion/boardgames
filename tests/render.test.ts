@@ -119,8 +119,10 @@ describe('rendering', () => {
     expect(wrapper.text()).toContain('TEST')
     expect(wrapper.text()).toContain('Takeda')
     expect(wrapper.text()).toContain('Uesugi')
-    expect(wrapper.findAll('.seat')).toHaveLength(SAMURAI_MAX)
-    expect(wrapper.findAll('.seat.empty')).toHaveLength(SAMURAI_MAX - 2)
+    // Open seats collapse into a single row carrying one ghost swatch each.
+    expect(wrapper.findAll('.seat')).toHaveLength(3)
+    expect(wrapper.findAll('.seat.empty')).toHaveLength(1)
+    expect(wrapper.findAll('.empty-swatch')).toHaveLength(SAMURAI_MAX - 2)
   })
 
   it('renders the board, every space and both hands from server state', () => {

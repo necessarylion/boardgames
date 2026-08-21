@@ -25,6 +25,7 @@ import {
 } from '../shared/coup'
 import { DEFAULT_OPTIONS, Game, type GameOptions, type GameState } from '../shared/engine'
 import { HalliGame, fruitTotals, ringingFruit, type HalliGameState } from '../shared/halligalli'
+import { SnakeGame, type SnakeGameState } from '../shared/snake'
 import type {
   AnyClientState,
   CarnivalClientState,
@@ -38,6 +39,8 @@ import type {
   HalliClientState,
   HalliPublicPlayer,
   PublicPlayer,
+  SnakeClientState,
+  SnakePublicPlayer,
 } from '../shared/protocol'
 import { teamArrangements, teamLeader, teamOf } from '../shared/rules'
 import { COLOUR_ORDER } from '../shared/colours'
@@ -88,6 +91,8 @@ export interface RoomSnapshot {
   carn?: CarnivalGameState | null
   /** The COP engine's state, when this is a COP table. */
   cop?: CopGameState | null
+  /** The Snake engine's state, when this is a Snake table. */
+  snake?: SnakeGameState | null
 }
 
 export class Room {
@@ -109,6 +114,8 @@ export class Room {
   carn: CarnivalGame | null = null
   /** The running COP game, when this room's kind is cop. */
   cop: CopGame | null = null
+  /** The running Snake game, when this room's kind is snake. */
+  snake: SnakeGame | null = null
   hostToken = ''
   lastActivity = Date.now()
   /**
@@ -153,6 +160,7 @@ export class Room {
       coup: this.coup?.state ?? null,
       carn: this.carn?.state ?? null,
       cop: this.cop?.state ?? null,
+      snake: this.snake?.state ?? null,
     }
   }
 
@@ -175,6 +183,7 @@ export class Room {
     room.coup = snapshot.coup ? CoupGame.fromState(snapshot.coup) : null
     room.carn = snapshot.carn ? CarnivalGame.fromState(snapshot.carn) : null
     room.cop = snapshot.cop ? CopGame.fromState(snapshot.cop) : null
+    room.snake = snapshot.snake ? SnakeGame.fromState(snapshot.snake) : null
     return room
   }
 
@@ -184,7 +193,8 @@ export class Room {
       this.hg !== null ||
       this.coup !== null ||
       this.carn !== null ||
-      this.cop !== null
+      this.cop !== null ||
+      this.snake !== null
     )
   }
 
@@ -194,6 +204,7 @@ export class Room {
     if (this.coup) return this.coup.state.phase === 'over'
     if (this.carn) return this.carn.state.phase === 'over'
     if (this.cop) return this.cop.state.phase === 'over'
+    if (this.snake) return this.snake.state.phase === 'over'
     return this.game?.state.phase === 'over'
   }
 
@@ -269,11 +280,14 @@ export class Room {
     this.coup = null
     this.carn = null
     this.cop = null
+    this.snake = null
     const dice = this.options.diceStart
     if (this.options.kind === 'halligalli') this.hg = new HalliGame(this.seats.length, seed, dice)
     else if (this.options.kind === 'coup') this.coup = new CoupGame(this.seats.length, seed, dice)
     else if (this.options.kind === 'carnivals') this.carn = new CarnivalGame(this.seats.length, seed, dice)
     else if (this.options.kind === 'cop') this.cop = new CopGame(this.seats.length, seed, dice)
+    // Snake has no opening seat to roll for — every snake moves at once.
+    else if (this.options.kind === 'snake') this.snake = new SnakeGame(this.seats.length, seed)
     // Samurai reads the option off `options`, which it already carries.
     else this.game = new Game(this.seats.length, this.options, seed)
   }
@@ -319,6 +333,7 @@ export class Room {
     this.coup = null
     this.carn = null
     this.cop = null
+    this.snake = null
     this.dropAbsentPlayers()
     this.touch()
     return null
@@ -351,6 +366,7 @@ export class Room {
     if (this.coup) return this.coup.state.paused
     if (this.carn) return this.carn.state.paused
     if (this.cop) return this.cop.state.paused
+    if (this.snake) return this.snake.state.paused
     return this.game?.state.paused ?? false
   }
 
@@ -472,6 +488,7 @@ export class Room {
     if (this.options.kind === 'coup') return this.coupStateFor(token)
     if (this.options.kind === 'carnivals') return this.carnivalStateFor(token)
     if (this.options.kind === 'cop') return this.copStateFor(token)
+    if (this.options.kind === 'snake') return this.snakeStateFor(token)
     const seat = this.seatByToken(token)
     const game = this.game
     const open = this.options.openInformation || game?.state.phase === 'over'
@@ -1023,6 +1040,73 @@ export class Room {
       turnMsLeft: this.turnMsLeft(),
     }
   }
+
+  /**
+   * The Snake state for one viewer. Nothing in Snake is secret — the whole
+   * board is everyone's to see — so this is the engine's state reshaped for the
+   * wire rather than redacted.
+   */
+  private snakeStateFor(token: string): SnakeClientState {
+    const seat = this.seatByToken(token)
+    const sn = this.snake
+    const hostId = this.seats.find((s) => s.token === this.hostToken)?.id ?? 0
+
+    const players: SnakePublicPlayer[] = this.seats.map((s) => {
+      const p = sn?.state.players[s.id]
+      return {
+        id: s.id,
+        name: s.name,
+        colour: s.colour,
+        connected: s.connected,
+        alive: p?.alive ?? false,
+        body: p ? p.body.map((c) => [...c] as [number, number]) : [],
+        dir: p?.dir ?? 'up',
+        apples: p?.apples ?? 0,
+        length: p?.length ?? 0,
+      }
+    })
+
+    const base = {
+      kind: 'snake' as const,
+      code: this.code,
+      options: this.options,
+      hostId,
+      you: seat?.id ?? null,
+      players,
+      playerCount: this.seats.length,
+    }
+
+    if (!sn) {
+      return {
+        ...base,
+        phase: 'lobby',
+        current: 0,
+        turnNumber: 0,
+        opening: null,
+        gridSize: 0,
+        food: [],
+        countdown: 0,
+        log: [],
+        result: null,
+        paused: false,
+      }
+    }
+
+    const s = sn.state
+    return {
+      ...base,
+      phase: s.phase,
+      current: s.current,
+      turnNumber: s.turnNumber,
+      opening: s.opening,
+      gridSize: s.gridSize,
+      food: s.food.map((c) => [...c] as [number, number]),
+      countdown: s.countdown,
+      log: s.log,
+      result: s.result,
+      paused: s.paused,
+    }
+  }
 }
 
 export class RoomManager {
@@ -1156,6 +1240,23 @@ export class RoomManager {
       // time anyone out until it is resumed.
       if (room.paused) continue
       if (room.turnDeadline !== null && now >= room.turnDeadline) due.push(room)
+    }
+    return due
+  }
+
+  /**
+   * Rooms whose Snake game should advance a frame. A table with nobody
+   * connected does not tick — a restored room comes back with every seat
+   * disconnected, and running its clock would kill every snake before anyone
+   * could reconnect to steer one.
+   */
+  tickableSnakes(): Room[] {
+    const due: Room[] = []
+    for (const room of this.rooms.values()) {
+      const s = room.snake?.state
+      if (s && s.phase === 'play' && !s.paused && room.seats.some((seat) => seat.connected)) {
+        due.push(room)
+      }
     }
     return due
   }

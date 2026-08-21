@@ -8,6 +8,7 @@ import { DEFAULT_BOARD_SHAPE } from '../shared/board'
 import { TURN_SECONDS_CHOICES } from '../shared/engine'
 import type { ClientMessage, ServerMessage } from '../shared/protocol'
 import { CLOSE_REPLACED, HEARTBEAT_MS, PROTOCOL_VERSION } from '../shared/protocol'
+import { SNAKE_TICK_MS } from '../shared/snake'
 import { BOARD_SHAPES, GAME_KINDS, maxPlayersFor } from '../shared/types'
 import { RoomManager, type Room } from './rooms'
 import { PostgresRoomStore, type RoomStore } from './store'
@@ -378,6 +379,30 @@ wss.on('connection', (socket) => {
       return
     }
 
+    // Snake likewise: its own engine, routed before the Samurai game below.
+    if (room.snake) {
+      if (!seat) return fail(socket, 'You are watching this game, not playing it.')
+      const sn = room.snake
+      const outcome = (() => {
+        switch (msg.t) {
+          case 'snakeDir':
+            return sn.setDirection(seat.id, msg.dir)
+          case 'pause':
+            return sn.pause(seat.id)
+          case 'resume':
+            return sn.resume(seat.id)
+          default:
+            return { ok: false as const, error: 'Unknown action.' }
+        }
+      })()
+      if (!outcome.ok) return fail(socket, outcome.error)
+      room.touch()
+      // A steer shows nothing until the next frame, which the frame clock below
+      // broadcasts anyway — a state per keypress would only double the traffic.
+      if (msg.t !== 'snakeDir') commit(room)
+      return
+    }
+
     // Everything below is a game action and needs a seat and a running game.
     if (!seat) return fail(socket, 'You are watching this game, not playing it.')
     const game = room.game
@@ -485,6 +510,22 @@ setInterval(() => {
     commit(room)
   }
 }, 1000).unref()
+
+/**
+ * The Snake frame clock: one sweep advances every running game a frame. Frames
+ * are broadcast but not written to the database — five rows a second per table
+ * buys nothing a restart could use, since a restored table waits paused-in-
+ * effect until someone reconnects anyway. The row is written when something
+ * durable happens: the game ending here, or pause/resume/start on their paths.
+ */
+setInterval(() => {
+  for (const room of rooms.tickableSnakes()) {
+    room.snake!.tick()
+    room.touch()
+    if (room.snake!.state.phase === 'over') commit(room)
+    else broadcast(room)
+  }
+}, SNAKE_TICK_MS).unref()
 
 /**
  * A heartbeat both ways. The ping gives the browser something to hear, so a
