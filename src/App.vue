@@ -12,6 +12,8 @@ import GameScreen from './components/samurai/GameScreen.vue'
 import HalliGameScreen from './components/halli_galli/HalliGameScreen.vue'
 import HalliLobby from './components/halli_galli/HalliLobby.vue'
 import HomeScreen from './components/common/HomeScreen.vue'
+import LaddersGameScreen from './components/ladders/LaddersGameScreen.vue'
+import LaddersLobby from './components/ladders/LaddersLobby.vue'
 import LandingScreen from './components/common/LandingScreen.vue'
 import LobbyScreen from './components/samurai/LobbyScreen.vue'
 import SnakeGameScreen from './components/snake/SnakeGameScreen.vue'
@@ -97,6 +99,11 @@ onMounted(() => game.connect())
     <template v-else-if="game.kind === 'snake'">
       <SnakeLobby v-if="game.phase === 'lobby'" />
       <SnakeGameScreen v-else />
+    </template>
+
+    <template v-else-if="game.kind === 'ladders'">
+      <LaddersLobby v-if="game.phase === 'lobby'" />
+      <LaddersGameScreen v-else />
     </template>
 
     <LobbyScreen v-else-if="game.phase === 'lobby'" />

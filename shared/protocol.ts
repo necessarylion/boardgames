@@ -25,9 +25,10 @@ import type { GameOptions, Phase } from './engine'
 import type { Card, Fruit, HalliEvent, HalliResult } from './halligalli'
 import type { PieceRef } from './rules'
 import type { SnakeDir, SnakeResult } from './snake'
+import type { LaddersResult, LastRoll, Power } from './ladders'
 import type { Caste, GameResult, LogEntry, PlacedTile, PlayerColour } from './types'
 
-export const PROTOCOL_VERSION = 7
+export const PROTOCOL_VERSION = 8
 
 /**
  * How often the server pings each client. A client that hears nothing for a few
@@ -454,6 +455,44 @@ export interface SnakeClientState {
   paused: boolean
 }
 
+/** A Snakes & Ladders seat. The board is public, so this is the whole of it. */
+export interface LaddersPublicPlayer {
+  id: number
+  name: string
+  colour: PlayerColour
+  connected: boolean
+  /** Square stood on; 0 is off the board. */
+  pos: number
+  rolls: number
+  /** Finishing place, from 1, once this seat has reached the top; null while racing. */
+  place: number | null
+  /** Owes a missed turn, from a skip square. */
+  skip: boolean
+}
+
+/** The Snakes & Ladders state sent to one client. Nothing here is secret. */
+export interface LaddersClientState {
+  kind: 'ladders'
+  code: string
+  phase: 'lobby' | 'play' | 'over'
+  options: GameOptions
+  hostId: number
+  you: number | null
+  players: LaddersPublicPlayer[]
+  playerCount: number
+  current: number
+  turnNumber: number
+  opening: Opening | null
+  lastRoll: LastRoll | null
+  /** This game's power squares; empty in the lobby. */
+  powers: Record<number, Power>
+  log: LogEntry[]
+  result: LaddersResult | null
+  paused: boolean
+  /** Milliseconds left on the roller's clock, or null when the table is untimed. */
+  turnMsLeft: number | null
+}
+
 /** Any game's redacted state; `kind` says which, for the client to route on. */
 export type AnyClientState =
   | ClientState
@@ -462,6 +501,7 @@ export type AnyClientState =
   | CarnivalClientState
   | CopClientState
   | SnakeClientState
+  | LaddersClientState
 
 export type ClientMessage =
   /** `code` is the table this client believes it is at, so a server that has
@@ -523,6 +563,8 @@ export type ClientMessage =
   | { t: 'copNext' }
   /** Snake: queue a turn for your snake's next frame. */
   | { t: 'snakeDir'; dir: SnakeDir }
+  /** Snakes & Ladders: throw the die (only on your turn). */
+  | { t: 'laddersRoll' }
   /** Suspend or resume the table. Open to any seated player. */
   | { t: 'pause' }
   | { t: 'resume' }

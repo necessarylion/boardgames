@@ -64,6 +64,14 @@ function pick(kind: GameKind) {
         <span class="go">{{ t('landing.play') }}</span>
       </button>
 
+      <button class="game-card ladders" type="button" @click="pick('ladders')">
+        <span class="seal die">🎲</span>
+        <span class="game-name">{{ t('landing.ladders.name') }}</span>
+        <span class="game-blurb">{{ t('landing.ladders.blurb') }}</span>
+        <span class="meta tiny">{{ t('landing.ladders.meta') }}</span>
+        <span class="go">{{ t('landing.play') }}</span>
+      </button>
+
       <button class="game-card cop" type="button" @click="pick('cop')">
         <span class="seal siren">🚔</span>
         <span class="game-name">{{ t('landing.cop.name') }}</span>
@@ -185,6 +193,10 @@ function pick(kind: GameKind) {
 .seal.serpent {
   font-size: 1.5rem;
   background: linear-gradient(140deg, #17482a, #2f7a45);
+}
+
+.seal.die {
+  background: linear-gradient(140deg, #b23a2c, #d4a017);
 }
 
 .game-name {

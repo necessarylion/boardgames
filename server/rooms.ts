@@ -26,6 +26,7 @@ import {
 import { DEFAULT_OPTIONS, Game, type GameOptions, type GameState } from '../shared/engine'
 import { HalliGame, fruitTotals, ringingFruit, type HalliGameState } from '../shared/halligalli'
 import { SnakeGame, type SnakeGameState } from '../shared/snake'
+import { LaddersGame, type LaddersGameState } from '../shared/ladders'
 import type {
   AnyClientState,
   CarnivalClientState,
@@ -41,6 +42,8 @@ import type {
   PublicPlayer,
   SnakeClientState,
   SnakePublicPlayer,
+  LaddersClientState,
+  LaddersPublicPlayer,
 } from '../shared/protocol'
 import { teamArrangements, teamLeader, teamOf } from '../shared/rules'
 import { COLOUR_ORDER } from '../shared/colours'
@@ -93,6 +96,8 @@ export interface RoomSnapshot {
   cop?: CopGameState | null
   /** The Snake engine's state, when this is a Snake table. */
   snake?: SnakeGameState | null
+  /** The Snakes & Ladders engine's state, when this is a ladders table. */
+  ladders?: LaddersGameState | null
 }
 
 export class Room {
@@ -116,6 +121,8 @@ export class Room {
   cop: CopGame | null = null
   /** The running Snake game, when this room's kind is snake. */
   snake: SnakeGame | null = null
+  /** The running Snakes & Ladders game, when this room's kind is ladders. */
+  ladders: LaddersGame | null = null
   hostToken = ''
   lastActivity = Date.now()
   /**
@@ -161,6 +168,7 @@ export class Room {
       carn: this.carn?.state ?? null,
       cop: this.cop?.state ?? null,
       snake: this.snake?.state ?? null,
+      ladders: this.ladders?.state ?? null,
     }
   }
 
@@ -184,6 +192,7 @@ export class Room {
     room.carn = snapshot.carn ? CarnivalGame.fromState(snapshot.carn) : null
     room.cop = snapshot.cop ? CopGame.fromState(snapshot.cop) : null
     room.snake = snapshot.snake ? SnakeGame.fromState(snapshot.snake) : null
+    room.ladders = snapshot.ladders ? LaddersGame.fromState(snapshot.ladders) : null
     return room
   }
 
@@ -194,7 +203,8 @@ export class Room {
       this.coup !== null ||
       this.carn !== null ||
       this.cop !== null ||
-      this.snake !== null
+      this.snake !== null ||
+      this.ladders !== null
     )
   }
 
@@ -205,6 +215,7 @@ export class Room {
     if (this.carn) return this.carn.state.phase === 'over'
     if (this.cop) return this.cop.state.phase === 'over'
     if (this.snake) return this.snake.state.phase === 'over'
+    if (this.ladders) return this.ladders.state.phase === 'over'
     return this.game?.state.phase === 'over'
   }
 
@@ -301,6 +312,7 @@ export class Room {
     this.carn = null
     this.cop = null
     this.snake = null
+    this.ladders = null
     const dice = this.options.diceStart
     if (this.options.kind === 'halligalli') this.hg = new HalliGame(this.seats.length, seed, dice)
     else if (this.options.kind === 'coup') this.coup = new CoupGame(this.seats.length, seed, dice)
@@ -308,6 +320,7 @@ export class Room {
     else if (this.options.kind === 'cop') this.cop = new CopGame(this.seats.length, seed, dice)
     // Snake has no opening seat to roll for — every snake moves at once.
     else if (this.options.kind === 'snake') this.snake = new SnakeGame(this.seats.length, seed)
+    else if (this.options.kind === 'ladders') this.ladders = new LaddersGame(this.seats.length, seed, dice)
     // Samurai reads the option off `options`, which it already carries.
     else this.game = new Game(this.seats.length, this.options, seed)
   }
@@ -354,6 +367,7 @@ export class Room {
     this.carn = null
     this.cop = null
     this.snake = null
+    this.ladders = null
     this.dropAbsentPlayers()
     this.touch()
     return null
@@ -385,6 +399,7 @@ export class Room {
     if (this.carn) return this.carn.state.paused
     if (this.cop) return this.cop.state.paused
     if (this.snake) return this.snake.state.paused
+    if (this.ladders) return this.ladders.state.paused
     return this.game?.state.paused ?? false
   }
 
@@ -394,6 +409,11 @@ export class Room {
     if (this.coup) return this.coupTurnKey()
     if (this.carn) return this.carnivalTurnKey()
     if (this.cop) return this.copTurnKey()
+    if (this.ladders) {
+      // Keyed on the roll count, so a six that rolls again gets a fresh period.
+      const l = this.ladders.state
+      return l.phase === 'play' ? `${l.turnNumber}:${l.current}` : null
+    }
     const s = this.game?.state
     if (!s || s.phase !== 'play') return null
     return `${s.turnNumber}:${s.current}`
@@ -507,6 +527,7 @@ export class Room {
     if (this.options.kind === 'carnivals') return this.carnivalStateFor(token)
     if (this.options.kind === 'cop') return this.copStateFor(token)
     if (this.options.kind === 'snake') return this.snakeStateFor(token)
+    if (this.options.kind === 'ladders') return this.laddersStateFor(token)
     const seat = this.seatByToken(token)
     const game = this.game
     const open = this.options.openInformation || game?.state.phase === 'over'
@@ -1125,6 +1146,68 @@ export class Room {
       log: s.log,
       result: s.result,
       paused: s.paused,
+    }
+  }
+
+  /** The Snakes & Ladders state for one viewer. Nothing on the board is secret. */
+  private laddersStateFor(token: string): LaddersClientState {
+    const seat = this.seatByToken(token)
+    const ld = this.ladders
+    const hostId = this.seats.find((s) => s.token === this.hostToken)?.id ?? 0
+
+    const players: LaddersPublicPlayer[] = this.seats.map((s) => {
+      const p = ld?.state.players[s.id]
+      return {
+        id: s.id,
+        name: s.name,
+        colour: s.colour,
+        connected: s.connected,
+        pos: p?.pos ?? 0,
+        rolls: p?.rolls ?? 0,
+        place: ld && ld.state.standings.includes(s.id) ? ld.state.standings.indexOf(s.id) + 1 : null,
+        skip: p?.skip ?? false,
+      }
+    })
+
+    const base = {
+      kind: 'ladders' as const,
+      code: this.code,
+      options: this.options,
+      hostId,
+      you: seat?.id ?? null,
+      players,
+      playerCount: this.seats.length,
+    }
+
+    if (!ld) {
+      return {
+        ...base,
+        phase: 'lobby',
+        current: 0,
+        turnNumber: 0,
+        opening: null,
+        lastRoll: null,
+        powers: {},
+        log: [],
+        result: null,
+        paused: false,
+        turnMsLeft: null,
+      }
+    }
+
+    const s = ld.state
+    return {
+      ...base,
+      phase: s.phase,
+      current: s.current,
+      turnNumber: s.turnNumber,
+      opening: s.opening,
+      lastRoll: s.lastRoll,
+      powers: s.powers,
+      log: s.log,
+      result: s.result,
+      paused: s.paused,
+      turnMsLeft: this.turnMsLeft(),
     }
   }
 }

@@ -410,6 +410,28 @@ wss.on('connection', (socket) => {
       return
     }
 
+    // Snakes & Ladders likewise: its own engine, routed before the Samurai game below.
+    if (room.ladders) {
+      if (!seat) return fail(socket, 'You are watching this game, not playing it.')
+      const ld = room.ladders
+      const outcome = (() => {
+        switch (msg.t) {
+          case 'laddersRoll':
+            return ld.roll(seat.id)
+          case 'pause':
+            return ld.pause(seat.id)
+          case 'resume':
+            return ld.resume(seat.id)
+          default:
+            return { ok: false as const, error: 'Unknown action.' }
+        }
+      })()
+      if (!outcome.ok) return fail(socket, outcome.error)
+      room.touch()
+      commit(room)
+      return
+    }
+
     // Everything below is a game action and needs a seat and a running game.
     if (!seat) return fail(socket, 'You are watching this game, not playing it.')
     const game = room.game
@@ -512,6 +534,9 @@ setInterval(() => {
       // COP settles whatever the round is waiting on: hides an absent thief, opens
       // the Cop's doors, waves an unmade arrest through, or deals the next round.
       if (room.cop.timeOut().ok) room.touch()
+    } else if (room.ladders) {
+      // Snakes & Ladders throws the die for whoever is holding the table up.
+      if (room.ladders.timeOut().ok) room.touch()
     }
     room.rearmTurnTimer()
     commit(room)

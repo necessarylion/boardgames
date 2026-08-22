@@ -29,6 +29,7 @@ const MASTHEAD = {
   carnivals: { title: 'landing.carnivals.name', tagline: 'home.carnivals.tagline', hint: 'home.carnivals.hostHint' },
   cop: { title: 'landing.cop.name', tagline: 'home.cop.tagline', hint: 'home.cop.hostHint' },
   snake: { title: 'landing.snake.name', tagline: 'home.snake.tagline', hint: 'home.snake.hostHint' },
+  ladders: { title: 'landing.ladders.name', tagline: 'home.ladders.tagline', hint: 'home.ladders.hostHint' },
 } as const
 
 const masthead = computed(() => MASTHEAD[kind.value])
@@ -80,19 +81,20 @@ function join() {
 
     <aside
       class="art"
-      :class="{ halli: kind === 'halligalli', coup: kind === 'coup', carnivals: kind === 'carnivals', cop: kind === 'cop', snake: kind === 'snake' }"
+      :class="{ halli: kind === 'halligalli', coup: kind === 'coup', carnivals: kind === 'carnivals', cop: kind === 'cop', snake: kind === 'snake', ladders: kind === 'ladders' }"
     >
       <img v-if="isSamurai" class="art-image" :src="mainBackground" alt="" />
       <div class="art-wash"></div>
       <header class="masthead">
         <span
           class="seal"
-          :class="{ fruits: kind === 'halligalli', crown: kind === 'coup', tent: kind === 'carnivals', siren: kind === 'cop', serpent: kind === 'snake' }"
+          :class="{ fruits: kind === 'halligalli', crown: kind === 'coup', tent: kind === 'carnivals', siren: kind === 'cop', serpent: kind === 'snake', die: kind === 'ladders' }"
         >
           <GameIcon v-if="kind === 'coup'" name="coup.duke" :size="22" />
           <template v-else-if="kind === 'carnivals'">🎪</template>
           <template v-else-if="kind === 'cop'">🚔</template>
           <template v-else-if="kind === 'snake'">🐍</template>
+          <template v-else-if="kind === 'ladders'">🎲</template>
           <template v-else>{{ isSamurai ? '侍' : '🔔' }}</template>
         </span>
         <h1>{{ t(masthead.title) }}</h1>
@@ -183,7 +185,7 @@ function join() {
             </template>
             <!-- Coup and COP have no board or hand settings, but they do run a
                  shot clock, so they get that one control and nothing else. -->
-            <template v-else-if="kind === 'coup' || kind === 'cop'">
+            <template v-else-if="kind === 'coup' || kind === 'cop' || kind === 'ladders'">
               <p v-if="masthead.hint" class="muted tiny host-hint">{{ t(masthead.hint) }}</p>
               <TurnClockOptions :seconds="turnSeconds" @pick="turnSeconds = $event" />
             </template>
@@ -273,6 +275,10 @@ function join() {
 
 .art.snake {
   background: linear-gradient(160deg, #123420 0%, #2f7a45 55%, #7ba05b 100%);
+}
+
+.art.ladders {
+  background: linear-gradient(160deg, #b23a2c 0%, #d4a017 45%, #1e6f86 100%);
 }
 
 .back {
