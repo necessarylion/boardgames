@@ -18,7 +18,7 @@
     "esModuleInterop": true,
     "useDefineForClassFields": true,
     "noEmit": true,
-    "types": ["vite/client", "vitest/globals"],
+    "types": ["node", "vite/client", "vitest/globals"],
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"],
@@ -32,6 +32,8 @@
     "shared/**/*.ts",
     "server/**/*.ts",
     "tests/**/*.ts",
-    "vite.config.ts"
+    "e2e/**/*.ts",
+    "vite.config.ts",
+    "playwright.config.ts"
   ]
 }

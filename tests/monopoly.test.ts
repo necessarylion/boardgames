@@ -640,6 +640,26 @@ describe('trading', () => {
 })
 
 describe('debt and bankruptcy', () => {
+  it('values a built holding at exactly what selling and mortgaging it pays', () => {
+    // `liquidValue` is what decides whether a debt is payable at all, so it has
+    // to agree to the last unit with what the seat can really raise. It rounds
+    // per office, and `houseCost` is odd at two tiers — rounding the total
+    // instead would call a payable debt bankruptcy.
+    const game = started()
+    const spaces = groupSpaces('brown')
+    give(game, 0, ...spaces)
+    game.build(0, spaces[0])
+    game.build(0, spaces[1])
+    game.build(0, spaces[0])
+
+    const expected = liquidValue(game.state, 0)
+    for (let next = sellable(game.state, 0); next.length; next = sellable(game.state, 0)) {
+      game.sell(0, next[0])
+    }
+    for (const i of mortgageable(game.state, 0)) game.mortgage(0, i)
+    expect(game.state.players[0].cash).toBe(expected)
+  })
+
   it('leaves a debt on the stack when the rent cannot be covered', () => {
     const game = started()
     give(game, 1, 1, 3)

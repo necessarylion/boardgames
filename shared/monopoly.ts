@@ -104,6 +104,14 @@ export const UTILITY_MULTIPLIER: readonly number[] = [0, 4, 10]
  * band ids stay colour names because that is what they are on the board: a
  * stripe along the edge of the space, and what `Group` means everywhere else.
  *
+ * Every company's rent ladder is deliberately half what the usual scale gives
+ * for its price, and every `houseCost` 30% above it — a house rule, so that the
+ * money moves slowly and building is a commitment rather than an obvious buy.
+ * Prices, both taxes, the mortgage rates and the salary are untouched, so this
+ * is a real reduction rather than a rescaling. The data centres and the two
+ * utilities keep their full rent, which is what makes a set of them worth
+ * holding against a built sector.
+ *
  * The names are the companies' own; the marks drawn for them in
  * `src/game/companies.ts` are not. A logo is a registered trademark, so every
  * space carries an original emblem instead — the same line this repo draws
@@ -112,52 +120,52 @@ export const UTILITY_MULTIPLIER: readonly number[] = [0, 4, 10]
 export const SPACES: readonly MonopolySpace[] = [
   { kind: 'go', name: 'IPO' },
   // Social
-  { kind: 'street', name: 'Snap', group: 'brown', price: 60, rent: [2, 10, 30, 90, 160, 250], houseCost: 50 },
+  { kind: 'street', name: 'Snap', group: 'brown', price: 60, rent: [1, 5, 15, 45, 80, 125], houseCost: 65 },
   { kind: 'chest', name: 'Venture Fund' },
-  { kind: 'street', name: 'Reddit', group: 'brown', price: 60, rent: [4, 20, 60, 180, 320, 450], houseCost: 50 },
+  { kind: 'street', name: 'Reddit', group: 'brown', price: 60, rent: [2, 10, 30, 90, 160, 225], houseCost: 65 },
   { kind: 'tax', name: 'Data Tax', amount: 200 },
   { kind: 'station', name: 'Polaris Data Centre', price: 200 },
   // Consumer apps
-  { kind: 'street', name: 'Spotify', group: 'cyan', price: 100, rent: [6, 30, 90, 270, 400, 550], houseCost: 50 },
+  { kind: 'street', name: 'Spotify', group: 'cyan', price: 100, rent: [3, 15, 45, 135, 200, 275], houseCost: 65 },
   { kind: 'chance', name: 'Market' },
-  { kind: 'street', name: 'Uber', group: 'cyan', price: 100, rent: [6, 30, 90, 270, 400, 550], houseCost: 50 },
-  { kind: 'street', name: 'PayPal', group: 'cyan', price: 120, rent: [8, 40, 100, 300, 450, 600], houseCost: 50 },
+  { kind: 'street', name: 'Uber', group: 'cyan', price: 100, rent: [3, 15, 45, 135, 200, 275], houseCost: 65 },
+  { kind: 'street', name: 'PayPal', group: 'cyan', price: 120, rent: [4, 20, 50, 150, 225, 300], houseCost: 65 },
   { kind: 'jail', name: 'Antitrust' },
   // Creative and enterprise software
-  { kind: 'street', name: 'Adobe', group: 'pink', price: 140, rent: [10, 50, 150, 450, 625, 750], houseCost: 100 },
+  { kind: 'street', name: 'Adobe', group: 'pink', price: 140, rent: [5, 25, 75, 225, 313, 375], houseCost: 130 },
   { kind: 'utility', name: 'Power Grid', price: 150 },
-  { kind: 'street', name: 'Oracle', group: 'pink', price: 140, rent: [10, 50, 150, 450, 625, 750], houseCost: 100 },
-  { kind: 'street', name: 'Salesforce', group: 'pink', price: 160, rent: [12, 60, 180, 500, 700, 900], houseCost: 100 },
+  { kind: 'street', name: 'Oracle', group: 'pink', price: 140, rent: [5, 25, 75, 225, 313, 375], houseCost: 130 },
+  { kind: 'street', name: 'Salesforce', group: 'pink', price: 160, rent: [6, 30, 90, 250, 350, 450], houseCost: 130 },
   { kind: 'station', name: 'Meridian Data Centre', price: 200 },
   // Media and devices
-  { kind: 'street', name: 'X', group: 'orange', price: 180, rent: [14, 70, 200, 550, 750, 950], houseCost: 100 },
+  { kind: 'street', name: 'X', group: 'orange', price: 180, rent: [7, 35, 100, 275, 375, 475], houseCost: 130 },
   { kind: 'chest', name: 'Venture Fund' },
-  { kind: 'street', name: 'Netflix', group: 'orange', price: 180, rent: [14, 70, 200, 550, 750, 950], houseCost: 100 },
-  { kind: 'street', name: 'Samsung', group: 'orange', price: 200, rent: [16, 80, 220, 600, 800, 1000], houseCost: 100 },
+  { kind: 'street', name: 'Netflix', group: 'orange', price: 180, rent: [7, 35, 100, 275, 375, 475], houseCost: 130 },
+  { kind: 'street', name: 'Samsung', group: 'orange', price: 200, rent: [8, 40, 110, 300, 400, 500], houseCost: 130 },
   { kind: 'parking', name: 'Sandbox' },
   // Semiconductors
-  { kind: 'street', name: 'Intel', group: 'red', price: 220, rent: [18, 90, 250, 700, 875, 1050], houseCost: 150 },
+  { kind: 'street', name: 'Intel', group: 'red', price: 220, rent: [9, 45, 125, 350, 438, 525], houseCost: 195 },
   { kind: 'chance', name: 'Market' },
-  { kind: 'street', name: 'AMD', group: 'red', price: 220, rent: [18, 90, 250, 700, 875, 1050], houseCost: 150 },
-  { kind: 'street', name: 'TSMC', group: 'red', price: 240, rent: [20, 100, 300, 750, 925, 1100], houseCost: 150 },
+  { kind: 'street', name: 'AMD', group: 'red', price: 220, rent: [9, 45, 125, 350, 438, 525], houseCost: 195 },
+  { kind: 'street', name: 'TSMC', group: 'red', price: 240, rent: [10, 50, 150, 375, 463, 550], houseCost: 195 },
   { kind: 'station', name: 'Southern Cross Data Centre', price: 200 },
   // EV and AI
-  { kind: 'street', name: 'Tesla', group: 'yellow', price: 260, rent: [22, 110, 330, 800, 975, 1150], houseCost: 150 },
-  { kind: 'street', name: 'Meta', group: 'yellow', price: 260, rent: [22, 110, 330, 800, 975, 1150], houseCost: 150 },
+  { kind: 'street', name: 'Tesla', group: 'yellow', price: 260, rent: [11, 55, 165, 400, 488, 575], houseCost: 195 },
+  { kind: 'street', name: 'Meta', group: 'yellow', price: 260, rent: [11, 55, 165, 400, 488, 575], houseCost: 195 },
   { kind: 'utility', name: 'Fibre Network', price: 150 },
-  { kind: 'street', name: 'OpenAI', group: 'yellow', price: 280, rent: [24, 120, 360, 850, 1025, 1200], houseCost: 150 },
+  { kind: 'street', name: 'OpenAI', group: 'yellow', price: 280, rent: [12, 60, 180, 425, 513, 600], houseCost: 195 },
   { kind: 'goToJail', name: 'Go to Antitrust' },
   // The cloud giants
-  { kind: 'street', name: 'Amazon', group: 'green', price: 300, rent: [26, 130, 390, 900, 1100, 1275], houseCost: 200 },
-  { kind: 'street', name: 'Microsoft', group: 'green', price: 300, rent: [26, 130, 390, 900, 1100, 1275], houseCost: 200 },
+  { kind: 'street', name: 'Amazon', group: 'green', price: 300, rent: [13, 65, 195, 450, 550, 638], houseCost: 260 },
+  { kind: 'street', name: 'Microsoft', group: 'green', price: 300, rent: [13, 65, 195, 450, 550, 638], houseCost: 260 },
   { kind: 'chest', name: 'Venture Fund' },
-  { kind: 'street', name: 'Google', group: 'green', price: 320, rent: [28, 150, 450, 1000, 1200, 1400], houseCost: 200 },
+  { kind: 'street', name: 'Google', group: 'green', price: 320, rent: [14, 75, 225, 500, 600, 700], houseCost: 260 },
   { kind: 'station', name: 'Horizon Data Centre', price: 200 },
   { kind: 'chance', name: 'Market' },
   // The two largest
-  { kind: 'street', name: 'NVIDIA', group: 'blue', price: 350, rent: [35, 175, 500, 1100, 1300, 1500], houseCost: 200 },
+  { kind: 'street', name: 'NVIDIA', group: 'blue', price: 350, rent: [18, 88, 250, 550, 650, 750], houseCost: 260 },
   { kind: 'tax', name: 'Cloud Bill', amount: 100 },
-  { kind: 'street', name: 'Apple', group: 'blue', price: 400, rent: [50, 200, 600, 1400, 1700, 2000], houseCost: 200 },
+  { kind: 'street', name: 'Apple', group: 'blue', price: 400, rent: [25, 100, 300, 700, 850, 1000], houseCost: 260 },
 ]
 
 /** Whether a space can be owned at all — the three that carry a price. */
@@ -488,7 +496,10 @@ export function liquidValue(state: MonopolyGameState, playerId: number): number 
   for (const i of holdings(state, playerId)) {
     const s = SPACES[i]
     if (s.kind === 'street' && state.houses[i] > 0) {
-      total += Math.round((s.houseCost / 2) * state.houses[i])
+      // Rounded per office, exactly as `sell()` pays: `houseCost` is odd at two
+      // tiers, so rounding the total instead would understate what the debtor
+      // can actually raise and call a payable debt bankruptcy.
+      total += Math.round(s.houseCost / 2) * state.houses[i]
     }
     if (!state.mortgaged[i]) total += mortgageValue(i)
   }
@@ -1177,7 +1188,7 @@ export class MonopolyGame {
         // Buildings are sold back to the bank; the creditor takes bare ground.
         const def = SPACES[i]
         if (def.kind === 'street' && s.houses[i] > 0) {
-          winner.cash += Math.round((def.houseCost / 2) * s.houses[i])
+          winner.cash += Math.round(def.houseCost / 2) * s.houses[i]
           s.houses[i] = 0
         }
       }

@@ -1,12 +1,12 @@
 name: Publish Docker image
 
+# Builds the image and tells Coolify to pull it. The suite lives in
+# `test.yml` and gates the pull request, so a commit that reaches main has
+# already passed it.
 on:
   push:
     branches: [main]
     tags: ['v*']
-  # Pull requests are verified but never published.
-  pull_request:
-    branches: [main]
   workflow_dispatch:
 
 env:
@@ -14,27 +14,8 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  verify:
-    name: Typecheck and test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-
-      - run: bun install --frozen-lockfile
-      - run: bun run typecheck
-      # Includes the end-to-end suite, which starts the real server and plays a
-      # full game between two WebSocket clients.
-      - run: bun run test
-
   publish:
     name: Build and push
-    # Never publish an image that did not pass the suite.
-    needs: verify
-    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       contents: read

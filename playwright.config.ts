@@ -1,11 +1,7 @@
 import { defineConfig, devices } from '@playwright/test'
 
 /**
- * Browser tests for the board games app.
- *
- * Standalone on purpose: this folder has its own manifest and its own
- * `node_modules`, and nothing in the game project references it. Delete the
- * folder and the app is exactly as it was.
+ * Browser tests for the board games app, in `e2e/`.
  *
  * The specs are named `*.e2e.ts` rather than `*.spec.ts` for one specific
  * reason: the app runs Vitest from the repository root, and Vitest's default
@@ -19,7 +15,7 @@ import { defineConfig, devices } from '@playwright/test'
 const BASE_URL = process.env.E2E_BASE_URL ?? 'http://localhost:5173'
 
 export default defineConfig({
-  testDir: './tests',
+  testDir: './e2e/tests',
   testMatch: '**/*.e2e.ts',
 
   /* A table is two browser contexts talking over a websocket, so a test is
@@ -49,34 +45,24 @@ export default defineConfig({
   },
 
   /*
-   * The shapes the app is laid out for, portrait and landscape. `isMobile` is
-   * what makes Chromium answer `pointer: coarse` and `hover: none`, which is
-   * how the touch-sized controls are chosen.
+   * Three shapes, the ones the app is actually laid out for: a phone, a tablet
+   * and a desktop. `isMobile` is what makes a browser answer `pointer: coarse`
+   * and `hover: none`, which is how the touch-sized controls are chosen.
    *
-   * The last one is WebKit, and it is the one that matters most for the parts of
-   * this app that exist because of Safari: `dvh` for a viewport a toolbar
-   * changes the height of, `env(safe-area-inset-*)` for a notch, and the
-   * fullscreen button that hides itself on an iPhone because Safari there keeps
-   * the API for video.
+   * The phone is Playwright's iPhone 13, which is WebKit — the browser several
+   * of the mobile fixes exist for: `dvh` for a viewport a toolbar changes the
+   * height of, `env(safe-area-inset-*)` for a notch, and the fullscreen button
+   * that hides itself because Safari on an iPhone keeps the API for video.
+   *
+   * The shapes this once also ran — a larger phone, a smaller one, both of them
+   * on their side, and a tablet in landscape — were a whole pass of the suite
+   * each for layouts the three below already cross. Add one back when a bug
+   * turns up that only it catches.
    */
   projects: [
     {
       name: 'mobile',
-      use: {
-        ...devices['Desktop Chrome'],
-        viewport: { width: 390, height: 844 },
-        isMobile: true,
-        hasTouch: true,
-      },
-    },
-    {
-      name: 'mobile-large',
-      use: {
-        ...devices['Desktop Chrome'],
-        viewport: { width: 430, height: 932 },
-        isMobile: true,
-        hasTouch: true,
-      },
+      use: { ...devices['iPhone 13'] },
     },
     {
       name: 'tablet',
@@ -88,39 +74,8 @@ export default defineConfig({
       },
     },
     {
-      name: 'mobile-small',
-      use: {
-        ...devices['Desktop Chrome'],
-        viewport: { width: 320, height: 568 },
-        isMobile: true,
-        hasTouch: true,
-      },
-    },
-    /* Rotated. A phone on its side is where the board and the panels change
-       places entirely, and it is the layout with the least room to spare. */
-    {
-      name: 'mobile-landscape',
-      use: {
-        ...devices['Desktop Chrome'],
-        viewport: { width: 844, height: 390 },
-        isMobile: true,
-        hasTouch: true,
-      },
-    },
-    /* A tablet on its side is wide enough for the full three columns, so this is
-       the touch screen that is *not* laid out as a phone. */
-    {
-      name: 'tablet-landscape',
-      use: { ...devices['Desktop Chrome'], viewport: { width: 1024, height: 768 }, hasTouch: true },
-    },
-    {
       name: 'desktop',
       use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } },
-    },
-    /* Real Safari, which is the browser several of the mobile fixes are for. */
-    {
-      name: 'mobile-safari',
-      use: { ...devices['iPhone 13'] },
     },
   ],
 
@@ -133,7 +88,6 @@ export default defineConfig({
     ? undefined
     : {
         command: 'bun run dev',
-        cwd: '..',
         url: BASE_URL,
         reuseExistingServer: true,
         timeout: 120_000,

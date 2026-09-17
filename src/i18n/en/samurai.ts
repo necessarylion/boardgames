@@ -307,7 +307,7 @@ export const enSamurai = {
 
   // --- landing (choose a game) --------------------------------------------
   'landing.title': 'Game Table',
-  'landing.tagline': 'Two board games, one table. Pick one to host or join a room with friends.',
+  'landing.tagline': 'Eight board games, one table. Pick one to host or join a room with friends.',
   'landing.play': 'Play',
   'landing.samurai.name': 'Samurai',
   'landing.samurai.blurb': 'Place your influence across feudal Japan and lead the most castes.',

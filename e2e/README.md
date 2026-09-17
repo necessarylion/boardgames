@@ -4,50 +4,50 @@ Playwright tests for the board games app: one spec per game, driving two real
 browser windows through a whole table — landing screen, room, join by invite
 link, deal, and a turn or two.
 
-This folder is **standalone**. It has its own `package.json`, its own
-`node_modules` and its own `tsconfig.json`, and nothing in the game project
-refers to it. The app's `package.json`, `vite.config.ts` and `tsconfig.json` are
-untouched; delete this folder and the app is exactly as it was.
+Only the specs live here. `playwright.config.ts`, the `@playwright/test`
+dependency and the `tsconfig.json` that types these files are all at the
+repository root, alongside the app's.
 
 ## Running
 
+Everything runs from the repository root:
+
 ```sh
-cd e2e
 bun install
-bunx playwright install chromium   # once; ~150MB, cached in your user profile
-bun run test
+bunx playwright install chromium webkit   # once; cached in your user profile
+bun run test:e2e
 ```
 
-npm works just as well if you prefer it: `npm install`, `npx playwright install
-chromium`, `npm test`.
-
-`playwright test` starts the app itself (`bun run dev` in the parent folder,
-which is Vite on 5173 plus the game server on 8787) and shuts it down
-afterwards. If a dev server is already up it is reused.
+`playwright test` starts the app itself (`bun run dev`, which is Vite on 5173
+plus the game server on 8787) and shuts it down afterwards. If a dev server is
+already up it is reused.
 
 To test something that is already running — a built server, a deployment —
 point at it and no server is started:
 
 ```sh
-E2E_BASE_URL=http://localhost:8787 bun run test
+E2E_BASE_URL=http://localhost:8787 bun run test:e2e
 ```
 
 ## What runs where
 
-Four viewports, all Chromium, so one browser download covers the suite:
+Three viewports, one per layout the app actually has:
 
-| Project        | Viewport   | What it is for                               |
-| -------------- | ---------- | -------------------------------------------- |
-| `mobile`       | 390 × 844  | The phone layouts: sheets, tabs, touch sizes |
-| `mobile-large` | 430 × 932  | The same, with room to spare                 |
-| `tablet`       | 768 × 1024 | The middle layout                            |
-| `desktop`      | 1440 × 900 | The full three-column tables                 |
+| Project   | Browser  | Viewport   | What it is for                               |
+| --------- | -------- | ---------- | -------------------------------------------- |
+| `mobile`  | WebKit   | iPhone 13  | The phone layouts: sheets, tabs, touch sizes |
+| `tablet`  | Chromium | 768 × 1024 | The middle layout                            |
+| `desktop` | Chromium | 1440 × 900 | The full three-column tables                 |
+
+The phone is a real Safari, which is the browser several of the mobile fixes are
+for — `dvh`, `env(safe-area-inset-*)`, and the fullscreen button that hides
+itself on an iPhone.
 
 ```sh
-bun run test -- --project=mobile        # one shape
-bun run test -- tests/monopoly.e2e.ts   # one game
-bun run test -- --headed --project=desktop
-bun run report                          # the HTML report from the last run
+bun run test:e2e --project=mobile          # one shape
+bun run test:e2e e2e/tests/monopoly.e2e.ts # one game
+bun run test:e2e --headed --project=desktop
+bun run test:e2e:report                    # the HTML report from the last run
 ```
 
 Tests marked mobile-only skip themselves on the desktop project, so a full run
@@ -65,6 +65,12 @@ is honest about what it covered rather than quietly passing.
 | `tests/cop.e2e.ts`       | COP                | Exactly one seat is the Cop                       |
 | `tests/snake.e2e.ts`     | Snake              | One arena, live on both screens                   |
 | `tests/ladders.e2e.ts`   | Snakes & Ladders   | Rolls the die and passes the turn                 |
+
+CI runs the same suite split four ways (`--shard`), one runner each, in
+Microsoft's `mcr.microsoft.com/playwright` image so no browser is downloaded —
+see `.github/workflows/test.yml`. That image carries the browsers for
+one Playwright version, which is why `@playwright/test` is pinned rather than
+ranged: bump the two together.
 
 `support/table.ts` holds what every game does the same way: host, join, start,
 and the two checks every screen owes a phone (no sideways scroll, no button too
@@ -92,9 +98,9 @@ worth knowing about, which is rather the point.
 
 ## State of the suite
 
-136 runs — seventeen tests across eight viewport projects — of which 120 execute
-and 16 skip themselves, the mobile-only ones on the two projects wide enough for
-the desktop layout. About five minutes on a laptop, one worker.
+51 runs — seventeen tests across three viewport projects — of which 43 execute
+and 8 skip themselves, the mobile-only ones on the two projects wide enough for
+the desktop layout. About a minute and a half on a laptop, one worker.
 
 Three things these tests found, all since fixed in the app:
 

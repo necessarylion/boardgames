@@ -8,3 +8,6 @@ dist-server/
 .DS_Store
 *.log
 .vite/
+test-results/
+playwright-report/
+blob-report/

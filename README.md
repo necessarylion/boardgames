@@ -1,27 +1,44 @@
-# Samurai
+# Board Games
 
-An unofficial web implementation of the board game **Samurai**, designed by
-Reiner Knizia. Two to four players, each in their own browser, kept in sync over
-WebSockets.
+Eight board and card games in the browser, played with friends over a
+four-character room code. One Vue 3 + TypeScript client, one small Bun
+WebSocket server holding the authoritative state, and a `shared/` rules layer
+imported unchanged by both sides.
 
-> **Not affiliated with, endorsed by, or licensed by Reiner Knizia or the game's
-> publishers.** This is a fan project. It implements the game's rules, which are
-> not copyrightable, using entirely original code, artwork and board layout. It
-> ships no rulebook, no scanned components and no publisher artwork. If you enjoy
-> the game, buy a physical copy — it is worth owning.
+| Game | Players | What it is |
+| --- | --- | --- |
+| **Samurai** | 2–6 | Place influence across feudal Japan and lead the most castes |
+| **Halli Galli** | 2–8 | Flip cards and race to slap the bell the instant five fruit show |
+| **Coup** | 2–8 | Claim whatever character suits you and hope nobody calls the bluff |
+| **Carnivals** | 2–8 | Bet on a hand you can only half see — your own red, everyone else's blue |
+| **COP** | 2–8 | Hide behind a door with your loot; the Cop opens two |
+| **Snake** | 2–8 | The arcade classic, head to head, last one slithering wins |
+| **Snakes & Ladders** | 2–8 | Roll, climb the ladders, dodge the snakes, reach 100 |
+| **Monopoly** | 2–8 | Buy up the tech giants, build them out, and charge rent until everyone is broke |
 
-Vue 3 + TypeScript + Vite on the client, a small Bun WebSocket server holding
-the authoritative game state.
+The games share the room, seat, reconnection, redaction and persistence
+machinery and nothing else — no common engine, no rules in common. Each has its
+own engine in `shared/`, its own store slice and its own components.
 
-![The table mid-game: the hex board, the player panel and the play log](assets/preview2.png)
+> **Not affiliated with, endorsed by, or licensed by any game's designer or
+> publisher.** This is a fan project. It implements rules, which are not
+> copyrightable, using original code and artwork. It ships no rulebook, no
+> scanned components and no publisher artwork. If you enjoy any of these games,
+> buy a physical copy.
 
-*The table. The board pans and zooms, the sidebar tracks the caste counts and
-every player's hand size, and your own tiles sit along the bottom.*
+![The Samurai table mid-game: the hex board, the player panel and the play log](assets/preview2.png)
+
+*Samurai's table. The board pans and zooms, the sidebar tracks the caste counts
+and every player's hand size, and your own tiles sit along the bottom.*
 
 ![The draft screen: what each tile does, beside the twenty tiles to choose from](assets/preview1.jpeg)
 
-*The opening draft. Everyone picks five of their twenty tiles at the same time,
-with a reference for what each tile does alongside.*
+*Samurai's opening draft. Everyone picks five of their twenty tiles at the same
+time, with a reference for what each tile does alongside.*
+
+Every table is laid out for a phone as well as a desktop: the side panels
+become sheets, the prompts move under the board, and touch targets are sized
+for a thumb.
 
 ## Running it
 
@@ -31,8 +48,8 @@ bun run dev
 ```
 
 That starts both processes: the game server on `:8787` and Vite on `:5173`. Open
-<http://localhost:5173>, create a room, and share the four-character code (or the
-invite link) with the other players.
+<http://localhost:5173>, pick a game, create a room, and share the four-character
+code (or the invite link) with the other players.
 
 Vite binds to every interface, so players on the same network can join at
 `http://<your-lan-ip>:5173`.
@@ -89,69 +106,58 @@ tables.
 | `bun run dev` | Server + client with hot reload |
 | `bun run build` | Typecheck and bundle the client |
 | `bun start` | Serve the built client and the game server together |
-| `bun run test` | Full suite — rules, engine, board, rendering, and a live end-to-end game over WebSockets |
+| `bun run test` | Full suite — every game's engine and room, rendering, and a live end-to-end game over WebSockets |
 | `bun run typecheck` | `vue-tsc` over client, server and shared code |
+| `cd e2e && bun run test` | Playwright, one spec per game, two real browsers per table |
+
+`e2e/` is a standalone package with its own `package.json` and
+`node_modules` — see [e2e/README.md](e2e/README.md).
 
 There is also a visual harness at
 <http://localhost:5173/dev-preview.html?players=4&turns=30>, which renders the
-table against a locally simulated game so the board can be inspected without
-opening four browsers. `&shape=circle` picks a map, and `&zoom=4&at=0.45,0.55`
-additionally scrolls the board in, for checking the zoomed view. It is dev-only and is not part of the production
-bundle.
+Samurai table against a locally simulated game so the board can be inspected
+without opening four browsers. `&shape=circle` picks a map, and
+`&zoom=4&at=0.45,0.55` additionally scrolls the board in, for checking the
+zoomed view. It is dev-only and is not part of the production bundle.
 
 ## How it is put together
 
 ```
-shared/    game rules, board, tiles, scoring, wire protocol — used by both sides
+shared/    one engine per game, plus board, tiles, scoring, wire protocol — used by both sides
 server/    WebSocket server: rooms, seats, reconnection, redaction, persistence
-src/       Vue client: board rendering, hand, lobby, draft
+src/       Vue client: one component folder and store slice per game, plus the shared shell
 tests/     unit, render and end-to-end tests
+e2e/       Playwright browser suite, standalone
 ```
 
-The rules live in `shared/` and are imported unchanged by both the server and the
-browser. The server owns the only real game state (`shared/engine.ts`) and
-validates every action, so a tampered client cannot cheat. The client uses the
-same rule functions purely to decide what to highlight.
+Rules live in `shared/` and are imported unchanged by both the server and the
+browser. The server owns the only real game state and validates every action, so
+a tampered client cannot cheat. The client uses the same rule functions purely to
+decide what to highlight and enable.
+
+Adding a game is a fixed list of files rather than an interface to implement —
+`CLAUDE.md` has the checklist.
 
 ### Hidden information
 
-Each client receives its own redacted view of the game. A player's draw stack
-never leaves the server, opponents' hands are sent only as counts, and captured
-pieces stay hidden until the game ends — unless the table is created with *open
-information*.
+Each client receives its own redacted view, built in one place
+(`Room.stateFor`). What that means per game: a Samurai player's draw stack never
+leaves the server, opponents' hands travel as counts and captured pieces stay
+hidden until the game ends; Coup keeps the court deck off the wire entirely and
+sends held influence as a count; Carnivals shows you your own red card and
+everyone else's blue, never the other halves; Monopoly hides almost nothing —
+cash and ownership are public — beyond a trade's terms and each seat's own list
+of legal moves.
 
-Tile definitions are recoverable from their ids (`p2-t7` is player 2's eighth
-tile), so the protocol only ever sends ids. That keeps messages small and means
-sending a hand can never accidentally leak one.
+Where the client cannot derive its options from a redacted view — a Coup
+challenge window, a Monopoly build or trade — the server computes that seat's
+affordances and sends them ready-made.
 
-### Moving around the board
+### Opening seat
 
-The board pans and zooms, which matters most on a phone where the four-player
-map would otherwise be a grid of tiny hexes. Scroll or pinch to zoom, drag to
-pan, and use the buttons in the corner (`+`, `−`, `Fit`) to reach the same thing.
-
-It works by driving the SVG's `viewBox`, and the view box is always given the
-container's aspect ratio so it never letterboxes — which is what makes zooming
-anchor exactly on the cursor or the pinch midpoint rather than drifting. A drag
-that ends over a hex is swallowed in the capture phase, so panning across the
-board never places a tile by accident.
-
-### Ending and restarting
-
-The **Table** menu in the top bar is available at any point during a game. The
-host can *End game*, which throws away the board and puts everyone back in the
-lobby with their seats intact, ready to change the settings and deal again. Any
-player can *Leave table* and go back to the start screen. Both ask for a
-confirming second click, since neither can be undone.
-
-At the end of a game the host also gets *Play again*, which deals a fresh game to
-the same players straight away.
-
-Players who are away when a new game is dealt lose their seat, because seat
-numbers index into the game and can only be renumbered between games. If they
-come back while the room is still in the lobby, their browser quietly claims a
-free seat again. The host role also moves to someone still present whenever the
-host drops, so a room can never be left with nobody able to restart it.
+No game gives the first turn to seat 0. `shared/opening.ts` draws the opening
+seat for every game that has one, either silently or through a roll-off the
+whole table watches, depending on the room's settings.
 
 ### Reconnection
 
@@ -177,10 +183,42 @@ expired room, or a memory-only server that restarted — it is told so and
 returned to the start screen, rather than left looking at a board that no longer
 exists.
 
-## Notes on the rules
+### Ending and restarting
 
-Two details are worth recording, because the rulebook constrains them without
-spelling them out:
+The **Table** menu in the top bar is available at any point during a game. The
+host can *End game*, which throws away the board and puts everyone back in the
+lobby with their seats intact, ready to change the settings and deal again. Any
+player can *Leave table* and go back to the start screen. Both ask for a
+confirming second click, since neither can be undone.
+
+At the end of a game the host also gets *Play again*, which deals a fresh game to
+the same players straight away.
+
+Players who are away when a new game is dealt lose their seat, because seat
+numbers index into the game and can only be renumbered between games. If they
+come back while the room is still in the lobby, their browser quietly claims a
+free seat again. The host role also moves to someone still present whenever the
+host drops, so a room can never be left with nobody able to restart it.
+
+## Samurai
+
+The oldest game here and the most involved, so a few notes.
+
+**Moving around the board.** The board pans and zooms, which matters most on a
+phone where the six-player map would otherwise be a grid of tiny hexes. Scroll or
+pinch to zoom, drag to pan, and use the buttons in the corner (`+`, `−`, `Fit`)
+to reach the same thing. It works by driving the SVG's `viewBox`, always given
+the container's aspect ratio so it never letterboxes — which is what makes
+zooming anchor exactly on the cursor or the pinch midpoint rather than drifting.
+A drag that ends over a hex is swallowed in the capture phase, so panning never
+places a tile by accident.
+
+**Tile ids encode their definitions** (`p2-t7` is player 2's eighth tile), so the
+protocol only ever sends ids. That keeps messages small and means sending a hand
+can never accidentally leak one.
+
+Two rules details are worth recording, because the rulebook constrains them
+without spelling them out:
 
 - **Tile distribution.** The rulebook fixes the totals — 20 tiles per player,
   exactly five bearing the fast icon, one switch tile and one move tile — but
@@ -189,29 +227,37 @@ spelling them out:
   ships, switch, move). Change that one array if your printing differs.
 
 - **The board.** The map in `shared/board.ts` is an original layout, not a copy
-  of the printed board. It is built to the same structural rules: an
-  island chain of sea, land and settlement hexes whose capacity matches the
-  supply exactly at every player count (21 / 30 / 39 pieces), with the smaller
-  boards nested inside the larger ones the way the physical board's map pieces
-  nest. The board is authored as text, so editing those rows is all it takes to
-  swap in a different map — `tests/board.test.ts` will verify it still adds up.
+  of the printed board. It is built to the same structural rules: an island chain
+  of sea, land and settlement hexes whose capacity matches the supply exactly at
+  every player count (21 / 30 / 39 / 48 / 57 pieces), with the smaller boards
+  nested inside the larger ones the way the physical board's map pieces nest. The
+  board is authored as text, so editing those rows is all it takes to swap in a
+  different map — `tests/board.test.ts` will verify it still adds up.
 
 Capture order is the other place the rulebook leaves a choice: it lets the active
 player pick the order in which surrounded settlements resolve. Because captures
 never remove tiles, every order produces identical influence totals, so the
 engine resolves in board order and the choice is not surfaced.
 
+Five and six players are an extension, not a port — the published game stops at
+four, and the outlying islands, the supply formula and the raised set-aside
+ending are all choices made here. None of them changes how two, three or four
+players play.
+
 ## Licence
 
 The code and artwork in this repository are MIT licensed — see [LICENSE](LICENSE).
 
-That covers this implementation only. *Samurai* was designed by Reiner Knizia,
-and the game's name, rulebook, published board and component art belong to their
-respective rights holders. None of those are included here: the artwork in
-`assets/` is our own, `src/game/icons.ts` also carries an SVG silhouette for
-every icon, and the board in `shared/board.ts` is an original map. Game rules and
-mechanics are not subject to copyright, which is what makes an independent
-implementation possible.
+That covers this implementation only. The games' names, rulebooks, published
+boards and component art belong to their respective rights holders, and none of
+those are included here: the artwork in `assets/` is our own,
+`src/game/icons.ts` carries an SVG silhouette for every icon, and the maps and
+boards in `shared/` are original layouts. Game rules and mechanics are not
+subject to copyright, which is what makes an independent implementation possible.
 
-If you hold rights to *Samurai* and want something here changed, open an issue
-and I will act on it.
+The one exception is `src/game/companies.ts`: Monopoly's properties are
+technology companies, and the logos drawn there are hand-made approximations of
+real marks, which remain trademarks of their owners.
+
+If you hold rights to any of these games and want something here changed, open an
+issue and I will act on it.
