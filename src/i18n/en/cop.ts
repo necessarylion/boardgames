@@ -91,4 +91,6 @@ export const enCop = {
   'cop.col.player': 'Player',
   'cop.col.tokens': 'Tokens',
   'cop.col.caught': 'Caught',
+  'cop.turnClock.hint':
+    '— out of time hides an absent thief, opens the Cop’s doors, or waves an unmade arrest through',
 }

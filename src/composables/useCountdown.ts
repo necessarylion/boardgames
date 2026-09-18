@@ -9,17 +9,31 @@ import { computed, onUnmounted, ref, watch, type Ref } from 'vue'
  * lets this read correctly on a device whose own clock is wrong, and every
  * broadcast quietly corrects any drift that has crept in.
  *
- * Shared by Samurai's clock and Coup's, which differ only in which state they
- * read the remainder off and in how they draw it.
+ * Shared by every timed game, which differ only in which state they read the
+ * remainder off and in how they draw it.
+ *
+ * It takes the whole state rather than the number for one specific reason: a
+ * fresh period reports the *same* remainder as the last one. Watching
+ * `turnMsLeft` alone meant that when a turn passed — 30000 left, then 30000
+ * left again for the next player — the value had not changed, Vue did not fire,
+ * and the local anchor stayed on the previous player's turn. The clock then
+ * read 0:00 for the rest of the game. Watching the state object re-anchors on
+ * every broadcast, because the server sends a new one each time, and the
+ * remainder it carries is only true at the moment it was built.
  */
-export function useCountdown(msLeft: () => number | null, paused: Ref<boolean> | (() => boolean)) {
+export function useCountdown(
+  source: () => { turnMsLeft: number | null } | null | undefined,
+  paused: Ref<boolean> | (() => boolean),
+) {
+  const msLeft = () => source()?.turnMsLeft ?? null
   const isPaused = typeof paused === 'function' ? computed(paused) : paused
   const deadlineAt = ref<number | null>(null)
   const now = ref(Date.now())
 
   watch(
-    msLeft,
-    (left) => {
+    source,
+    () => {
+      const left = msLeft()
       now.value = Date.now()
       deadlineAt.value = left === null ? null : now.value + left
     },

@@ -118,7 +118,7 @@ const coins = (n: number) => (n === 1 ? t('coup.coins.one') : t('coup.coins', { 
 // The clock counts the decision in front of the table, which for most of a turn
 // is a response owed by somebody other than the player whose turn it is.
 const { label: clockLabel, urgent: clockUrgent } = useCountdown(
-  () => game.coup?.turnMsLeft ?? null,
+  () => game.coup,
   () => game.isPaused,
 )
 

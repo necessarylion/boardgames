@@ -7,7 +7,7 @@ import { nextTick } from 'vue'
 
 import DraftScreen from '../src/components/samurai/DraftScreen.vue'
 import GameScreen from '../src/components/samurai/GameScreen.vue'
-import HomeScreen from '../src/components/common/HomeScreen.vue'
+import StartScreen from '../src/components/common/StartScreen.vue'
 import LobbyScreen from '../src/components/samurai/LobbyScreen.vue'
 import { Room } from '../server/rooms'
 import type { ClientState } from '../shared/protocol'
@@ -106,9 +106,12 @@ describe('ending and restarting', () => {
 })
 
 describe('rendering', () => {
-  it('renders the home screen without a connection', () => {
-    const wrapper = mount(HomeScreen)
-    expect(wrapper.text()).toContain('Samurai')
+  it('offers hosting and joining before any game is chosen', () => {
+    const wrapper = mount(StartScreen)
+    // The front door asks for a name and a room, never for a game.
+    expect(wrapper.text()).toContain('Create room')
+    expect(wrapper.text()).toContain('Join room')
+    expect(wrapper.text()).not.toContain('Samurai')
     expect(wrapper.findAll('button').length).toBeGreaterThanOrEqual(2)
   })
 

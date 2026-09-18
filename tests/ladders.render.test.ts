@@ -2,6 +2,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { mount } from '@vue/test-utils'
+import { nextTick } from 'vue'
 
 import LaddersGameScreen from '../src/components/ladders/LaddersGameScreen.vue'
 import { DEFAULT_OPTIONS } from '../shared/engine'
@@ -22,9 +23,21 @@ function room(): Room {
 
 const view = (r: Room, token: string) => r['stateFor'](token) as LaddersClientState
 
+/**
+ * The die is a fixed-size canvas, so it is the one thing on this table that has
+ * to be told the width rather than left to CSS. jsdom windows are reused
+ * between files, so each case sets the size it means to test.
+ */
+function sizeTo(w: number, h: number) {
+  window.innerWidth = w
+  window.innerHeight = h
+  window.dispatchEvent(new Event('resize'))
+}
+
 beforeEach(() => {
   setActivePinia(createPinia())
   localStorage.clear()
+  sizeTo(1280, 900)
 })
 
 describe('the Snakes & Ladders table', () => {
@@ -51,5 +64,42 @@ describe('the Snakes & Ladders table', () => {
     const l = r.ladders!.state.lastRoll!
     expect(wrapper.text()).toContain(`Ada rolled ${l.roll}`)
     expect((wrapper.find('.roll').element as HTMLButtonElement).disabled).toBe(l.again)
+  })
+
+  it('shrinks the die to the screen it is thrown on', async () => {
+    const r = room()
+    const game = useGameStore()
+    game.ladders = view(r, 'token-a')
+
+    // The 3D die loads asynchronously, so what is asserted here is the size the
+    // table asks for rather than the canvas it eventually gets.
+    const wrapper = mount(LaddersGameScreen)
+    const size = () => (wrapper.vm as unknown as { dieSize: number }).dieSize
+
+    expect(size(), 'a desktop gets the full-sized die').toBe(170)
+
+    sizeTo(320, 568)
+    await nextTick()
+    expect(size(), 'the narrowest phone gets the smallest die').toBeLessThanOrEqual(110)
+    expect(size(), 'but never one too small to read').toBeGreaterThanOrEqual(80)
+
+    sizeTo(390, 844)
+    await nextTick()
+    expect(size()).toBeGreaterThan(110)
+
+    // A phone on its side has height to spare nowhere, so the die gives way.
+    sizeTo(844, 390)
+    await nextTick()
+    expect(size(), 'held sideways, height is what is scarce').toBeLessThanOrEqual(96)
+  })
+
+  it('keeps the roll dead for the seat that is not on turn', () => {
+    const r = room()
+    const game = useGameStore()
+    game.ladders = view(r, 'token-b')
+    const wrapper = mount(LaddersGameScreen)
+
+    expect(wrapper.text()).toContain('Ada')
+    expect((wrapper.find('.roll').element as HTMLButtonElement).disabled).toBe(true)
   })
 })

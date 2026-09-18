@@ -249,3 +249,13 @@ describe('rolling', () => {
     expect(game.state.players[0].rolls).toBe(1)
   })
 })
+
+describe('the play log', () => {
+  it('keeps the last two hundred lines, as every other table does', () => {
+    const game = new LaddersGame(2, 7, false)
+    for (let i = 0; i < 320; i++) game['log'](0, `line ${i}`)
+
+    expect(game.state.log).toHaveLength(200)
+    expect(game.state.log.at(-1)!.text).toBe('line 319')
+  })
+})

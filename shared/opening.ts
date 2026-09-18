@@ -3,11 +3,14 @@ import type { Rng } from './rng'
 /**
  * Who goes first, and how the table found out.
  *
- * Opening the room is not an advantage in any of the three games, so none of
- * them hands the first turn to seat 0 just for having been dealt first. The seat
- * is drawn — either quietly, or by a roll-off the whole table gets to watch.
+ * This used to be drawn at random whatever the table asked for, because seat 0
+ * was an accident of who happened to join first and handing it the opening turn
+ * would have rewarded nothing. Turn positions removed that accident: seat 0 is
+ * now whoever *chose* position 1. So the choice is the table's — either the
+ * positions decide, and position 1 opens, or the table rolls for it and watches
+ * the winner be decided.
  *
- * This lives apart from any one engine because all three want it and none of
+ * This lives apart from any one engine because every game wants it and none of
  * them owns it: the roll decides a seat number and knows nothing about tiles,
  * fruit or influence.
  */
@@ -48,16 +51,24 @@ export function rollForFirst(rng: Rng, playerCount: number): Opening {
 }
 
 /**
- * Pick the opening seat. With the dice on, the roll-off decides it and is kept
- * so it can be replayed on screen; with them off the seat is drawn from the same
- * generator without ceremony. Either way it is random — the option only decides
- * whether anyone gets to see it happen.
+ * Pick the opening seat.
+ *
+ * With the dice on, the roll-off decides it and is kept so it can be replayed on
+ * screen. With them off the turn positions decide, and seat 0 — position 1 —
+ * opens: `Room.start()` has already seated the table in position order, so seat
+ * 0 is the player who asked to go first.
+ *
+ * It used to draw at random in that second case too, which made the option a
+ * choice about ceremony rather than about anything, and left a table that had
+ * carefully arranged its positions opening on whichever seat the generator
+ * liked.
  */
 export function chooseFirst(
   rng: Rng,
   playerCount: number,
   dice: boolean,
 ): { first: number; opening: Opening | null } {
-  const opening = dice ? rollForFirst(rng, playerCount) : null
-  return { first: opening ? opening.winner : rng.int(playerCount), opening }
+  if (!dice) return { first: 0, opening: null }
+  const opening = rollForFirst(rng, playerCount)
+  return { first: opening.winner, opening }
 }

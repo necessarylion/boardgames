@@ -8,7 +8,7 @@ const game = useGameStore()
 // The counting itself is shared with Coup's clock; see the composable for why
 // the server sends a remainder rather than a deadline.
 const { label, urgent } = useCountdown(
-  () => game.state?.turnMsLeft ?? null,
+  () => game.state,
   () => game.isPaused,
 )
 </script>

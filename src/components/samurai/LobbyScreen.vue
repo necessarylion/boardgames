@@ -48,7 +48,14 @@ function saveTeamName() {
 }
 
 const canStart = computed(
-  () => game.isHost && seats.value.length >= MIN_PLAYERS && teamValid.value,
+  () =>
+    game.isHost &&
+    seats.value.length >= MIN_PLAYERS &&
+    seats.value.length <= maxSeats &&
+    teamValid.value &&
+    // A colour or position still in the air: the answer decides whether the
+    // table is legal, so the deal waits the round trip out.
+    !game.seatBusy,
 )
 
 function toggle(key: 'randomHands' | 'openInformation' | 'diceStart' | 'shuffleMidgame') {
@@ -211,15 +218,20 @@ function setBoard(shape: BoardShape) {
       {{ t('lobby.teams.mode', { mode: splitLabel(teamsValue) }) }}
     </p>
 
-    <button class="btn wide" :disabled="!canStart" @click="game.startGame()">
-      {{ game.isHost ? t('lobby.start') : t('lobby.waitingHost') }}
-    </button>
-    <p v-if="game.isHost && seats.length < MIN_PLAYERS" class="tiny muted centre">
-      {{ t('lobby.needTwo') }}
-    </p>
-    <p v-else-if="game.isHost && teamsOn && !teamValid" class="tiny muted centre">
-      {{ t('lobby.teams.need') }}
-    </p>
+    <template #actions>
+      <button class="btn wide" :disabled="!canStart" @click="game.startGame()">
+        {{ game.isHost ? t('lobby.start') : t('lobby.waitingHost') }}
+      </button>
+      <p v-if="game.isHost && seats.length < MIN_PLAYERS" class="tiny muted centre">
+        {{ t('lobby.needTwo') }}
+      </p>
+      <!-- Travels with the button it explains: both of these say why Start is
+           refusing, so they belong in the bar rather than at the end of the
+           settings column the bar was lifted out of. -->
+      <p v-else-if="game.isHost && teamsOn && !teamValid" class="tiny muted centre">
+        {{ t('lobby.teams.need') }}
+      </p>
+    </template>
   </LobbySplit>
 </template>
 

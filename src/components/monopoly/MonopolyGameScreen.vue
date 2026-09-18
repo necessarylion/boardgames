@@ -6,6 +6,7 @@ import SeatToken from '../common/SeatToken.vue'
 import TableMenu from '../common/TableMenu.vue'
 import CompanyLogo from './CompanyLogo.vue'
 import SpaceDetail from './SpaceDetail.vue'
+import MonopolyChat from './MonopolyChat.vue'
 import MonopolyTradeDialog from './MonopolyTradeDialog.vue'
 import { PLAYER_COLOURS } from '@shared/colours'
 import {
@@ -42,7 +43,7 @@ const pending = computed(() => game.mpPending)
 const nameOf = (id: number) => players.value.find((p) => p.id === id)?.name ?? ''
 
 const { label: clockLabel, urgent: clockUrgent } = useCountdown(
-  () => state.value?.turnMsLeft ?? null,
+  () => state.value,
   () => game.isPaused,
 )
 
@@ -146,7 +147,7 @@ const COMPACT_PX = 960
 const compact = ref(window.innerWidth <= COMPACT_PX)
 
 /** Which side panel is up, or null. Only ever one of them at a time. */
-type Panel = 'players' | 'properties' | 'log'
+type Panel = 'players' | 'properties' | 'log' | 'chat'
 const panel = ref<Panel | null>(null)
 
 /**
@@ -178,7 +179,12 @@ function togglePanel(which: Panel) {
  * a baseline, or arriving at a game in progress would announce forty lines
  * nobody has missed.
  */
-const logCount = computed(() => state.value?.log.length ?? 0)
+/*
+ * Counted against the lines ever written, not against how many are kept: the
+ * engine trims the log from the front, so once it is full its length stops
+ * moving and a badge keyed on that would go quiet for the rest of the game.
+ */
+const logCount = computed(() => state.value?.logCount ?? 0)
 const seenLog = ref<number | null>(null)
 
 watch(
@@ -191,8 +197,47 @@ watch(
 
 const unreadLog = computed(() => Math.max(0, logCount.value - (seenLog.value ?? logCount.value)))
 
-/** The one panel the two side columns share, so each knows what to head itself. */
-const sideTitle = computed(() => (panel.value === 'log' ? t('log.title') : t('lobby.players')))
+/**
+ * On a wide screen the log and the chat take turns in the space under the
+ * seats, because both want the height and neither is worth half of it. On a
+ * narrow one the tab bar already decides, so this is ignored.
+ */
+const sideView = ref<'log' | 'chat'>('log')
+const showLogHere = computed(() => compact.value || sideView.value === 'log')
+const showChatHere = computed(() => compact.value || sideView.value === 'chat')
+
+/** Whether the chat is actually on screen, whichever layout is in force. */
+const chatOpen = computed(() =>
+  compact.value ? panel.value === 'chat' : sideView.value === 'chat',
+)
+
+/*
+ * Unread chat, counted the same way as the log: the first count seen is a
+ * baseline, so arriving at a game in progress does not announce a conversation
+ * nobody missed, and anything that arrives while the chat is on screen is read
+ * by definition.
+ */
+/* The same trap, and the same answer: chat ids only ever go up, while the list
+   itself is capped at a hundred. */
+const chatCount = computed(() => (game.mpChat.at(-1)?.id ?? -1) + 1)
+const seenChat = ref<number | null>(null)
+
+watch(
+  [chatCount, chatOpen],
+  ([n, open]) => {
+    if (seenChat.value === null || open) seenChat.value = n
+  },
+  { immediate: true },
+)
+
+const unreadChat = computed(() => Math.max(0, chatCount.value - (seenChat.value ?? chatCount.value)))
+
+/** The one panel the side columns share, so each knows what to head itself. */
+const sideTitle = computed(() => {
+  if (panel.value === 'log') return t('log.title')
+  if (panel.value === 'chat') return t('chat.title')
+  return t('lobby.players')
+})
 
 /** The dice give up a little on a small board; below this they read as pips. */
 const dieSize = computed(() => (compact.value ? 60 : 86))
@@ -488,9 +533,10 @@ const detailBand = computed(() => (detail.value === null ? null : bandOf(detail.
         class="side"
         :class="{
           sheet: compact,
-          open: compact && (panel === 'players' || panel === 'log'),
+          open: compact && (panel === 'players' || panel === 'log' || panel === 'chat'),
           'only-log': panel === 'log',
           'only-players': panel === 'players',
+          'only-chat': panel === 'chat',
         }"
       >
         <div v-if="compact" class="sheet-head">
@@ -530,13 +576,44 @@ const detailBand = computed(() => (detail.value === null ? null : bandOf(detail.
           {{ t('monopoly.bank.stock', { houses: state.bank.houses, hotels: state.bank.hotels }) }}
         </p>
 
+        <!-- Wide only: on a phone the tab bar below has already chosen. -->
+        <div v-if="!compact" class="side-switch" role="tablist">
+          <button
+            type="button"
+            role="tab"
+            class="switch-tab"
+            :class="{ on: sideView === 'log' }"
+            :aria-selected="sideView === 'log'"
+            @click="sideView = 'log'"
+          >
+            {{ t('log.title') }}
+          </button>
+          <button
+            type="button"
+            role="tab"
+            class="switch-tab"
+            :class="{ on: sideView === 'chat' }"
+            :aria-selected="sideView === 'chat'"
+            @click="sideView = 'chat'"
+          >
+            {{ t('chat.title') }}
+            <span v-if="unreadChat" class="tab-count unread">{{ unreadChat }}</span>
+          </button>
+        </div>
+
         <LogPanel
           v-if="state"
+          v-show="showLogHere"
           class="log"
           :entries="state.log"
           :players="players"
           :mark-of="logMark"
         />
+
+        <!-- Kept mounted rather than swapped in and out, so a half-typed line
+             survives a look at the log. `open` is what tells it to catch up to
+             the newest message when it comes back into view. -->
+        <MonopolyChat v-show="showChatHere" class="chat-pane" :open="chatOpen" />
       </aside>
 
       <section class="board-wrap">
@@ -748,17 +825,7 @@ const detailBand = computed(() => (detail.value === null ? null : bandOf(detail.
                   <button v-if="game.mpCanRoll" class="btn big" @click="game.mpRoll()">
                     {{ state?.lastRoll?.doubles && state.lastRoll.player === game.you ? t('monopoly.rollAgain') : t('monopoly.roll') }}
                   </button>
-                  <button v-else-if="game.mpCanEndTurn" class="btn big" @click="game.mpEndTurn()">
-                    {{ t('monopoly.endTurn') }}
-                  </button>
                   <p v-else class="tiny muted">{{ turnLabel }}</p>
-                  <button
-                    v-if="game.mpTradePartners.length"
-                    class="btn ghost small"
-                    @click="showTrade = true"
-                  >
-                    {{ t('monopoly.trade.open') }}
-                  </button>
                 </div>
               </div>
             </Teleport>
@@ -788,6 +855,18 @@ const detailBand = computed(() => (detail.value === null ? null : bandOf(detail.
         </div>
 
         <h3>{{ t('monopoly.manage.title') }}</h3>
+
+        <!-- An offer is a property matter and no longer part of a turn — any
+             seat may make one whenever the table is idle — so it sits with the
+             deeds rather than beside the dice. -->
+        <button
+          v-if="game.mpTradePartners.length"
+          class="btn ghost small trade-open"
+          @click="showTrade = true"
+        >
+          {{ t('monopoly.trade.open') }}
+        </button>
+
         <p v-if="!myHoldings.length" class="tiny muted">{{ t('monopoly.manage.none') }}</p>
         <ul v-else class="deeds">
           <li
@@ -949,6 +1028,16 @@ const detailBand = computed(() => (detail.value === null ? null : bandOf(detail.
         >
           {{ t('monopoly.tab.log') }}
           <span v-if="unreadLog" class="tab-count unread">{{ unreadLog }}</span>
+        </button>
+        <button
+          type="button"
+          class="tab"
+          :class="{ on: panel === 'chat' }"
+          :aria-expanded="panel === 'chat'"
+          @click="togglePanel('chat')"
+        >
+          {{ t('chat.title') }}
+          <span v-if="unreadChat" class="tab-count unread">{{ unreadChat }}</span>
         </button>
       </nav>
 
@@ -1130,6 +1219,49 @@ const detailBand = computed(() => (detail.value === null ? null : bandOf(detail.
 
 .bank {
   margin: 0;
+}
+
+/* The log and the chat take turns under the seats on a wide screen; this is
+   what does the taking of turns. */
+.side-switch {
+  flex: none;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.3rem;
+  padding: 0.4rem 0.5rem 0;
+  border-top: 1px solid rgba(160, 137, 102, 0.35);
+}
+
+.switch-tab {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  padding: 0.3rem 0.4rem;
+  border-radius: 7px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.switch-tab:hover {
+  background: rgba(160, 137, 102, 0.12);
+}
+
+.switch-tab.on {
+  border-color: var(--gold-line);
+  background: rgba(212, 160, 23, 0.14);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* The chat takes the same room under the seats that the log does. */
+.chat-pane {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .log {
@@ -1566,6 +1698,12 @@ const detailBand = computed(() => (detail.value === null ? null : bandOf(detail.
   border: 1px solid var(--gold-line);
   background: var(--paper);
   overflow: hidden;
+}
+
+/* Full width under the heading, the way the panel's own actions read. */
+.trade-open {
+  width: 100%;
+  margin-bottom: 0.7rem;
 }
 
 /* A full set is the thing worth spotting from across the panel — it is what
@@ -2015,7 +2153,7 @@ const detailBand = computed(() => (detail.value === null ? null : bandOf(detail.
 
   .tabs {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(4, 1fr);
     gap: 0.35rem;
     padding: 0.35rem 0 calc(0.15rem + env(safe-area-inset-bottom));
     background: var(--paper);
@@ -2035,9 +2173,11 @@ const detailBand = computed(() => (detail.value === null ? null : bandOf(detail.
     background: var(--paper);
     color: var(--ink);
     font: inherit;
-    /* Three labels across the narrowest phone, in a script with no spaces to
-       break at either — so they are allowed to shrink and to wrap. */
-    font-size: clamp(0.7rem, 2.6vw, 0.85rem);
+    /* Four labels across the narrowest phone, in a script with no spaces to
+       break at either — so they are allowed to shrink and to wrap. The chat
+       made this four; at 320px that is 80px a tab, which the lower bound and
+       the wrapping between them have to fit a word like "Properties" into. */
+    font-size: clamp(0.62rem, 2.3vw, 0.85rem);
     font-weight: 600;
     line-height: 1.15;
     text-align: center;
@@ -2051,7 +2191,7 @@ const detailBand = computed(() => (detail.value === null ? null : bandOf(detail.
 
   .tab-count {
     flex: none;
-    min-width: 1.3rem;
+    min-width: 1.1rem;
     padding: 0 0.25rem;
     border-radius: 999px;
     background: var(--paper-3);
@@ -2115,7 +2255,19 @@ const detailBand = computed(() => (detail.value === null ? null : bandOf(detail.
     display: none;
   }
 
-  .side.only-players .log {
+  .side.only-players .log,
+  .side.only-players .chat-pane {
+    display: none;
+  }
+
+  .side.only-log .chat-pane {
+    display: none;
+  }
+
+  /* The chat asks for the whole sheet: it is a conversation, not a sidebar. */
+  .side.only-chat .players,
+  .side.only-chat .bank,
+  .side.only-chat .log {
     display: none;
   }
 

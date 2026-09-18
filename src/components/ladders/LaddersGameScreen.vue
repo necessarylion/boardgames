@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, onMounted, onUnmounted, ref, watch } from 'vue'
 import GameIcon from '../common/GameIcon.vue'
 import LogPanel from '../common/LogPanel.vue'
 import TableMenu from '../common/TableMenu.vue'
@@ -18,13 +18,38 @@ const Die3D = defineAsyncComponent(() => import('../common/Die3D.vue'))
 
 const game = useGameStore()
 
+/*
+ * The die is a WebGL canvas with a fixed pixel size, so unlike everything else
+ * here it cannot be left to CSS: at 170px it is most of a phone's width, and
+ * the roll button ends up below the fold. The two widths below are the same
+ * ones the stylesheet lays out at — a narrow screen in portrait stacks, a short
+ * one on its side keeps its columns — and are kept in step with it by hand.
+ */
+const STACK_PX = 832
+const SHORT_PX = 544
+
+const view = ref({ w: window.innerWidth, h: window.innerHeight })
+const onResize = () => (view.value = { w: window.innerWidth, h: window.innerHeight })
+onMounted(() => window.addEventListener('resize', onResize))
+onUnmounted(() => window.removeEventListener('resize', onResize))
+
+/** Landscape and short: a phone held sideways, where height is what is scarce. */
+const shortLandscape = computed(() => view.value.h <= SHORT_PX && view.value.w > view.value.h)
+const stacked = computed(() => view.value.w <= STACK_PX && !shortLandscape.value)
+
+const dieSize = computed(() => {
+  if (shortLandscape.value) return 92
+  if (stacked.value) return Math.max(96, Math.min(140, Math.round(view.value.w * 0.32)))
+  return 170
+})
+
 const players = computed(() => game.ldPlayers)
 const isOver = computed(() => game.ladders?.phase === 'over')
 const last = computed(() => game.ladders?.lastRoll ?? null)
 const nameOf = (id: number) => players.value.find((p) => p.id === id)?.name ?? ''
 
 const { label: clockLabel, urgent: clockUrgent } = useCountdown(
-  () => game.ladders?.turnMsLeft ?? null,
+  () => game.ladders,
   () => game.isPaused,
 )
 
@@ -524,7 +549,7 @@ const seatClothId = (colour: string) => `ladders-seat-cloth-${colour}`
       <aside class="tray-side">
         <!-- The dice tray -->
         <div class="tray">
-          <Die3D :face="dieFace" :roll-key="rollKey" :duration-ms="ROLL_MS" :size="170" />
+          <Die3D :face="dieFace" :roll-key="rollKey" :duration-ms="ROLL_MS" :size="dieSize" />
           <!-- Held while a throw replays, so the next one is not thrown over it. -->
           <button class="btn wide roll" :disabled="!game.canRoll || animating" @click="game.rollDie()">
             {{ t('ladders.roll') }}
@@ -617,6 +642,17 @@ const seatClothId = (colour: string) => `ladders-seat-cloth-${colour}`
   display: flex;
   align-items: center;
   gap: 0.45rem;
+  flex: none;
+}
+
+.turn {
+  min-width: 0;
+}
+
+.turn strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .code {
@@ -947,7 +983,8 @@ const seatClothId = (colour: string) => `ladders-seat-cloth-${colour}`
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 1rem;
+  padding: calc(1rem + env(safe-area-inset-top)) calc(1rem + env(safe-area-inset-right))
+    calc(1rem + env(safe-area-inset-bottom)) calc(1rem + env(safe-area-inset-left));
   background: rgba(20, 16, 12, 0.55);
 }
 
@@ -956,8 +993,11 @@ const seatClothId = (colour: string) => `ladders-seat-cloth-${colour}`
   flex-direction: column;
   align-items: center;
   gap: 0.6rem;
+  width: 100%;
   max-width: 24rem;
-  padding: 1.6rem 1.8rem;
+  max-height: 100%;
+  overflow-y: auto;
+  padding: clamp(1rem, 4vw, 1.6rem) clamp(1rem, 4vw, 1.8rem);
   text-align: center;
   box-shadow: var(--shadow-lg);
 }
@@ -979,7 +1019,9 @@ const seatClothId = (colour: string) => `ladders-seat-cloth-${colour}`
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
-  min-width: 14rem;
+  width: 100%;
+  /* Room for a name and a place, but never more than the phone has. */
+  min-width: min(14rem, 100%);
   text-align: left;
 }
 
@@ -1011,8 +1053,32 @@ const seatClothId = (colour: string) => `ladders-seat-cloth-${colour}`
   white-space: nowrap;
 }
 
-/* Narrow: the board comes first at full width, and the column drops under it. */
-@media (max-width: 46rem) {
+/*
+ * Narrow, whichever way up: the two columns are sized in proportion to the
+ * screen rather than at their desktop widths. Without this a 768px window in
+ * landscape — a small laptop, a tablet on its side — kept a 15rem column and a
+ * 13rem one and left the board barely 300px, which the browser tests caught.
+ */
+@media (max-width: 52rem) {
+  .side {
+    width: clamp(9rem, 22vw, 15rem);
+  }
+
+  .tray-side {
+    width: clamp(8rem, 20vw, 13rem);
+  }
+}
+
+/*
+ * Narrow and upright: the board comes first at full width and the two columns
+ * drop under it, in the order they are wanted — the board, then the die you
+ * throw, then who is where.
+ *
+ * Restricted to portrait, because the same rule on a phone held sideways gave
+ * the board the full width and so a height taller than the screen: the whole
+ * game became a scroll. A short screen is handled below instead.
+ */
+@media (max-width: 52rem) and (orientation: portrait) {
   .table {
     flex-direction: column;
     overflow-y: auto;
@@ -1021,11 +1087,20 @@ const seatClothId = (colour: string) => `ladders-seat-cloth-${colour}`
   .board-wrap {
     order: -1;
     flex: none;
+    padding: 0.4rem;
   }
 
+  /*
+   * Width-led, with a ceiling in viewport height so the roll button stays on
+   * screen beside it. Both dimensions are set on the box rather than one being
+   * left to `auto`, so the SVG's own aspect ratio is what fills it — the
+   * viewBox means the squares, the snakes and every token keep their places
+   * whatever size it lands at.
+   */
   .board {
-    width: 100%;
+    width: min(100%, 68vh);
     height: auto;
+    max-width: 100%;
   }
 
   .side,
@@ -1045,8 +1120,85 @@ const seatClothId = (colour: string) => `ladders-seat-cloth-${colour}`
     order: 1;
   }
 
+  .tray {
+    padding: 0.7rem 0.9rem 0.9rem;
+  }
+
   .log {
-    max-height: 16rem;
+    max-height: 14rem;
+  }
+}
+
+/*
+ * A phone on its side: height is what is scarce, so the columns stay and the
+ * board is sized by the height it has. Narrower columns than a desktop's, and
+ * the log gives up its share — the board and the roll button are the game.
+ */
+@media (orientation: landscape) and (max-height: 34rem) {
+  .table {
+    flex-direction: row;
+    overflow: hidden;
+  }
+
+  .board-wrap {
+    order: 0;
+    flex: 1 1 auto;
+    padding: 0.35rem;
+  }
+
+  .board {
+    height: 100%;
+    width: auto;
+    max-width: 100%;
+  }
+
+  .side {
+    order: -1;
+    width: clamp(8rem, 24vw, 11rem);
+    overflow-y: auto;
+  }
+
+  .tray-side {
+    width: clamp(7rem, 20vw, 9.5rem);
+    overflow-y: auto;
+  }
+
+  .tray {
+    padding: 0.5rem 0.5rem 0.7rem;
+    gap: 0.4rem;
+  }
+
+  .player-stats {
+    display: none;
+  }
+
+  .log {
+    display: none;
+  }
+
+  .topbar {
+    padding: 0.35rem 0.75rem;
+  }
+
+  .turn strong {
+    font-size: 1rem;
+  }
+}
+
+/* The tightest phones, where a full-sized seat row crowds out the board. */
+@media (max-width: 22.5rem) {
+  .topbar {
+    gap: 0.5rem;
+    padding: 0.5rem 0.6rem;
+  }
+
+  /* The turn is what the top bar is for; the room code is not. */
+  .code {
+    display: none;
+  }
+
+  .player {
+    padding: 0.4rem 0.5rem;
   }
 }
 </style>

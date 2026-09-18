@@ -63,4 +63,69 @@ test.describe('Snakes and Ladders', () => {
       await guest.close()
     }
   })
+  /*
+   * The widths the brief names, plus the tablet. Run in one table rather than
+   * one per size: seating two browsers is the slow part, and the board is laid
+   * out by CSS, so resizing the same page tests the same thing.
+   */
+  test('fits the board to every common phone width, upright and sideways', async ({
+    page,
+    browser,
+  }) => {
+    const code = await hostRoom(page, 'ladders', 'Ada')
+    const guest = await secondSeat(browser)
+
+    try {
+      await joinRoom(guest.page, 'ladders', code, 'Bo')
+      await startGame(page, [guest.page])
+
+      const board = page.locator('.board')
+      await expect(board).toBeVisible()
+
+      // Real device shapes, not one height for all of them: at 768x720 the
+      // window is landscape, which is a different layout and a different test.
+      const shapes = [
+        { width: 320, height: 568 },
+        { width: 375, height: 667 },
+        { width: 390, height: 844 },
+        { width: 414, height: 896 },
+        { width: 768, height: 1024 },
+      ]
+
+      for (const { width, height } of shapes) {
+        await page.setViewportSize({ width, height })
+        await expectNoSideScroll(page)
+
+        const box = (await board.boundingBox())!
+        expect(box, `a board at ${width}px`).not.toBeNull()
+        expect(box.width, `the board must fit ${width}px`).toBeLessThanOrEqual(width)
+        expect(box.width, `the board must be worth looking at ${width}px`).toBeGreaterThan(
+          Math.min(width, 700) * 0.5,
+        )
+
+        // The track is square-ish — ten rows and ten columns, plus the start
+        // lane — so a box far off that ratio means it has been stretched.
+        const ratio = box.width / box.height
+        expect(ratio, `the board keeps its shape at ${width}px`).toBeGreaterThan(0.85)
+        expect(ratio, `the board keeps its shape at ${width}px`).toBeLessThan(1.25)
+
+        // The roll is the whole of what a player does here, so it has to be
+        // reachable without hunting for it.
+        await expect(page.getByRole('button', { name: 'Roll', exact: true })).toBeVisible()
+        await expect(page.locator('.topbar .turn')).toBeVisible()
+      }
+
+      // Held sideways, the height is what is scarce: the board must fit it
+      // rather than running off the bottom of a page that has to be scrolled.
+      await page.setViewportSize({ width: 844, height: 390 })
+      await expectNoSideScroll(page)
+
+      const sideways = (await board.boundingBox())!
+      expect(sideways.height, 'the board fits a landscape phone').toBeLessThanOrEqual(390)
+      await expect(page.getByRole('button', { name: 'Roll', exact: true })).toBeInViewport()
+      await expect(page.locator('.topbar .turn')).toBeInViewport()
+    } finally {
+      await guest.close()
+    }
+  })
 })

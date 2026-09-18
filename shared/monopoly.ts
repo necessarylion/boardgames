@@ -27,6 +27,9 @@ import type { LogEntry } from './types'
 export const BOARD_SIZE = 40
 export const START_CASH = 1500
 /** Collected for passing or landing on the IPO. */
+/** Play-log lines a table keeps. The rest are trimmed from the front. */
+export const LOG_KEEP = 200
+
 export const GO_SALARY = 200
 export const JAIL_SPACE = 10
 export const GO_TO_JAIL_SPACE = 30
@@ -347,6 +350,8 @@ export interface MonopolyGameState {
    * throw count either.
    */
   cardCount: number
+  /** Play-log lines ever written, which the list's own length cannot say. */
+  logCount: number
   /** Doubles thrown in a row this turn; a third is a trip to Antitrust. */
   doubles: number
   pending: MonopolyPending[]
@@ -569,6 +574,10 @@ export class MonopolyGame {
       rolled: false,
       rollCount: 0,
       cardCount: 0,
+      // One, not none: the opening line below is seeded straight into the list
+      // rather than written through `log()`, and a count that disagreed with it
+      // would leave the table's unread badge one behind for the whole game.
+      logCount: 1,
       doubles: 0,
       pending: [],
       lastRoll: null,
@@ -596,6 +605,12 @@ export class MonopolyGame {
     if (playerId !== s.current) return fail('It is not your turn.')
     if (s.pending.length) return fail('There is something to settle first.')
     if (s.rolled) return fail('You have already thrown this turn.')
+
+    // The last card stays on the board until somebody throws again. It used to
+    // be cleared when the turn passed, which was the same moment — but a turn
+    // now ends itself the instant its throw settles, and clearing it there
+    // wiped the card before the table had a frame in which to show it.
+    s.lastCard = null
 
     const [a, b] = this.dice()
     const player = s.players[playerId]
@@ -690,7 +705,12 @@ export class MonopolyGame {
     const s = this.state
     const guard = this.guard(playerId)
     if (guard) return guard
-    if (playerId !== s.current) return fail('You may only trade on your own turn.')
+    // Any seat, any time. Trading is the one thing in this game that is a
+    // conversation rather than a move, and waiting for your turn to start one
+    // is what made it hardly ever happen. The table still only holds one
+    // question at a time, so an offer waits for whatever is already pending —
+    // and once made it *is* what the table is pending on, which is why it can
+    // hold up a throw until it is answered or the clock declines it.
     if (s.pending.length) return fail('There is something to settle first.')
     if (!tradePartners(s, playerId).includes(to)) return fail('That seat is not in the game.')
     const problem = this.tradeProblem(playerId, to, give, want)
@@ -862,6 +882,11 @@ export class MonopolyGame {
   }
 
   /** Hand the turn on. Only once the dice have been thrown and nothing is pending. */
+  /**
+   * End a turn by hand. Nothing in the client asks for this any more — a turn
+   * ends itself the moment its throw is settled — but the shot clock keeps it
+   * as the answer to a table somehow left holding a spent turn.
+   */
   endTurn(playerId: number): Outcome {
     const s = this.state
     const guard = this.guard(playerId)
@@ -881,12 +906,41 @@ export class MonopolyGame {
    * and a turn simply ended.
    */
   timeOut(): Outcome {
+    // Each step is settled the way the absent player would most likely want:
+    // the purchase they stopped on is taken, a bid is dropped, an offer
+    // refused, a gaol sentence thrown for, and a debt paid out of whatever can
+    // be raised without asking them anything.
     const s = this.state
     const p = s.pending[0]
-    if (p?.step === 'buy') return this.pass(p.player)
+    if (p?.step === 'buy') {
+      // Buy it. A space the lander cannot afford never becomes a decision in
+      // the first place — `land()` sends that straight to auction — so by the
+      // time this step exists the money is there, and letting the clock decline
+      // would hand a property the player wanted to the rest of the table. The
+      // affordability test is the belt to that brace.
+      const buyer = s.players[p.player]
+      if (buyer && buyer.cash >= priceOf(p.space)) return this.buy(p.player)
+      return this.pass(p.player)
+    }
     if (p?.step === 'auction') {
-      const waiting = s.players.find((pl) => inAuction(s, pl.id))
-      return waiting ? this.pass(waiting.id) : ok
+      /*
+       * Every seat still being waited on has had the window to answer the
+       * standing bid and has not, so they all drop out together rather than one
+       * per period. One at a time would be defensible too, but it lets a table
+       * that has walked away hold an auction open for as many periods as there
+       * are idle players; this closes it in one.
+       *
+       * `pass` on the last seat in the window is what awards the space, so the
+       * loop is guarded on the auction still being the pending step.
+       */
+      let outcome: Outcome = ok
+      while (s.pending[0]?.step === 'auction') {
+        const waiting = s.players.find((pl) => inAuction(s, pl.id))
+        if (!waiting) break
+        outcome = this.pass(waiting.id)
+        if (!outcome.ok) break
+      }
+      return outcome
     }
     if (p?.step === 'trade') return this.declineTrade(p.to)
     if (p?.step === 'jail') return this.jailChoice(p.player, 'roll')
@@ -1163,14 +1217,21 @@ export class MonopolyGame {
     const s = this.state
     if (liquidValue(s, playerId) < amount) return false
     while (s.players[playerId].cash < amount) {
-      const house = sellable(s, playerId)[0]
-      if (house !== undefined) {
-        this.sell(playerId, house)
+      // Bare land first. A mortgage keeps the buildings — and the rent they
+      // earn — standing, and it can be lifted later for half again, where a
+      // sold house has to be bought back at the full price. `mortgageable`
+      // already refuses a street whose group has anything built on it, so this
+      // branch is exactly the land with no office or HQ on it.
+      const space = mortgageable(s, playerId)[0]
+      if (space !== undefined) {
+        this.mortgage(playerId, space)
         continue
       }
-      const space = mortgageable(s, playerId)[0]
-      if (space === undefined) return false
-      this.mortgage(playerId, space)
+      // Nothing bare left: sell a building, which frees its group to be
+      // mortgaged on the next turn of this loop.
+      const house = sellable(s, playerId)[0]
+      if (house === undefined) return false
+      this.sell(playerId, house)
     }
     return true
   }
@@ -1212,7 +1273,6 @@ export class MonopolyGame {
     const s = this.state
     s.rolled = false
     s.doubles = 0
-    s.lastCard = null
     let id = s.current
     for (let i = 0; i < s.playerCount; i++) {
       id = (id + 1) % s.playerCount
@@ -1244,10 +1304,22 @@ export class MonopolyGame {
           this.nextTurn()
           continue
         }
-        // A seat that has thrown and settled everything still ends its own turn,
-        // so it can build and trade first; a jailed one is asked at the top.
         if (s.players[s.current].jailed && !s.rolled) {
           s.pending.push({ step: 'jail', player: s.current })
+          continue
+        }
+        /*
+         * The throw is spent and there is nothing left to settle, so the turn
+         * is over — nobody presses anything to end it.
+         *
+         * That works because *nothing* is left that only the seat on turn could
+         * do: building, selling and mortgaging were never gated on whose turn
+         * it is, and trading no longer is either. A double leaves `rolled`
+         * false and so falls through here to be thrown again, and `nextTurn()`
+         * clears it, which is what stops this looping.
+         */
+        if (s.rolled) {
+          this.nextTurn()
           continue
         }
         return
@@ -1312,7 +1384,21 @@ export class MonopolyGame {
     return true
   }
 
+  /**
+   * A line for the play log.
+   *
+   * `logCount` is every line ever written, which is not the same as how many
+   * are kept: the list is trimmed from the front, so its length stops moving
+   * once it is full, and the table's unread badge keys on the count instead. It
+   * is `rollCount`'s and `cardCount`'s third sibling and exists for the same
+   * reason — a number that only ever goes up.
+   */
   private log(player: number | null, text: string): void {
-    this.state.log.push({ turn: this.state.turnNumber, player, text })
+    const s = this.state
+    s.log.push({ turn: s.turnNumber, player, text })
+    s.logCount++
+    // A game of two hundred turns has more to say than anyone will scroll
+    // through, and the whole state goes out on every action.
+    if (s.log.length > LOG_KEEP) s.log.splice(0, s.log.length - LOG_KEEP)
   }
 }

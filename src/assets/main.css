@@ -135,6 +135,53 @@ button:disabled {
    min-height is a floor for any label that is shorter than the padding assumes.
    Both are set just under what the Latin text already produced, so English
    buttons keep the height the screens were laid out around. */
+/*
+ * A text input, wherever one is asked for: a name on the way in, a room code, a
+ * line of chat. It lives here rather than in a screen's scoped block because it
+ * is always next to a `.btn` and the two have to agree on height, radius and
+ * border — which they stopped doing the day this was left behind in a component
+ * that was deleted, and every input in the app quietly became a browser default.
+ */
+.field {
+  width: 100%;
+  min-height: 2.4rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid rgba(140, 118, 84, 0.55);
+  background: rgba(255, 253, 247, 0.9);
+  font: inherit;
+  color: var(--ink);
+}
+
+.field:focus {
+  outline: 2px solid rgba(178, 58, 44, 0.45);
+  outline-offset: 1px;
+}
+
+.field::placeholder {
+  color: var(--ink-faint);
+  letter-spacing: normal;
+}
+
+/* A button that reads as a link: a way out of a screen rather than an action
+   on it, so it carries no weight of its own. */
+.linkish {
+  display: block;
+  padding: 0.35rem;
+  border: 0;
+  background: transparent;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 0.85rem;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.linkish:hover {
+  color: var(--vermillion-dark);
+}
+
 .btn {
   display: inline-flex;
   align-items: center;
@@ -196,6 +243,12 @@ button:disabled {
      tables set this on their own primary buttons already; here it covers every
      game at once, so a control is never the one that got missed. */
   .btn {
+    min-height: 2.75rem;
+  }
+
+  /* The box beside it grows to match, or the pair reads as two different
+     controls and the smaller one is the harder to hit. */
+  .field {
     min-height: 2.75rem;
   }
 

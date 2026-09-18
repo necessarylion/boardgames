@@ -25,7 +25,7 @@ const copSeat = computed(() => game.copCopSeat)
 const you = computed(() => game.copYou)
 
 const { label: clockLabel, urgent: clockUrgent } = useCountdown(
-  () => game.cop?.turnMsLeft ?? null,
+  () => game.cop,
   () => game.isPaused,
 )
 

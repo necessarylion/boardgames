@@ -46,4 +46,6 @@ export const myLadders = {
   'ladders.skipping': 'နားနေသည်',
   'ladders.rule.powers': 'ပါဝါအကွက်ပေါ် ရပ်လိုက်သည်နှင့် ချက်ချင်း အလုပ်လုပ်သည် —',
   'ladders.winner': '{name} အနိုင်ရသည်!',
+  'ladders.turnClock.hint':
+    '— အချိန်ကုန်လျှင် ဝိုင်းကိုစောင့်နေစေသူအတွက် အန်စာတုံးလှိမ့်ပေးသည်',
 }

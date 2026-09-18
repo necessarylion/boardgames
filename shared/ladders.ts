@@ -378,5 +378,8 @@ export class LaddersGame {
 
   private log(player: number | null, text: string): void {
     this.state.log.push({ turn: this.state.turnNumber, player, text })
+    // Capped as every other table's is: the whole state goes out on every
+    // action, and nobody scrolls back two hundred lines.
+    if (this.state.log.length > 200) this.state.log.splice(0, this.state.log.length - 200)
   }
 }

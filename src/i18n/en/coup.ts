@@ -136,4 +136,6 @@ export const enCoup = {
     'Costs are paid when you declare and are never refunded — a blocked or caught assassination still costs {cost} coins.',
   'coup.rules.timeout':
     'If the clock runs out the safest legal move is made for you: a window is allowed, a forced loss gives up your first card, and a turn takes income.',
+  'coup.turnClock.hint':
+    '— out of time takes the income on offer, or waves a challenge window through',
 }

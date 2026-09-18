@@ -216,7 +216,9 @@ describe('moving', () => {
     game.roll(0)
     expect(game.state.players[0].pos).toBe(JAIL_SPACE)
     expect(game.state.players[0].jailed).toBe(true)
-    expect(game.state.rolled).toBe(true)
+    // A referral spends the throw, doubles or not — and a spent throw ends the
+    // turn on its own, so play has already moved on.
+    expect(game.state.current).toBe(1)
   })
 
   it('counts every card turned over, so the table can replay each draw', () => {
@@ -265,8 +267,8 @@ describe('moving', () => {
     game.roll(0)
     expect(game.state.players[0].pos).toBe(JAIL_SPACE)
     expect(game.state.players[0].jailed).toBe(true)
-    // A trip to the gaol ends the turn even on a double.
-    expect(game.state.rolled).toBe(true)
+    // A trip to Antitrust ends the turn even on a double.
+    expect(game.state.current).toBe(1)
   })
 })
 
@@ -793,16 +795,24 @@ describe('debt and bankruptcy', () => {
 })
 
 describe('the turn', () => {
-  it('will not end before the dice are thrown, or while something is pending', () => {
+  it('ends itself once the throw is settled, and not a moment before', () => {
     const game = started()
-    expect(game.endTurn(0).ok).toBe(false)
+    // Nothing thrown yet, so the turn is still very much on.
+    expect(game.state.current).toBe(0)
     rollOf(game, 1, 2)
     game.roll(0)
-    expect(game.endTurn(0).ok).toBe(false)
+
+    // A space on offer holds the turn open — there is something to settle.
+    expect(game.state.pending).toHaveLength(1)
+    expect(game.state.current, 'the turn waits on the decision').toBe(0)
+
+    // Declining sends it to auction, which also has to be settled.
     game.pass(0)
     game.pass(0)
     game.pass(1)
-    expect(game.endTurn(0).ok).toBe(true)
+
+    // Settled: the turn passes with nobody pressing anything.
+    expect(game.state.pending).toHaveLength(0)
     expect(game.state.current).toBe(1)
     expect(game.state.rolled).toBe(false)
   })
@@ -837,18 +847,35 @@ describe('pause and the clock', () => {
     game.state.players[0].pos = 0
     rollOf(game, 1, 2)
     game.roll(0)
-    // A purchase nobody answers goes to auction, and then to nobody.
+    // A purchase nobody answers is taken rather than given away: the lander
+    // stopped there and could afford it, so buying is the least the clock can
+    // do on their behalf.
     expect(game.timeOut().ok).toBe(true)
-    expect(game.state.pending[0].step).toBe('auction')
-    game.timeOut()
-    game.timeOut()
-    game.timeOut()
+    expect(game.state.owners[3]).toBe(0)
     expect(game.state.pending).toHaveLength(0)
-    expect(game.state.owners[3]).toBeNull()
 
     // With nothing pending it simply ends the turn.
     expect(game.timeOut().ok).toBe(true)
     expect(game.state.current).toBe(1)
+  })
+
+  it('still sends a space to auction when the clock fires with no buyer', () => {
+    const game = started(3)
+    game.state.players[0].pos = 0
+    rollOf(game, 1, 2)
+    game.roll(0)
+    // The one way a purchase becomes an auction now: the money went between
+    // landing and the period running out.
+    game.state.players[0].cash = 0
+
+    expect(game.timeOut().ok).toBe(true)
+    expect(game.state.pending[0].step).toBe('auction')
+
+    // One period closes it: everyone still being waited on drops out together,
+    // and with no bid at all the space goes back to the bank.
+    game.timeOut()
+    expect(game.state.pending.some((p) => p.step === 'auction')).toBe(false)
+    expect(game.state.owners[3]).toBeNull()
   })
 
   it('raises what it can rather than bankrupting an absent player who could pay', () => {
@@ -860,5 +887,96 @@ describe('pause and the clock', () => {
     expect(game.state.players[0].bankrupt).toBe(false)
     expect(game.state.pending).toHaveLength(0)
     expect(game.state.mortgaged.some((m) => m)).toBe(true)
+  })
+})
+
+/**
+ * What the shot clock does for a player who has stopped answering. Each of
+ * these is a decision the table would otherwise sit on forever, and each is
+ * settled the way that player would most likely have wanted.
+ */
+describe('the shot clock deciding for an absent player', () => {
+  it('buys the space they stopped on', () => {
+    const game = started()
+    const before = game.state.players[0].cash
+    rollOf(game, 1, 2)
+    game.roll(0)
+
+    const pending = game.state.pending[0]
+    expect(pending?.step, 'the lander was offered the space').toBe('buy')
+    const space = pending!.step === 'buy' ? pending.space : -1
+
+    expect(game.timeOut().ok).toBe(true)
+    expect(game.state.owners[space], 'bought, not passed to auction').toBe(0)
+    expect(game.state.players[0].cash).toBe(before - priceOf(space))
+    // No auction was ever opened.
+    expect(game.state.pending.some((p) => p.step === 'auction')).toBe(false)
+  })
+
+  it('sends a space the lander cannot afford to auction instead', () => {
+    const game = started()
+    game.state.players[0].cash = 5
+    rollOf(game, 1, 2)
+    game.roll(0)
+
+    // A price out of reach is never a decision — the engine opens the auction
+    // itself — so the clock has an auction in front of it, not a purchase.
+    expect(game.state.pending[0]?.step).toBe('auction')
+  })
+
+  it('throws for doubles rather than paying to leave the gaol', () => {
+    const game = started()
+    game.state.players[0].jailed = true
+    game.state.players[0].pos = 10
+    const cash = game.state.players[0].cash
+    game.state.pending = [{ step: 'jail', player: 0 }]
+
+    expect(game.timeOut().ok).toBe(true)
+    expect(game.state.players[0].cash, 'the fine was not paid').toBe(cash)
+    expect(game.state.lastRoll, 'the dice were thrown').not.toBeNull()
+  })
+
+  it('mortgages bare land before it sells a single building', () => {
+    const game = started()
+    // A full set with a hotel on it, and two other streets standing bare.
+    const set = groupSpaces('brown')
+    give(game, 0, ...set)
+    give(game, 0, 6, 8)
+    game.state.houses[set[0]] = HOTEL
+
+    game.state.players[0].cash = 0
+    game.state.pending = [{ step: 'debt', player: 0, amount: mortgageValue(6), creditor: 1 }]
+
+    expect(game.timeOut().ok).toBe(true)
+    // The hotel is still standing; a bare street paid instead.
+    expect(game.state.houses[set[0]], 'the hotel was left alone').toBe(HOTEL)
+    expect(game.state.mortgaged[6] || game.state.mortgaged[8]).toBe(true)
+  })
+
+  it('sells the buildings only once there is no bare land left', () => {
+    const game = started()
+    const set = groupSpaces('brown')
+    give(game, 0, ...set)
+    for (const space of set) game.state.houses[space] = HOTEL
+
+    // Every property they hold is built on, so nothing can be mortgaged until
+    // a building comes down.
+    game.state.players[0].cash = 0
+    game.state.pending = [{ step: 'debt', player: 0, amount: 50, creditor: 1 }]
+
+    expect(game.timeOut().ok).toBe(true)
+    const standing = set.map((space) => game.state.houses[space])
+    expect(Math.min(...standing), 'a building was sold to pay').toBeLessThan(HOTEL)
+    expect(game.state.players[0].bankrupt, 'and it was enough').toBe(false)
+  })
+
+  it('declares bankruptcy only when everything they hold still falls short', () => {
+    const game = started()
+    give(game, 0, 1)
+    game.state.players[0].cash = 0
+    game.state.pending = [{ step: 'debt', player: 0, amount: 99_999, creditor: 1 }]
+
+    expect(game.timeOut().ok).toBe(true)
+    expect(game.state.players[0].bankrupt).toBe(true)
   })
 })

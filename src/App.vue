@@ -11,15 +11,14 @@ import DraftScreen from './components/samurai/DraftScreen.vue'
 import GameScreen from './components/samurai/GameScreen.vue'
 import HalliGameScreen from './components/halli_galli/HalliGameScreen.vue'
 import HalliLobby from './components/halli_galli/HalliLobby.vue'
-import HomeScreen from './components/common/HomeScreen.vue'
 import LaddersGameScreen from './components/ladders/LaddersGameScreen.vue'
 import LaddersLobby from './components/ladders/LaddersLobby.vue'
-import LandingScreen from './components/common/LandingScreen.vue'
 import LobbyScreen from './components/samurai/LobbyScreen.vue'
 import MonopolyGameScreen from './components/monopoly/MonopolyGameScreen.vue'
 import MonopolyLobby from './components/monopoly/MonopolyLobby.vue'
 import SnakeGameScreen from './components/snake/SnakeGameScreen.vue'
 import SnakeLobby from './components/snake/SnakeLobby.vue'
+import StartScreen from './components/common/StartScreen.vue'
 import { useOpeningRoll } from './composables/useOpeningRoll'
 import { t } from './i18n'
 import { useGameStore } from './stores/game'
@@ -73,9 +72,9 @@ onMounted(() => game.connect())
       {{ game.connection === 'connecting' ? t('app.connecting') : t('app.connectionLost') }}
     </p>
 
-    <!-- Not at a table: land on the game chooser, then that game's home form. -->
-    <LandingScreen v-if="!game.inRoom && !game.chosenGame" />
-    <HomeScreen v-else-if="!game.inRoom" />
+    <!-- Not at a table: host one or join one. The game is picked in the
+         lobby afterwards, by whoever hosts. -->
+    <StartScreen v-if="!game.inRoom" />
 
     <!-- The card games have a lobby and a table each; Samurai keeps its three. -->
     <template v-else-if="game.kind === 'halligalli'">
@@ -149,9 +148,10 @@ onMounted(() => game.connect())
   min-height: 0;
 }
 
-/* Every screen scrolls as a whole except home and the Samurai lobby, which pin
-   one column at full height and scroll only the other beside it. */
-.app > :not(.connection):not(.toast):not(.home):not(.lobby-split) {
+/* Every screen scrolls as a whole except the lobby, which pins one column at
+   full height and scrolls only the other beside it — and which becomes a single
+   scrolling column of its own below 52rem. */
+.app > :not(.connection):not(.toast):not(.lobby-split) {
   overflow-y: auto;
 }
 
