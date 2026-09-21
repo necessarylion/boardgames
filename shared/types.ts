@@ -70,6 +70,15 @@ export type Section = 'A' | 'B' | 'C' | 'D' | 'E'
 export const MIN_PLAYERS = 2
 export const MAX_PLAYERS = 8
 
+/**
+ * Turn positions, numbered 1 to 8 — always eight of them, whatever the game
+ * seats. A table of three may sit at 1, 3 and 6; play then runs 1, 3, 6, and
+ * the gaps are simply skipped. Positions are the seating *order*, which is what
+ * lets a player move without moving anybody else: seat ids are assigned from
+ * this order when the game is dealt, and only then.
+ */
+export const MAX_POSITIONS = 8
+
 /** The largest table each game can seat. Never above `MAX_PLAYERS`. */
 export const GAME_MAX_PLAYERS: Record<GameKind, number> = {
   samurai: 6,

@@ -20,20 +20,27 @@ export type GameKind =
   | 'ladders'
   | 'monopoly'
 
-/** The card each game is chosen from on the landing screen. */
-const CARD: Record<GameKind, string> = {
-  samurai: '.game-card.samurai',
-  halligalli: '.game-card.halli',
-  coup: '.game-card.coup',
-  carnivals: '.game-card.carnivals',
-  cop: '.game-card.cop',
-  snake: '.game-card.snake',
-  ladders: '.game-card.ladders',
-  monopoly: '.game-card.monopoly',
+/**
+ * Each game's name on the shelf in the lobby, anchored so that one name cannot
+ * match another: "Snake" is a prefix of "Snakes & Ladders".
+ */
+const GAME_NAME: Record<GameKind, RegExp> = {
+  samurai: /^Samurai$/,
+  halligalli: /^Halli Galli$/,
+  coup: /^Coup$/,
+  carnivals: /^Carnivals$/,
+  cop: /^COP$/,
+  snake: /^Snake$/,
+  ladders: /^Snakes & Ladders$/,
+  monopoly: /^Monopoly$/,
 }
 
 /**
  * Host a room and return its four-letter code.
+ *
+ * The room comes first and the game second — the front door only asks whether
+ * you are hosting or joining, and the shelf of games is in the lobby, where
+ * only the host is offered it.
  *
  * The opening roll-off is turned off on the way through. It decides nothing —
  * the engine has already drawn the seat and the ceremony is a replay of it —
@@ -43,17 +50,17 @@ const CARD: Record<GameKind, string> = {
  */
 export async function hostRoom(page: Page, kind: GameKind, name: string): Promise<string> {
   await page.goto('/')
-  await page.locator(CARD[kind]).click()
-
   await page.locator('input.field:not(.code)').first().fill(name)
-
-  const diceStart = page.locator('label.check', { hasText: 'Roll for who starts' }).locator('input')
-  if (await diceStart.count()) await diceStart.uncheck()
-
   await page.getByRole('button', { name: 'Create room' }).click()
 
   const code = page.locator('.lobby-split .code')
   await expect(code).toBeVisible()
+
+  await pickGame(page, kind)
+
+  const diceStart = page.locator('label.check', { hasText: 'Roll for who starts' }).locator('input')
+  if (await diceStart.count()) await diceStart.uncheck()
+
   // Four tiles, one letter each, so the text comes back spaced.
   const text = (await code.innerText()).replace(/\s+/g, '')
   expect(text, 'a room code is four letters').toHaveLength(4)
@@ -61,9 +68,22 @@ export async function hostRoom(page: Page, kind: GameKind, name: string): Promis
 }
 
 /**
+ * Point the room at a game. The host only: the shelf is not rendered for anyone
+ * else, so this fails loudly rather than quietly if handed a guest's page.
+ */
+export async function pickGame(host: Page, kind: GameKind) {
+  const option = host
+    .locator('.game-option')
+    .filter({ has: host.locator('.option-name', { hasText: GAME_NAME[kind] }) })
+  await option.click()
+  // The card marks itself as the table's, which is how we know it landed.
+  await expect(option).toHaveClass(/chosen/)
+}
+
+/**
  * Join an existing room. The invite link is used rather than the code box: it
- * is the way a guest actually arrives, and it carries the game as well as the
- * code, so the join screen dresses itself for the right table.
+ * is the way a guest actually arrives, and arriving on one collapses the front
+ * door to the single action that applies.
  */
 export async function joinRoom(page: Page, kind: GameKind, code: string, name: string) {
   await page.goto(`/?room=${code}&g=${kind}`)

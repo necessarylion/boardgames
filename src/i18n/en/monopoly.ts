@@ -87,7 +87,7 @@ export const enMonopoly = {
   'monopoly.trade.elsewhere': '{a} and {b} are talking terms.',
   'monopoly.trade.nothing': 'Nothing',
 
-  // --- gaol ----------------------------------------------------------------
+  // --- antitrust ----------------------------------------------------------------
   'monopoly.jail.title': 'You are under antitrust review',
   'monopoly.jail.pay': 'Pay {fine}',
   'monopoly.jail.card': 'File a card',
@@ -173,4 +173,25 @@ export const enMonopoly = {
   'monopoly.logMark': 'Turn {n}',
   'monopoly.winner': '{name} wins!',
   'monopoly.result.reason': 'Last player left solvent.',
+  'monopoly.turnClock.hint':
+    '— out of time buys the space you stopped on, drops a bid, refuses an offer, throws to clear an antitrust review, or mortgages to settle a debt',
+
+  'monopoly.bidClock': 'Time to answer a bid',
+  'monopoly.bidClock.same': 'Same as turn',
+  'monopoly.bidClock.hint':
+    '— counted again from each bid; a bidder who lets it run out drops out of the auction',
+
+  // --- table talk ----------------------------------------------------------
+  'chat.title': 'Chat',
+  'chat.label': 'Message the table',
+  'chat.placeholder': 'Say something…',
+  'chat.send': 'Send',
+  'chat.empty': 'Nothing said yet. The table is listening.',
+  'chat.remaining': '{n} left',
+  'chat.newCount': '{count} new ↓',
+  'chat.toNewest': 'Jump to newest ↓',
+  'chat.joined': '{name} joined the table.',
+  'chat.left': '{name} left the table.',
+  'chat.away': '{name} lost connection.',
+  'chat.back': '{name} is back.',
 }

@@ -45,6 +45,15 @@ export interface GameOptions {
   /** Seconds a player has to take their turn; 0 leaves the table untimed. */
   turnSeconds: number
   /**
+   * Monopoly's: seconds a bidder has to answer the standing bid in an auction,
+   * counted afresh from each bid. 0 means "whatever the turn timer is" rather
+   * than "untimed" — an auction is part of a turn, so a host who timed the
+   * table has timed the bidding too unless they say otherwise. A shorter window
+   * is usually wanted here: everyone is waiting on one seat, and the answer is
+   * a number or a shrug.
+   */
+  bidSeconds: number
+  /**
    * How many sides the table plays in, or 0 for a free-for-all. Seats deal round
    * the sides in turn (A, B, A, B…), so the split has to divide the players into
    * equal teams of at least two — 2 at four players, 2 or 3 at six. The server
@@ -68,13 +77,24 @@ export interface GameOptions {
 /** Shot-clock lengths a table can be set up with. 0 is no clock at all. */
 export const TURN_SECONDS_CHOICES = [0, 30, 45, 60, 120] as const
 
+/** Shorter than a turn's, because answering a bid is one decision, not a turn. */
+export const BID_SECONDS_CHOICES = [0, 15, 30, 45, 60] as const
+
 export const DEFAULT_OPTIONS: GameOptions = {
   kind: 'samurai',
   randomHands: false,
   openInformation: false,
   boardShape: DEFAULT_BOARD_SHAPE,
   turnSeconds: 0,
+  bidSeconds: 0,
   teams: 0,
+  /*
+   * On. A table that leaves this alone has its opening seat rolled for, which
+   * is what keeps the first turn from falling to whoever happened to open the
+   * room — they hold turn position 1 by default, so with the roll off they
+   * would always go first. Turning it off is how a table says it wants the
+   * positions it chose to decide that too.
+   */
   diceStart: true,
   shuffleMidgame: false,
 }

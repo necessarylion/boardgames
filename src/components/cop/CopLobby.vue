@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import CopToken from './CopToken.vue'
 import LobbySplit from '../common/LobbySplit.vue'
+import TurnClockOptions from '../common/TurnClockOptions.vue'
 import { RESOURCES } from '@shared/cop'
 import { MIN_PLAYERS, maxPlayersFor } from '@shared/types'
 import { t } from '@/i18n'
@@ -10,8 +11,30 @@ import { useGameStore } from '@/stores/game'
 const maxSeats = maxPlayersFor('cop')
 const game = useGameStore()
 
+/** Only the host may change these, and only before the deal. */
+function setClock(turnSeconds: number) {
+  const options = game.cop?.options
+  if (!options || !game.isHost) return
+  game.setOptions({ ...options, turnSeconds })
+}
+
+/** Only the host may change this, and only before the deal. */
+function setDice(diceStart: boolean) {
+  const options = game.cop?.options
+  if (!options || !game.isHost) return
+  game.setOptions({ ...options, diceStart })
+}
+
 const seats = computed(() => game.copPlayers)
-const canStart = computed(() => game.isHost && seats.value.length >= MIN_PLAYERS)
+const canStart = computed(
+  () =>
+    game.isHost &&
+    seats.value.length >= MIN_PLAYERS &&
+    seats.value.length <= maxSeats &&
+    // A colour or position still in the air: the answer decides whether the
+    // table is legal, so the deal waits the round trip out.
+    !game.seatBusy,
+)
 </script>
 
 <template>
@@ -33,14 +56,29 @@ const canStart = computed(() => game.isHost && seats.value.length >= MIN_PLAYERS
 
     <hr class="rule" />
 
-    <p v-if="!game.isHost" class="tiny muted">{{ t('lobby.hostOnly') }}</p>
+    <!-- Set before the deal, because the clock is armed the moment play starts
+         and changing it mid-game would move a live deadline. -->
+    <TurnClockOptions
+      :seconds="game.cop?.options.turnSeconds ?? 0"
+      :locked="!game.isHost"
+      hint="cop.turnClock.hint"
+      @pick="setClock"
+    />
 
-    <button class="btn wide" :disabled="!canStart" @click="game.startGame()">
-      {{ game.isHost ? t('lobby.start') : t('lobby.waitingHost') }}
-    </button>
-    <p v-if="game.isHost && seats.length < MIN_PLAYERS" class="tiny muted centre">
-      {{ t('lobby.needTwo') }}
-    </p>
+    <label class="check" :class="{ locked: !game.isHost }">
+      <input
+        type="checkbox"
+        :checked="game.cop?.options.diceStart ?? true"
+        :disabled="!game.isHost"
+        @change="setDice(($event.target as HTMLInputElement).checked)"
+      />
+      <span>
+        {{ t('option.diceStart') }}
+        <em class="tiny muted">{{ t('option.diceStart.hint') }}</em>
+      </span>
+    </label>
+
+    <p v-if="!game.isHost" class="tiny muted">{{ t('lobby.hostOnly') }}</p>
 
     <hr class="rule" />
 
@@ -52,6 +90,15 @@ const canStart = computed(() => game.isHost && seats.value.length >= MIN_PLAYERS
       </span>
     </div>
     <p class="tiny muted note">{{ t('cop.lobby.start') }}</p>
+
+    <template #actions>
+      <button class="btn wide" :disabled="!canStart" @click="game.startGame()">
+        {{ game.isHost ? t('lobby.start') : t('lobby.waitingHost') }}
+      </button>
+      <p v-if="game.isHost && seats.length < MIN_PLAYERS" class="tiny muted centre">
+        {{ t('lobby.needTwo') }}
+      </p>
+    </template>
   </LobbySplit>
 </template>
 

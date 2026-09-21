@@ -18,7 +18,8 @@ import {
   type ServerMessage,
   type SnakeClientState,
 } from '@shared/protocol'
-import { GAME_KINDS, maxPlayersFor, type GameKind, type PlayerColour } from '@shared/types'
+import { maxPlayersFor, type GameKind, type PlayerColour } from '@shared/types'
+import { GAME_CARDS } from '@/game/catalogue'
 import { t } from '@/i18n'
 import { createCarnival } from './carnivals/useCarnival'
 import { createCop } from './cop/useCop'
@@ -55,17 +56,6 @@ const LEGACY_TOKEN_KEY = 'samurai.token'
 function roomFromUrl(): string | null {
   const code = new URLSearchParams(location.search).get('room')
   return code ? code.trim().toUpperCase() : null
-}
-
-/**
- * Which game an invite link is for. A room code alone cannot say — the server
- * is not asked until the join — so the share link carries the kind alongside
- * it, and the join screen dresses itself for that game rather than defaulting
- * to Samurai's artwork. Absent or unrecognised, the old default stands.
- */
-function gameFromUrl(): GameKind | null {
-  const g = new URLSearchParams(location.search).get('g')
-  return GAME_KINDS.find((k) => k === g) ?? null
 }
 
 /** Put the table in the URL, so a refresh — or a second tab — lands back here. */
@@ -120,12 +110,15 @@ export const useGameStore = defineStore('game', () => {
       ladders.value ??
       monopoly.value,
   )
-  /**
-   * Which game the player picked on the landing screen, before any room exists.
-   * An invite link points straight at a table, so it skips the landing entirely.
-   */
-  const chosenGame = ref<GameKind | null>(roomFromUrl() ? gameFromUrl() ?? 'samurai' : null)
   const error = ref<string | null>(null)
+  /**
+   * A passing line about something someone else did — a seat filled, a colour
+   * taken, the game swapped out from under you. It lives here rather than in
+   * the lobby because changing the game unmounts that lobby and mounts another
+   * one: a notice held in the component would be destroyed by the very event it
+   * was announcing.
+   */
+  const notice = ref<string | null>(null)
   const myName = ref(localStorage.getItem(NAME_KEY) ?? '')
   /** Another tab took this seat. Nothing reconnects until the player says so. */
   const replaced = ref(false)
@@ -140,7 +133,7 @@ export const useGameStore = defineStore('game', () => {
   // Read off `room`, so the home banner, routing and lobby chrome work the same
   // whichever table is on screen. The per-game modules below derive from these.
   const inRoom = computed(() => room.value !== null)
-  const kind = computed<GameKind>(() => room.value?.kind ?? chosenGame.value ?? 'samurai')
+  const kind = computed<GameKind>(() => room.value?.kind ?? 'samurai')
   const phase = computed(() => room.value?.phase ?? 'lobby')
   const you = computed(() => room.value?.you ?? null)
   const isSeated = computed(() => you.value !== null)
@@ -345,6 +338,7 @@ export const useGameStore = defineStore('game', () => {
         if (state.value) rememberSeat(state.value.code)
         break
       case 'state': {
+        seatBusy.value = false
         if (hasLeft) return
         const incoming = message.state
         rememberSeat(incoming.code, incoming.kind)
@@ -352,6 +346,12 @@ export const useGameStore = defineStore('game', () => {
         // interaction (for example a piece someone else just captured).
         if (incoming.kind === 'samurai' && incoming.you !== incoming.current) {
           samurai.resetInteraction()
+        }
+        // The host may have pointed the room at another game, which arrives
+        // as a state of a different kind and takes this lobby off screen.
+        const was = room.value
+        if (was && was.code === incoming.code && was.kind !== incoming.kind) {
+          showNotice(t('lobby.notice.game', { game: t(GAME_CARDS[incoming.kind].name) }))
         }
         clearStates()
         if (incoming.kind === 'halligalli') halli.value = incoming
@@ -366,6 +366,7 @@ export const useGameStore = defineStore('game', () => {
         break
       }
       case 'error':
+        seatBusy.value = false
         showError(message.message)
         samurai.resetInteraction()
         break
@@ -394,6 +395,14 @@ export const useGameStore = defineStore('game', () => {
     if (next.phase !== 'lobby' || full || !myName.value || reclaimedFor === next.code) return
     reclaimedFor = next.code
     send({ t: 'join', code: next.code, name: myName.value })
+  }
+
+  let noticeTimer: ReturnType<typeof setTimeout> | null = null
+
+  function showNotice(text: string) {
+    notice.value = text
+    if (noticeTimer) clearTimeout(noticeTimer)
+    noticeTimer = setTimeout(() => (notice.value = null), 3500)
   }
 
   function showError(text: string) {
@@ -449,20 +458,45 @@ export const useGameStore = defineStore('game', () => {
     send({ t: 'join', code: wanted, name })
   }
 
-  /**
-   * Leave the table for good. Clearing the chosen game as well as the room takes
-   * the player all the way back to the games list rather than dropping them on
-   * the create/join form for the game they just left. Only a deliberate leave
-   * does this — a `left` the server sends for other reasons (an expired invite)
-   * keeps its join form, so the reset lives here rather than in the handler.
-   */
+  /** Leave the table for good, taking its chatter off screen with it. */
   const leaveRoom = () => {
-    chosenGame.value = null
+    notice.value = null
     send({ t: 'leave' })
   }
   const setOptions = (options: GameOptions) => send({ t: 'options', options })
-  /** Pick your own seat colour; the server refuses one another player wears. */
-  const setColour = (colour: PlayerColour) => send({ t: 'colour', colour })
+  /**
+   * Host only: point the room at a different game. It is the same `options`
+   * message the settings use — `kind` is one of them — so the room keeps its
+   * code, its seats and their colours, and every client is handed the new
+   * game's lobby state on the next broadcast. The server refuses a non-host and
+   * refuses it once the game has started; this only saves the round trip.
+   */
+  function setGameKind(next: GameKind) {
+    const options = room.value?.options
+    if (!options || !isHost.value || options.kind === next) return
+    setOptions({ ...options, kind: next })
+  }
+  /**
+   * Pick your own seat colour or turn position. Both are the server's to
+   * decide: it refuses one another player already holds, and of two players
+   * reaching for the same one the first request in wins. `seatBusy` is true
+   * from the moment one is sent until the answer lands, which is what holds the
+   * start button while a change is still in the air.
+   */
+  const seatBusy = ref(false)
+  let seatBusyTimer: ReturnType<typeof setTimeout> | null = null
+
+  function claimSeating(message: ClientMessage) {
+    seatBusy.value = true
+    if (seatBusyTimer) clearTimeout(seatBusyTimer)
+    // A socket that never answers must not leave the button dead for good.
+    seatBusyTimer = setTimeout(() => (seatBusy.value = false), 3000)
+    send(message)
+  }
+
+  const setColour = (colour: PlayerColour) => claimSeating({ t: 'colour', colour })
+  /** Take a vacant turn position, 1 to 8. Nobody else is moved by it. */
+  const setPosition = (position: number) => claimSeating({ t: 'position', position })
   /** Team leaders only (the server enforces it); a blank name resets to a letter. */
   const renameTeam = (team: number, name: string) => send({ t: 'renameTeam', team, name })
   const startGame = () => send({ t: 'start' })
@@ -478,12 +512,6 @@ export const useGameStore = defineStore('game', () => {
     samurai.resetInteraction()
   }
 
-  // --- landing -------------------------------------------------------------
-  /** The player picked a game on the landing screen; show its home form next. */
-  const chooseGame = (game: GameKind) => (chosenGame.value = game)
-  /** Back to the landing screen to pick a different game. */
-  const clearChosenGame = () => (chosenGame.value = null)
-
   return {
     // connection
     connection,
@@ -493,6 +521,8 @@ export const useGameStore = defineStore('game', () => {
     takeOverSeat,
     error,
     showError,
+    notice,
+    showNotice,
     myName,
     rememberName,
     // shared shell
@@ -506,7 +536,6 @@ export const useGameStore = defineStore('game', () => {
     monopoly,
     room,
     kind,
-    chosenGame,
     inRoom,
     phase,
     you,
@@ -518,15 +547,16 @@ export const useGameStore = defineStore('game', () => {
     joinRoom,
     leaveRoom,
     setOptions,
+    setGameKind,
     setColour,
+    setPosition,
+    seatBusy,
     renameTeam,
     startGame,
     rematch,
     abandonGame,
     togglePause,
     // landing
-    chooseGame,
-    clearChosenGame,
     // Samurai
     ...samurai,
     // Halli Galli

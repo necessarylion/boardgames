@@ -5,7 +5,7 @@ import { extname, join, normalize, resolve } from 'node:path'
 import { WebSocketServer, type WebSocket } from 'ws'
 
 import { DEFAULT_BOARD_SHAPE } from '../shared/board'
-import { TURN_SECONDS_CHOICES } from '../shared/engine'
+import { BID_SECONDS_CHOICES, TURN_SECONDS_CHOICES } from '../shared/engine'
 import type { ClientMessage, ServerMessage } from '../shared/protocol'
 import { CLOSE_REPLACED, HEARTBEAT_MS, PROTOCOL_VERSION } from '../shared/protocol'
 import { SNAKE_TICK_MS } from '../shared/snake'
@@ -145,6 +145,7 @@ wss.on('connection', (socket) => {
       const room = rooms.roomOf(token)
       if (room) {
         const seat = room.seatByToken(token)
+        if (seat && !seat.connected) room.note(token, 'back')
         if (seat) seat.connected = true
         room.touch()
         commit(room)
@@ -210,6 +211,22 @@ wss.on('connection', (socket) => {
         if (!seat) return fail(socket, 'You have no seat in this room.')
         seat.name = String(msg.name ?? '').trim().slice(0, 18) || seat.name
         room.touch()
+        commit(room)
+        return
+      }
+
+      case 'chat': {
+        // Seated players only — `say` refuses a spectator, and refuses a
+        // message that sanitises down to nothing.
+        const error = room.say(activeToken, msg.text)
+        if (error) return fail(socket, error)
+        commit(room)
+        return
+      }
+
+      case 'position': {
+        const error = room.setPosition(activeToken, msg.position)
+        if (error) return fail(socket, error)
         commit(room)
         return
       }
@@ -469,8 +486,6 @@ wss.on('connection', (socket) => {
             return mp.jailChoice(seat.id, msg.choice)
           case 'monoBankrupt':
             return mp.declareBankrupt(seat.id)
-          case 'monoEndTurn':
-            return mp.endTurn(seat.id)
           case 'pause':
             return mp.pause(seat.id)
           case 'resume':
@@ -528,8 +543,10 @@ wss.on('connection', (socket) => {
     const seat = room.seatByToken(token)
     if (seat) seat.connected = false
     // A player who has not started yet just leaves; mid-game, the seat is kept
-    // so they can reconnect and pick up where they left off.
+    // so they can reconnect and pick up where they left off. `removeSeat` says
+    // so itself; a kept seat has nobody else to say it.
     if (!room.started) room.removeSeat(token)
+    else room.note(token, 'away')
     // Someone still present has to be able to end or restart the game.
     room.ensureHost()
     commit(room)
@@ -542,6 +559,7 @@ function sanitiseOptions(options: unknown) {
   // stale or hand-rolled client can never leave a room unable to deal a board.
   const shape = BOARD_SHAPES.find((s) => s === o.boardShape) ?? DEFAULT_BOARD_SHAPE
   const seconds = TURN_SECONDS_CHOICES.find((s) => s === Number(o.turnSeconds)) ?? 0
+  const bid = BID_SECONDS_CHOICES.find((s) => s === Number(o.bidSeconds)) ?? 0
   // The number of sides, or 0 for a free-for-all; anything under two is neither.
   // The start check is what holds it to a split that fits the player count.
   const teamsRaw = typeof o.teams === 'boolean' ? (o.teams ? 2 : 0) : Math.floor(Number(o.teams))
@@ -553,6 +571,7 @@ function sanitiseOptions(options: unknown) {
     openInformation: Boolean(o.openInformation),
     boardShape: shape,
     turnSeconds: seconds,
+    bidSeconds: bid,
     teams,
     // Absent on a client that predates the option, which should still get the
     // roll rather than silently losing it, so this defaults on rather than off.

@@ -16,7 +16,7 @@ export const mySamurai = {
   // --- the opening roll, shared by every game --------------------------------
   'option.diceStart': 'ဘယ်သူစမလဲ အန်စာတုံးဖြင့် ဆုံးဖြတ်ရန်',
   'option.diceStart.hint':
-    'မည်သို့ပင်ဖြစ်စေ ပထမနေရာကို ကျပန်းရွေးသည်။ ဤရွေးချယ်မှုက ဆုံးဖြတ်သည့် အန်စာလှိမ့်ခြင်းကို ပြသည်။',
+    'စားပွဲမှ လှိမ့်ပြီး အနွေတ်ရသူက စတင်သည်။ ပိတ်ထားလျှင် အလှည့်နေရာ 1 က စတင်သည်။',
   'dice.title': 'ပထမဆုံးစမည့်သူအတွက် အန်စာလှိမ့်နေသည်',
   'dice.tieRound': 'သရေဖြစ်၍ ထပ်လှိမ့်သည် (အကြိမ် {n})',
   'dice.rolling': 'လှိမ့်နေသည်…',
@@ -35,6 +35,16 @@ export const mySamurai = {
   'caste.lower.buddha': 'ဘာသာရေး',
   'caste.lower.rice': 'ကုန်သွယ်ရေး',
   'caste.lower.castle': 'စစ်ရေး',
+
+  // --- the front door ------------------------------------------------------
+  'start.lead': 'အခန်းအသစ်ဖွင့်ပါ သို့မဟုတ် သူငယ်ချင်းများထံ ဝင်ပါ။',
+  'start.or': 'သို့မဟုတ်',
+  'start.join.have': 'အခန်းကုဒ်ရှိပါသလား။',
+  'start.host.title': 'အခန်းဖွင့်မည်',
+  'start.host.action': 'အခန်းဖွင့်မည်',
+  'start.host.hint': 'အခန်းဖွင့်ပြီး ကုဒ်ကိုမျှဝေပါ။ အားလုံးဝင်ပြီးမှ ဂိမ်းကိုရွေးနိုင်သည်။',
+  'start.join.title': 'အခန်းဝင်မည်',
+  'start.join.label': 'အခန်းကုဒ်',
 
   // --- home ----------------------------------------------------------------
   'home.tagline':
@@ -107,11 +117,31 @@ export const mySamurai = {
   'lobby.leave': 'ထွက်ရန်',
   'lobby.players': 'ကစားသမားများ',
   'lobby.pickColour': 'အရောင်ရွေးပါ',
+  'lobby.pickPosition': 'သင့်အလှည့်နေရာရွေးပါ',
+  'lobby.positionOf': 'အလှည့် {n} — {name}',
+  'lobby.positionTaken': 'နေရာ {n} — {name} ယူထားသည်',
+  'lobby.positionFree': 'နေရာ {n} ကိုယူမည်',
+  'lobby.turnOrder': 'အလှည့်အစဉ်',
   'lobby.seatCount': '{seated} / {max}',
   'lobby.badge.host': 'အိမ်ရှင်',
   'lobby.badge.you': 'သင်',
   'lobby.badge.away': 'မရှိပါ',
   'lobby.waitingForPlayer': 'ကစားသမားကို စောင့်ဆိုင်းနေသည်…',
+  'lobby.copyCode': 'ကုဒ်ကူးယူရန်',
+  'lobby.codeCopied': 'ကုဒ်ကူးယူပြီး',
+  'lobby.colourTaken': '{colour} — {name} ယူထားသည်',
+  'lobby.game.title': 'ဂိမ်း',
+  'lobby.game.pick': 'ဂိမ်းရွေးပါ',
+  'lobby.game.hostPicks': 'ဘယ်ဂိမ်းကစားမည်ကို အခန်းရှင်ကရွေးသည်။',
+  'lobby.game.tooMany': 'အများဆုံး {max} ယောက်',
+  'lobby.game.tooManyNow':
+    '{game} သည် {max} ယောက်သာဆံ့သည်။ တစ်ယောက်ထွက်ရန် သို့မဟုတ် အားလုံးဆံ့သောဂိမ်းရွေးပါ။',
+  'lobby.notice.joined': '{name} ဝင်လာသည်။',
+  'lobby.notice.joinedMany': 'ကစားသမား {count} ယောက် ဝင်လာသည်။',
+  'lobby.notice.left': '{name} ထွက်သွားသည်။',
+  'lobby.notice.leftMany': 'ကစားသမား {count} ယောက် ထွက်သွားသည်။',
+  'lobby.notice.game': 'ဤဝိုင်းသည် ယခု {game} ကစားနေသည်။',
+  'lobby.notice.colour': 'သင့်အရောင်မှာ ယခု {colour} ဖြစ်သည်။',
   'lobby.settings': 'ဝိုင်း ဆက်တင်များ',
   'lobby.hostOnly': 'အိမ်ရှင်သာလျှင် ဤသည်များကို ပြောင်းလဲနိုင်သည်။',
   'lobby.supply':

@@ -1,5 +1,6 @@
 import { computed, type ComputedRef, type Ref } from 'vue'
 
+import { CHAT_MAX } from '@shared/chat'
 import type { ClientMessage, MonopolyClientState } from '@shared/protocol'
 import type { TradeSide } from '@shared/monopoly'
 
@@ -33,11 +34,28 @@ export function createMonopoly(ctx: MonopolyContext) {
       monopoly.value?.phase === 'play' && you.value !== null && monopoly.value.current === you.value,
   )
 
+  /**
+   * The room's talk. Sent only to a seated player, so a spectator's list is
+   * empty and the composer below has nothing to send it with.
+   */
+  const mpChat = computed(() => monopoly.value?.chat ?? [])
+
+  /**
+   * Say something. The message is sanitised and length-capped on the server —
+   * this only declines to send a line that is empty before it leaves, which is
+   * the common case of hitting Enter on an untouched box.
+   */
+  function mpSay(text: string) {
+    const trimmed = text.trim()
+    if (!trimmed) return false
+    send({ t: 'chat', text: trimmed.slice(0, CHAT_MAX) })
+    return true
+  }
+
   /** The one gate every action shares, on top of whatever `can` says. */
   const live = computed(() => monopoly.value?.phase === 'play' && !isPaused.value)
 
   const mpCanRoll = computed(() => live.value && !!mpCan.value?.roll)
-  const mpCanEndTurn = computed(() => live.value && !!mpCan.value?.endTurn)
   /** The space on the block, or null when nothing is being offered to you. */
   const mpBuyOffer = computed(() => (live.value ? mpCan.value?.buy ?? null : null))
   const mpCanBid = computed(() => live.value && !!mpCan.value?.bid)
@@ -114,18 +132,15 @@ export function createMonopoly(ctx: MonopolyContext) {
     if (mpDebt.value !== null) send({ t: 'monoBankrupt' })
   }
 
-  function mpEndTurn() {
-    if (mpCanEndTurn.value) send({ t: 'monoEndTurn' })
-  }
-
   return {
     mpPlayers,
+    mpChat,
+    mpSay,
     mpYou,
     mpCan,
     mpPending,
     mpIsMyTurn,
     mpCanRoll,
-    mpCanEndTurn,
     mpBuyOffer,
     mpCanBid,
     mpMinBid,
@@ -151,6 +166,5 @@ export function createMonopoly(ctx: MonopolyContext) {
     mpUnmortgage,
     mpLeaveJail,
     mpGiveUp,
-    mpEndTurn,
   }
 }

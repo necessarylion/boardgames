@@ -54,7 +54,7 @@ const canConfirmSelect = computed(
 )
 
 const { label: clockLabel, urgent: clockUrgent } = useCountdown(
-  () => game.carnival?.turnMsLeft ?? null,
+  () => game.carnival,
   () => game.isPaused,
 )
 

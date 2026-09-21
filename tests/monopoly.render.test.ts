@@ -7,7 +7,7 @@ import MonopolyGameScreen from '../src/components/monopoly/MonopolyGameScreen.vu
 import { COMPANY_LOGOS, companyLogo } from '../src/game/companies'
 import { money } from '../shared/money'
 import { DEFAULT_OPTIONS } from '../shared/engine'
-import { SPACES, groupSpaces, mortgageValue, priceOf, rentFor } from '../shared/monopoly'
+import { LOG_KEEP, SPACES, groupSpaces, mortgageValue, priceOf, rentFor } from '../shared/monopoly'
 import type { MonopolyClientState } from '../shared/protocol'
 import { Room } from '../server/rooms'
 import { useGameStore } from '../src/stores/game'
@@ -479,10 +479,11 @@ describe('the table on a narrow screen', () => {
     expect(manage().classes()).not.toContain('open')
     expect(screen.find('.sheet-scrim').exists()).toBe(false)
 
+    // Players, properties, the log and the chat.
     const tabs = screen.findAll('.tab')
-    expect(tabs).toHaveLength(3)
+    expect(tabs).toHaveLength(4)
 
-    // Players and the log share one sheet and take turns in it.
+    // Players, the log and the chat share one sheet and take turns in it.
     await tabs[0].trigger('click')
     expect(side().classes()).toContain('open')
     expect(side().classes()).toContain('only-players')
@@ -491,6 +492,10 @@ describe('the table on a narrow screen', () => {
     await tabs[2].trigger('click')
     expect(side().classes()).toContain('only-log')
     expect(side().text()).toContain('Play log')
+
+    await tabs[3].trigger('click')
+    expect(side().classes()).toContain('only-chat')
+    expect(side().find('.chat .composer').exists()).toBe(true)
 
     // Properties is the other column, and only one is ever up.
     await tabs[1].trigger('click')
@@ -510,16 +515,51 @@ describe('the table on a narrow screen', () => {
     // What was already there when the table opened is not news.
     expect(screen.find('.tab-count.unread').exists()).toBe(false)
 
+    // A broadcast moves both: the list itself is trimmed once it is full, so
+    // `logCount` is what the badge counts against.
     const store = useGameStore()
     store.monopoly = {
       ...store.monopoly!,
       log: [...store.monopoly!.log, { turn: 1, player: 1, text: 'buys something.' }],
+      logCount: store.monopoly!.logCount + 1,
     }
     await screen.vm.$nextTick()
     expect(screen.find('.tab-count.unread').text()).toBe('1')
 
     await screen.findAll('.tab')[2].trigger('click')
     expect(screen.find('.tab-count.unread').exists()).toBe(false)
+  })
+
+  it('goes on counting once the log is full and its length stops moving', async () => {
+    const r = room()
+    widthOf(390)
+    const screen = screenFor(r, 'token-0')
+    const store = useGameStore()
+
+    // A long game: the log is at its cap, so the list can only ever shed a line
+    // from the front as it takes one at the back.
+    const full = Array.from({ length: LOG_KEEP }, (_, i) => ({
+      turn: 1,
+      player: 0,
+      text: `line ${i}`,
+    }))
+    store.monopoly = { ...store.monopoly!, log: full, logCount: LOG_KEEP }
+    await screen.vm.$nextTick()
+
+    // Read it, then shut it again: that is the state the badge measures from.
+    const logTab = () => screen.findAll('.tab')[2]
+    await logTab().trigger('click')
+    await logTab().trigger('click')
+    expect(screen.find('.tab-count.unread').exists(), 'caught up').toBe(false)
+
+    store.monopoly = {
+      ...store.monopoly!,
+      log: [...full.slice(1), { turn: 2, player: 1, text: 'and one more' }],
+      logCount: LOG_KEEP + 1,
+    }
+    await screen.vm.$nextTick()
+    // The length is identical either side of that; only the count moved.
+    expect(screen.find('.tab-count.unread').text(), 'still counting').toBe('1')
   })
 
   it('opens a space card on a tap, since there is no hover to open it with', async () => {
@@ -549,5 +589,65 @@ describe('the table on a narrow screen', () => {
     // the tap sheet above is what answers it.
     await screen.findAll('.space')[3].trigger('mouseenter')
     expect(document.querySelector('.detail-layer')).toBeNull()
+  })
+})
+
+/**
+ * Where the controls live, now that a turn ends itself and a trade belongs to
+ * nobody's turn in particular.
+ */
+describe('the turn controls', () => {
+  it('offers no way to end a turn by hand', () => {
+    const r = room()
+    widthOf(1400)
+    const screen = screenFor(r, 'token-0')
+
+    expect(screen.text()).not.toContain('End turn')
+    expect(screen.find('.prompt .btn.big').text(), 'only the throw').toContain('Throw')
+  })
+
+  it('keeps the trade offer with the deeds, not with the dice', () => {
+    const r = room()
+    widthOf(1400)
+    const screen = screenFor(r, 'token-0')
+
+    // In the property panel, where the chat and the player list live.
+    expect(screen.find('.manage .trade-open').exists()).toBe(true)
+    expect(screen.find('.manage .trade-open').text()).toContain('Offer a trade')
+    // And nowhere near the board's own prompt.
+    expect(screen.find('.prompt .trade-open').exists()).toBe(false)
+    expect(screen.find('.centre-panel .trade-open').exists()).toBe(false)
+  })
+
+  it('offers it to a seat that is not on turn as well', () => {
+    const r = room()
+    widthOf(1400)
+    const waiting = screenFor(r, 'token-1')
+
+    expect(waiting.find('.manage .trade-open').exists()).toBe(true)
+    // That seat has no throw to make, and still nothing to end.
+    expect(waiting.find('.prompt .btn.big').exists()).toBe(false)
+    expect(waiting.text()).not.toContain('End turn')
+  })
+
+  it('takes the offer away while the table is waiting on a decision', () => {
+    const r = room()
+    r.monopoly!.state.pending = [{ step: 'buy', player: 0, space: 1 }]
+    widthOf(1400)
+    const screen = screenFor(r, 'token-0')
+
+    expect(screen.find('.manage .trade-open').exists()).toBe(false)
+  })
+
+  it('reaches the trade through the property tab on a phone', async () => {
+    const r = room()
+    widthOf(390)
+    const screen = screenFor(r, 'token-0')
+
+    // It rides in the same sheet as the deeds, so it opens with that tab.
+    const tabs = screen.findAll('.tab')
+    await tabs[1].trigger('click')
+    expect(screen.find('.manage.open').exists()).toBe(true)
+    expect(screen.find('.manage .trade-open').exists()).toBe(true)
   })
 })

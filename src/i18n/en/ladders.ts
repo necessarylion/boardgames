@@ -47,4 +47,6 @@ export const enLadders = {
   'ladders.skipping': 'Sitting out',
   'ladders.rule.powers': 'Power squares fire the moment you stop on them:',
   'ladders.winner': '{name} wins!',
+  'ladders.turnClock.hint':
+    '— out of time throws the die for whoever is holding the table up',
 }

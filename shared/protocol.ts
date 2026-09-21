@@ -32,9 +32,10 @@ import type {
   MonopolyRoll,
   TradeSide,
 } from './monopoly'
+import type { ChatEntry } from './chat'
 import type { Caste, GameResult, LogEntry, PlacedTile, PlayerColour } from './types'
 
-export const PROTOCOL_VERSION = 9
+export const PROTOCOL_VERSION = 10
 
 /**
  * How often the server pings each client. A client that hears nothing for a few
@@ -55,6 +56,8 @@ export interface PublicPlayer {
   id: number
   name: string
   colour: PlayerColour
+  /** Turn position, 1 to 8. Seats are dealt into the game in this order. */
+  position: number
   connected: boolean
   /** Tiles held, but not which ones. */
   handCount: number
@@ -127,6 +130,8 @@ export interface HalliPublicPlayer {
   id: number
   name: string
   colour: PlayerColour
+  /** Turn position, 1 to 8. Seats are dealt into the game in this order. */
+  position: number
   connected: boolean
   /** Cards in the face-down draw pile — a count only; the cards stay hidden. */
   stackCount: number
@@ -170,6 +175,8 @@ export interface CoupPublicPlayer {
   id: number
   name: string
   colour: PlayerColour
+  /** Turn position, 1 to 8. Seats are dealt into the game in this order. */
+  position: number
   connected: boolean
   coins: number
   /** Face-down influence still held — a count only; the cards stay hidden. */
@@ -284,6 +291,8 @@ export interface CarnivalPublicPlayer {
   id: number
   name: string
   colour: PlayerColour
+  /** Turn position, 1 to 8. Seats are dealt into the game in this order. */
+  position: number
   connected: boolean
   /** The seat's bankroll. */
   carnivals: number
@@ -352,6 +361,8 @@ export interface CopPublicPlayer {
   id: number
   name: string
   colour: PlayerColour
+  /** Turn position, 1 to 8. Seats are dealt into the game in this order. */
+  position: number
   connected: boolean
   /** Wearing the badge this round. */
   cop: boolean
@@ -423,6 +434,8 @@ export interface SnakePublicPlayer {
   id: number
   name: string
   colour: PlayerColour
+  /** Turn position, 1 to 8. Seats are dealt into the game in this order. */
+  position: number
   connected: boolean
   alive: boolean
   /** Cells occupied, head first; empty once the snake has crashed. */
@@ -466,6 +479,8 @@ export interface LaddersPublicPlayer {
   id: number
   name: string
   colour: PlayerColour
+  /** Turn position, 1 to 8. Seats are dealt into the game in this order. */
+  position: number
   connected: boolean
   /** Square stood on; 0 is off the board. */
   pos: number
@@ -507,6 +522,8 @@ export interface MonopolyPublicPlayer {
   id: number
   name: string
   colour: PlayerColour
+  /** Turn position, 1 to 8. Seats are dealt into the game in this order. */
+  position: number
   connected: boolean
   cash: number
   /** Space stood on, 0–39. */
@@ -528,7 +545,6 @@ export interface MonopolyPublicPlayer {
  */
 export interface MonopolyAffordances {
   roll: boolean
-  endTurn: boolean
   /** The space on the block, or null when nothing is being offered to you. */
   buy: number | null
   /** You owe the standing auction an answer. */
@@ -587,12 +603,24 @@ export interface MonopolyClientState {
   rollCount: number
   /** Cards turned over this game — what the table keys the card replay on. */
   cardCount: number
+  /**
+   * Play-log lines ever written. The log is trimmed from the front, so its
+   * length stops moving once it is full — this is what the unread badge counts
+   * against.
+   */
+  logCount: number
   lastRoll: MonopolyRoll | null
   lastCard: { deck: 'chance' | 'chest'; text: string; player: number } | null
   /** Undrawn cards in each deck — counts only; the order stays on the server. */
   decks: { chance: number; chest: number }
   can: MonopolyAffordances
   log: LogEntry[]
+  /**
+   * The room's chat, which only a seated player is sent: a spectator can watch
+   * the board but is not at the table. System lines ride the same list so they
+   * read in the order things happened.
+   */
+  chat: ChatEntry[]
   result: MonopolyResult | null
   paused: boolean
   /**
@@ -624,6 +652,8 @@ export type ClientMessage =
   | { t: 'rename'; name: string }
   /** Pick your own seat colour — palette colours only, and only ones nobody wears. */
   | { t: 'colour'; colour: PlayerColour }
+  /** Pick your own turn position, 1 to 8 — vacant ones only. Lobby only. */
+  | { t: 'position'; position: number }
   /** Team leaders only: rename their side. A blank name resets it to a letter. */
   | { t: 'renameTeam'; team: number; name: string }
   | { t: 'options'; options: GameOptions }
@@ -676,6 +706,8 @@ export type ClientMessage =
   | { t: 'snakeDir'; dir: SnakeDir }
   /** Snakes & Ladders: throw the die (only on your turn). */
   | { t: 'laddersRoll' }
+  /** Monopoly: say something to the rest of the room. Seated players only. */
+  | { t: 'chat'; text: string }
   /** Monopoly: throw the dice and move (only on your turn). */
   | { t: 'monoRoll' }
   /** Monopoly: buy the space you stopped on, at the bank's price. */
@@ -699,7 +731,6 @@ export type ClientMessage =
   /** Monopoly: give up — everything goes to the creditor, or back to the bank. */
   | { t: 'monoBankrupt' }
   /** Monopoly: hand the turn on, once the dice are thrown and all is settled. */
-  | { t: 'monoEndTurn' }
   /** Suspend or resume the table. Open to any seated player. */
   | { t: 'pause' }
   | { t: 'resume' }

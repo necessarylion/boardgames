@@ -61,6 +61,9 @@ const state: ClientState = {
     id: i,
     name: NAMES[i],
     colour: COLOUR_ORDER[i],
+    // The harness seats everyone in order; positions are a lobby choice and
+    // there is no lobby here.
+    position: i + 1,
     connected: i !== playerCount - 1,
     handCount: p.hand.length,
     stackCount: p.stack.length,

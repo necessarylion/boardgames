@@ -18,7 +18,7 @@ export const enSamurai = {
   // --- the opening roll, shared by every game --------------------------------
   'option.diceStart': 'Roll for who starts',
   'option.diceStart.hint':
-    'The opening seat is drawn at random either way; this shows the roll that decided it.',
+    'The table rolls, and the winner opens. Turn it off and turn position 1 goes first instead.',
   'dice.title': 'Rolling for the opening seat',
   'dice.tieRound': 'Tied — rolling again (round {n})',
   'dice.rolling': 'Rolling…',
@@ -37,6 +37,16 @@ export const enSamurai = {
   'caste.lower.buddha': 'religion',
   'caste.lower.rice': 'commerce',
   'caste.lower.castle': 'military',
+
+  // --- the front door ------------------------------------------------------
+  'start.lead': 'Create a room or join your friends.',
+  'start.or': 'or',
+  'start.join.have': 'Have a room code?',
+  'start.host.title': 'Host a room',
+  'start.host.action': 'Create room',
+  'start.host.hint': 'Open a table, share the code, then pick the game once everyone is in.',
+  'start.join.title': 'Join a room',
+  'start.join.label': 'Room code',
 
   // --- home ----------------------------------------------------------------
   'home.tagline':
@@ -108,11 +118,31 @@ export const enSamurai = {
   'lobby.leave': 'Leave',
   'lobby.players': 'Players',
   'lobby.pickColour': 'Pick your colour',
+  'lobby.pickPosition': 'Choose your turn position',
+  'lobby.positionOf': 'Turn {n} — {name}',
+  'lobby.positionTaken': 'Position {n} — taken by {name}',
+  'lobby.positionFree': 'Take position {n}',
+  'lobby.turnOrder': 'Turn order',
   'lobby.seatCount': '{seated} / {max}',
   'lobby.badge.host': 'Host',
   'lobby.badge.you': 'You',
   'lobby.badge.away': 'Away',
   'lobby.waitingForPlayer': 'Waiting for a player…',
+  'lobby.copyCode': 'Copy code',
+  'lobby.codeCopied': 'Code copied',
+  'lobby.colourTaken': '{colour} — taken by {name}',
+  'lobby.game.title': 'Game',
+  'lobby.game.pick': 'Pick the game',
+  'lobby.game.hostPicks': 'The host chooses what the table plays.',
+  'lobby.game.tooMany': 'Seats {max}',
+  'lobby.game.tooManyNow':
+    '{game} seats {max}. Someone has to leave, or pick a game with room for everyone.',
+  'lobby.notice.joined': '{name} joined.',
+  'lobby.notice.joinedMany': '{count} players joined.',
+  'lobby.notice.left': '{name} left.',
+  'lobby.notice.leftMany': '{count} players left.',
+  'lobby.notice.game': 'The table is now playing {game}.',
+  'lobby.notice.colour': 'Your colour is now {colour}.',
   'lobby.settings': 'Table settings',
   'lobby.hostOnly': 'Only the host can change these.',
   'lobby.supply':

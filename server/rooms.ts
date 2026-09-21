@@ -64,9 +64,16 @@ import type {
   MonopolyPublicPlayer,
 } from '../shared/protocol'
 import { teamArrangements, teamLeader, teamOf } from '../shared/rules'
+import { CHAT_KEEP, sanitiseChat, type ChatEntry, type ChatKind } from '../shared/chat'
 import { COLOUR_ORDER } from '../shared/colours'
 import { Rng, randomSeed } from '../shared/rng'
-import { MAX_PLAYERS, MIN_PLAYERS, maxPlayersFor, type PlayerColour } from '../shared/types'
+import {
+  MAX_PLAYERS,
+  MAX_POSITIONS,
+  MIN_PLAYERS,
+  maxPlayersFor,
+  type PlayerColour,
+} from '../shared/types'
 import type { RoomStore } from './store'
 
 export { MAX_PLAYERS, MIN_PLAYERS }
@@ -82,6 +89,8 @@ export interface Seat {
   token: string
   name: string
   colour: PlayerColour
+  /** Turn position, 1 to 8. Unique across the room's seats. */
+  position: number
   connected: boolean
 }
 
@@ -96,6 +105,9 @@ export interface RoomSnapshot {
   options: GameOptions
   /** The table's shuffled palette, so a restart does not recolour the seats. */
   colours: PlayerColour[]
+  /** Table talk, including the system lines. Absent on rooms written before it. */
+  chat?: ChatEntry[]
+  chatSeq?: number
   seats: Seat[]
   hostToken: string
   /** Client tokens that consider this their current room, seated or watching. */
@@ -128,6 +140,16 @@ export class Room {
    * so nobody's colour moves under them between one game and the next.
    */
   colours: PlayerColour[] = new Rng(randomSeed()).shuffle([...COLOUR_ORDER])
+
+  /**
+   * What the room has said to itself: messages players typed and the lines the
+   * room adds when someone arrives, leaves, drops out or comes back. Kept on
+   * the room rather than in a game's state because none of it is a game event —
+   * it survives a rematch, and it is recorded whatever is being played.
+   */
+  chat: ChatEntry[] = []
+  /** Ids are handed out from here, so they stay unique across a trim. */
+  private chatSeq = 0
   options: GameOptions = { ...DEFAULT_OPTIONS }
   seats: Seat[] = []
   game: Game | null = null
@@ -184,6 +206,8 @@ export class Room {
       code: this.code,
       options: this.options,
       colours: this.colours,
+      chat: this.chat,
+      chatSeq: this.chatSeq,
       seats: this.seats,
       hostToken: this.hostToken,
       members: [...this.members],
@@ -206,9 +230,18 @@ export class Room {
     // Rooms written before the palette was shuffled were coloured in seat order,
     // which is exactly what falling back to it reproduces.
     room.colours = snapshot.colours ?? [...COLOUR_ORDER]
+    // Rooms written before the chat existed simply have nothing to say yet.
+    room.chat = snapshot.chat ?? []
+    room.chatSeq = snapshot.chatSeq ?? room.chat.length
     // Nobody survives a restart still connected; their client reconnects and
     // says hello, which flips the seat back.
-    room.seats = snapshot.seats.map((seat) => ({ ...seat, connected: false }))
+    room.seats = snapshot.seats.map((seat, i) => ({
+      ...seat,
+      // Rooms written before positions existed are seated in the order they
+      // were stored, which is the order they were playing in.
+      position: seat.position ?? i + 1,
+      connected: false,
+    }))
     room.hostToken = snapshot.hostToken
     room.members = new Set(snapshot.members)
     // Older snapshots predate custom side names; an empty list is the default.
@@ -254,6 +287,52 @@ export class Room {
     return this.seats.find((s) => s.token === token)
   }
 
+  /**
+   * Add a line to the room's talk. `kind` is what happened; the text is only
+   * carried for what a player actually typed, because the system lines are
+   * worded by each client in its own language.
+   *
+   * Returns the entry, or null if there is no seat to attribute it to — which
+   * is what keeps a spectator from being able to say anything at all.
+   */
+  private record(token: string, kind: ChatKind, text: string): ChatEntry | null {
+    const seat = this.seatByToken(token)
+    if (!seat) return null
+    const entry: ChatEntry = {
+      id: this.chatSeq++,
+      kind,
+      seat: seat.id,
+      name: seat.name,
+      colour: seat.colour,
+      text,
+      // Stamped here rather than by the sender: a clock the client controls is
+      // a clock that can be wrong, and the order has to match everyone's list.
+      at: Date.now(),
+    }
+    this.chat.push(entry)
+    if (this.chat.length > CHAT_KEEP) this.chat.splice(0, this.chat.length - CHAT_KEEP)
+    return entry
+  }
+
+  /**
+   * A player says something. Seated players only, and never an empty line: the
+   * sanitiser can empty a message that was nothing but whitespace or hidden
+   * characters, and an empty bubble is not worth anyone's screen.
+   */
+  say(token: string, raw: unknown): string | null {
+    if (!this.seatByToken(token)) return 'You have no seat in this room.'
+    const text = sanitiseChat(raw)
+    if (!text) return 'There is nothing to send.'
+    this.record(token, 'said', text)
+    this.touch()
+    return null
+  }
+
+  /** The room noting something that happened to a seat, in nobody's words. */
+  note(token: string, kind: Exclude<ChatKind, 'said'>) {
+    this.record(token, kind, '')
+  }
+
   isHost(token: string): boolean {
     return this.hostToken === token
   }
@@ -271,15 +350,22 @@ export class Room {
       colour:
         this.colours.find((c) => !this.seats.some((s) => s.colour === c)) ??
         this.colours[this.seats.length],
+      // The first vacant position, which is what makes a new arrival sit after
+      // everyone already here — and what fills a gap left by someone who went.
+      position: this.firstVacantPosition(),
       connected: true,
     }
     this.seats.push(seat)
     if (!this.hostToken) this.hostToken = token
+    this.note(token, 'joined')
     this.touch()
     return seat
   }
 
   removeSeat(token: string) {
+    // Recorded before the seat goes: the line needs the name and colour, and
+    // after the filter below there is nothing left to read them off.
+    this.note(token, this.started ? 'away' : 'left')
     // Seat ids index into the game, so seats can only be removed before it starts.
     if (this.started) {
       const seat = this.seatByToken(token)
@@ -287,8 +373,9 @@ export class Room {
       return
     }
     this.seats = this.seats.filter((s) => s.token !== token)
-    // Renumbering never recolours: a colour someone chose stays theirs.
-    this.seats.forEach((seat, i) => (seat.id = i))
+    // Renumbering never recolours, and never moves a turn position: both are
+    // the player's own and follow them.
+    this.renumberSeats()
     if (this.hostToken === token) this.hostToken = this.seats[0]?.token ?? ''
     this.touch()
   }
@@ -309,6 +396,66 @@ export class Room {
   }
 
   /**
+   * Give the seats their ids from their current order, and carry the chat's
+   * attribution across with them.
+   *
+   * A seat id is an index into the seating, so every renumbering moves people:
+   * a line recorded before one would otherwise go on pointing at its old
+   * number, which by then belongs to somebody else — and each client decides
+   * whose words are its own by comparing that number. A speaker who has left
+   * the table becomes -1, which is nobody.
+   */
+  private renumberSeats() {
+    const was = new Map<string, number>()
+    for (const seat of this.seats) was.set(seat.token, seat.id)
+
+    this.seats.forEach((seat, i) => (seat.id = i))
+
+    const moved = new Map<number, number>()
+    for (const seat of this.seats) {
+      const before = was.get(seat.token)
+      if (before !== undefined) moved.set(before, seat.id)
+    }
+    for (const entry of this.chat) entry.seat = moved.get(entry.seat) ?? -1
+  }
+
+  /** The lowest turn position nobody holds, or the last one if all are taken. */
+  private firstVacantPosition(): number {
+    for (let n = 1; n <= MAX_POSITIONS; n++) {
+      if (!this.seats.some((s) => s.position === n)) return n
+    }
+    return MAX_POSITIONS
+  }
+
+  /**
+   * A player takes a vacant turn position. Their own seat only, and never one
+   * another seat holds — nobody is swapped, pushed along or renumbered by this,
+   * which is the whole point of positions being chosen rather than derived from
+   * the order people arrived in.
+   *
+   * Two players reaching for the same vacant position is settled here and only
+   * here: requests are handled one at a time, so the first to arrive takes it
+   * and the second is told to choose again.
+   */
+  setPosition(token: string, position: number): string | null {
+    const seat = this.seatByToken(token)
+    if (!seat) return 'You have no seat in this room.'
+    if (this.started) return 'The game has already started.'
+    if (!Number.isInteger(position) || position < 1 || position > MAX_POSITIONS) {
+      return 'No such position.'
+    }
+    if (seat.position === position) return null
+    if (this.seats.some((s) => s.token !== token && s.position === position)) {
+      return `Position ${position} is no longer available. Please choose another position.`
+    }
+    // The seat's old position is vacant the moment this returns: it is held
+    // nowhere but on the seat itself.
+    seat.position = position
+    this.touch()
+    return null
+  }
+
+  /**
    * A player picks their own colour, from the shared palette only and never one
    * another seat is wearing. Lobby only: seat colours are how the table reads a
    * running game, and must not change under it.
@@ -319,7 +466,7 @@ export class Room {
     if (this.started) return 'The game has already started.'
     if (!COLOUR_ORDER.includes(colour)) return 'No such colour.'
     if (this.seats.some((s) => s.token !== token && s.colour === colour)) {
-      return 'Another player already wears that colour.'
+      return 'This color is no longer available. Please choose another color.'
     }
     seat.colour = colour
     this.touch()
@@ -331,6 +478,35 @@ export class Room {
     if (this.options.teams && !teamArrangements(playerCount).includes(this.options.teams)) {
       return 'That team split does not divide the players into equal sides.'
     }
+    return null
+  }
+
+  /**
+   * Put the seats in turn-position order and renumber them, so that seat 0 is
+   * whoever chose the lowest position. Every engine plays its seats in id
+   * order, so this — and nothing inside any engine — is what makes the chosen
+   * positions the actual turn order, with vacant positions skipped because they
+   * were never seats to begin with.
+   *
+   * Only ever called on the way into a deal. Seat ids index into a running
+   * game, so they cannot move once one has started.
+   */
+  private seatInPositionOrder() {
+    this.seats.sort((a, b) => a.position - b.position)
+    this.renumberSeats()
+  }
+
+  /**
+   * Two seats may not share a position or a colour. The two setters refuse to
+   * create either, so this is a last look before a game is dealt on top of them
+   * rather than a rule of its own — a room restored from an older snapshot is
+   * the one way it could be false.
+   */
+  private duplicateSeating(): string | null {
+    const positions = new Set(this.seats.map((s) => s.position))
+    if (positions.size !== this.seats.length) return 'Two players share a turn position.'
+    const colours = new Set(this.seats.map((s) => s.colour))
+    if (colours.size !== this.seats.length) return 'Two players share a colour.'
     return null
   }
 
@@ -369,6 +545,9 @@ export class Room {
     }
     const teams = this.teamsError(this.seats.length)
     if (teams) return teams
+    const seating = this.duplicateSeating()
+    if (seating) return seating
+    this.seatInPositionOrder()
     this.deal()
     this.touch()
     return null
@@ -383,6 +562,9 @@ export class Room {
     }
     const teams = this.teamsError(this.seats.length)
     if (teams) return teams
+    const seating = this.duplicateSeating()
+    if (seating) return seating
+    this.seatInPositionOrder()
     this.deal()
     this.touch()
     return null
@@ -415,7 +597,7 @@ export class Room {
   private dropAbsentPlayers() {
     this.seats = this.seats.filter((seat) => seat.connected)
     // Renumbering never recolours: a colour someone chose stays theirs.
-    this.seats.forEach((seat, i) => (seat.id = i))
+    this.renumberSeats()
     this.ensureHost()
   }
 
@@ -439,8 +621,24 @@ export class Room {
   }
 
   /** Null whenever nobody is on the clock — untimed table, lobby, draft, over. */
+  /**
+   * How long whatever the table is waiting on gets.
+   *
+   * Only Monopoly's auction differs: the rest of the app runs one period for
+   * everything, but an auction has the whole table waiting on one seat for a
+   * single word, so it gets its own — falling back to the turn timer when the
+   * host has not set one, which is what makes 0 mean "same as the turn" here
+   * rather than "untimed".
+   */
+  private currentPeriodSeconds(): number {
+    if (this.monopoly?.state.pending[0]?.step === 'auction') {
+      return this.options.bidSeconds || this.options.turnSeconds
+    }
+    return this.options.turnSeconds
+  }
+
   private currentTurnKey(): string | null {
-    if (!this.options.turnSeconds) return null
+    if (!this.currentPeriodSeconds()) return null
     if (this.coup) return this.coupTurnKey()
     if (this.monopoly) return this.monopolyTurnKey()
     if (this.carn) return this.carnivalTurnKey()
@@ -466,7 +664,21 @@ export class Room {
     const s = this.monopoly?.state
     if (!s || s.phase !== 'play') return null
     const p = s.pending[0]
-    return `${s.turnNumber}:${s.rollCount}:${s.current}:${p ? `${p.step}${'player' in p ? p.player : ''}` : ''}`
+    // An auction's key carries the standing bid and how many have dropped out,
+    // so every bid and every withdrawal starts the window again — which is what
+    // "so many seconds to answer the last bid" means. The other steps wait on
+    // one named seat and need no more than that seat's number.
+    const step = p
+      ? p.step === 'auction'
+        ? `auction:${p.high}:${p.highBidder ?? ''}:${p.passed.length}`
+        : // A trade names both sides. Any seat may open one now, so two offers
+          // can follow each other inside one turn — keyed on the step alone the
+          // second would inherit what was left of the first one's window.
+          p.step === 'trade'
+          ? `trade:${p.from}:${p.to}`
+          : `${p.step}${'player' in p ? p.player : ''}`
+      : ''
+    return `${s.turnNumber}:${s.rollCount}:${s.current}:${step}`
   }
 
   /**
@@ -532,7 +744,8 @@ export class Room {
   /** Give whoever is on the clock a full period, whatever was left before. */
   rearmTurnTimer(now = Date.now()) {
     this.turnKey = this.currentTurnKey()
-    this.turnDeadline = this.turnKey === null ? null : now + this.options.turnSeconds * 1000
+    this.turnDeadline =
+      this.turnKey === null ? null : now + this.currentPeriodSeconds() * 1000
   }
 
   /**
@@ -593,6 +806,7 @@ export class Room {
         id: s.id,
         name: s.name,
         colour: s.colour,
+        position: s.position,
         connected: s.connected,
         handCount: p?.hand.length ?? 0,
         stackCount: p?.stack.length ?? 0,
@@ -693,6 +907,7 @@ export class Room {
         id: s.id,
         name: s.name,
         colour: s.colour,
+        position: s.position,
         connected: s.connected,
         stackCount: p?.stack.length ?? 0,
         faceUp: p ? [...p.faceUp] : [],
@@ -759,6 +974,7 @@ export class Room {
         id: s.id,
         name: s.name,
         colour: s.colour,
+        position: s.position,
         connected: s.connected,
         coins: p?.coins ?? 0,
         influence: p?.hand.length ?? 0,
@@ -906,6 +1122,7 @@ export class Room {
         id: s.id,
         name: s.name,
         colour: s.colour,
+        position: s.position,
         connected: s.connected,
         carnivals: p?.carnivals ?? 0,
         committed: p?.committed ?? 0,
@@ -1026,6 +1243,7 @@ export class Room {
         id: x.id,
         name: x.name,
         colour: x.colour,
+        position: x.position,
         connected: x.connected,
         cop: s ? s.cop === x.id : false,
         caught: p?.caught ?? 0,
@@ -1147,6 +1365,7 @@ export class Room {
         id: s.id,
         name: s.name,
         colour: s.colour,
+        position: s.position,
         connected: s.connected,
         alive: p?.alive ?? false,
         body: p ? p.body.map((c) => [...c] as [number, number]) : [],
@@ -1212,6 +1431,7 @@ export class Room {
         id: s.id,
         name: s.name,
         colour: s.colour,
+        position: s.position,
         connected: s.connected,
         pos: p?.pos ?? 0,
         rolls: p?.rolls ?? 0,
@@ -1281,6 +1501,7 @@ export class Room {
         id: s.id,
         name: s.name,
         colour: s.colour,
+        position: s.position,
         connected: s.connected,
         cash: p?.cash ?? 0,
         pos: p?.pos ?? 0,
@@ -1299,11 +1520,14 @@ export class Room {
       you: seat?.id ?? null,
       players,
       playerCount: this.seats.length,
+      // The one redaction the chat needs: a spectator watches the board but is
+      // not at the table, so they are sent no talk at all. It rides on `base`
+      // so the lobby and the playing branch cannot answer this differently.
+      chat: seat ? this.chat : [],
     }
 
     const idle: MonopolyAffordances = {
       roll: false,
-      endTurn: false,
       buy: null,
       bid: false,
       minBid: 0,
@@ -1334,6 +1558,7 @@ export class Room {
         rolled: false,
         rollCount: 0,
         cardCount: 0,
+        logCount: 0,
         lastRoll: null,
         lastCard: null,
         decks: { chance: 0, chest: 0 },
@@ -1374,6 +1599,7 @@ export class Room {
       rolled: s.rolled,
       rollCount: s.rollCount,
       cardCount: s.cardCount,
+      logCount: s.logCount,
       lastRoll: s.lastRoll,
       lastCard: s.lastCard,
       decks: { chance: s.chance.length, chest: s.chest.length },
@@ -1399,12 +1625,13 @@ export class Room {
     const free = owing === null
     return {
       roll: mine && free && !s.rolled && !p,
-      endTurn: mine && free && s.rolled && !p,
       buy: p?.step === 'buy' && p.player === you ? p.space : null,
       bid: p?.step === 'auction' ? inAuction(s, you) : false,
       minBid: p?.step === 'auction' ? p.high + 1 : 0,
       trade: p?.step === 'trade' && p.to === you,
-      partners: mine && free && !p ? tradePartners(s, you) : [],
+      // Not `mine`: an offer may be made by any seat whenever the table is
+      // not already waiting on something.
+      partners: free && !p ? tradePartners(s, you) : [],
       build: free ? buildable(s, you) : [],
       sell: sellable(s, you),
       mortgage: mortgageable(s, you),

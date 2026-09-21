@@ -12,7 +12,15 @@ const game = useGameStore()
 const showRules = ref(false)
 
 const seats = computed(() => game.carnivalPlayers)
-const canStart = computed(() => game.isHost && seats.value.length >= MIN_PLAYERS)
+const canStart = computed(
+  () =>
+    game.isHost &&
+    seats.value.length >= MIN_PLAYERS &&
+    seats.value.length <= maxSeats &&
+    // A colour or position still in the air: the answer decides whether the
+    // table is legal, so the deal waits the round trip out.
+    !game.seatBusy,
+)
 </script>
 
 <template>
@@ -36,12 +44,14 @@ const canStart = computed(() => game.isHost && seats.value.length >= MIN_PLAYERS
 
     <p v-if="!game.isHost" class="tiny muted">{{ t('lobby.hostOnly') }}</p>
 
-    <button class="btn wide" :disabled="!canStart" @click="game.startGame()">
-      {{ game.isHost ? t('lobby.start') : t('lobby.waitingHost') }}
-    </button>
-    <p v-if="game.isHost && seats.length < MIN_PLAYERS" class="tiny muted centre">
-      {{ t('lobby.needTwo') }}
-    </p>
+    <template #actions>
+      <button class="btn wide" :disabled="!canStart" @click="game.startGame()">
+        {{ game.isHost ? t('lobby.start') : t('lobby.waitingHost') }}
+      </button>
+      <p v-if="game.isHost && seats.length < MIN_PLAYERS" class="tiny muted centre">
+        {{ t('lobby.needTwo') }}
+      </p>
+    </template>
 
     <hr class="rule" />
 
